@@ -1,0 +1,94 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push cancels the older build/deploy.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BUILD_NAME: MyGame
+
+jobs:
+  build:
+    name: Build ${{ matrix.targetPlatform }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - targetPlatform: WebGL
+            buildMethod: Game.Editor.BuildScript.BuildWebGL
+          - targetPlatform: Android
+            buildMethod: Game.Editor.BuildScript.BuildAndroid
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+          fetch-depth: 0 # semantic versioning reads git history
+
+      - name: Free disk space (Android image is large)
+        if: matrix.targetPlatform == 'Android'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Cache Library
+        uses: actions/cache@v6
+        with:
+          path: Library
+          key: Library-build-${{ matrix.targetPlatform }}-${{ hashFiles('Packages/**', 'ProjectSettings/**', 'Assets/**/*.asmdef') }}
+          restore-keys: |
+            Library-build-${{ matrix.targetPlatform }}-
+
+      - name: Build
+        uses: game-ci/unity-builder@v6
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: ${{ matrix.targetPlatform }}
+          buildMethod: ${{ matrix.buildMethod }}
+          buildName: ${{ env.BUILD_NAME }}
+
+      - name: Upload APK
+        if: matrix.targetPlatform == 'Android'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.BUILD_NAME }}-android-apk
+          path: build/Android/${{ env.BUILD_NAME }}.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload WebGL for GitHub Pages
+        if: matrix.targetPlatform == 'WebGL'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/WebGL/${{ env.BUILD_NAME }}
+
+  deploy:
+    name: Deploy WebGL to GitHub Pages
+    needs: build
+    # Deploy even if only the Android leg failed; deploy-pages fails on its own if no WebGL artifact exists.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
