@@ -6,10 +6,8 @@ using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.Rendering.Universal;
 
-namespace Game.Editor
+namespace OpenSkies.Editor
 {
     /// <summary>
     /// Headless build entry points for GameCI (unity-builder `buildMethod`).
@@ -18,27 +16,56 @@ namespace Game.Editor
     /// </summary>
     public static class BuildScript
     {
-        const string ProductName = "MyGame";
+        const string ProductName = "Open Skies"; // working title
         // PLACEHOLDER: replace before the first Play Store upload. It cannot change after publishing.
-        const string AndroidIdentifier = "com.dor.mygame";
+        const string AndroidIdentifier = "com.dor.openskies";
         // Google Play: from 31 Aug 2026 new apps and updates must target API 36 (Android 16).
         const int AndroidTargetApiLevel = 36;
 
-        const string ScenePath = "Assets/_Game/Scenes/Main.unity";
-        const string SettingsFolder = "Assets/_Game/Settings";
-        const string UrpAssetPath = SettingsFolder + "/URP-Mobile.asset";
-        const string UrpRendererPath = SettingsFolder + "/URP-Mobile_Renderer.asset";
+        // ---- CI entry points (GameCI buildMethod). -developmentBuild enables the development overlays.
 
-        public static void BuildWebGL() => Run(BuildTarget.WebGL, "Builds/WebGL", ConfigureWebGL);
+        public static void BuildWebGL() => Run(BuildTarget.WebGL, "Builds/WebGL", ConfigureWebGL, HasArg("-developmentBuild"));
 
-        public static void BuildAndroid() => Run(BuildTarget.Android, $"Builds/Android/{ProductName}.apk", ConfigureAndroid);
+        public static void BuildAndroid() => Run(BuildTarget.Android, "Builds/Android/OpenSkies.apk", ConfigureAndroid, HasArg("-developmentBuild"));
 
-        static void Run(BuildTarget target, string defaultPath, Action configure)
+        // ---- Editor menu: the same configuration, so local builds match CI builds.
+
+        [MenuItem("Open Skies/Build Android APK (Development)", false, 20)]
+        static void BuildAndroidDevelopmentFromMenu()
+        {
+            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                Run(BuildTarget.Android, "Builds/Android/OpenSkies-dev.apk", ConfigureAndroid, development: true);
+        }
+
+        [MenuItem("Open Skies/Build Android APK (Release)", false, 21)]
+        static void BuildAndroidReleaseFromMenu()
+        {
+            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                Run(BuildTarget.Android, "Builds/Android/OpenSkies.apk", ConfigureAndroid, development: false);
+        }
+
+        /// <summary>
+        /// Applies the Android player settings without building, so Build Profiles >
+        /// Build And Run uses the same configuration as CI.
+        /// </summary>
+        [MenuItem("Open Skies/Apply Android Player Settings", false, 40)]
+        public static void ApplyAndroidSettings()
+        {
+            if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            RenderPipelineSetup.EnsureUrp();
+            EnsurePrototypeScene();
+            ConfigureCommon();
+            ConfigureAndroid();
+            AssetDatabase.SaveAssets();
+            Debug.Log("[BuildScript] Android player settings applied.");
+        }
+
+        static void Run(BuildTarget target, string defaultPath, Action configure, bool development)
         {
             try
             {
-                EnsureMainScene();
-                EnsureUrp();
+                RenderPipelineSetup.EnsureUrp();
+                EnsurePrototypeScene();
                 ConfigureCommon();
                 configure();
                 AssetDatabase.SaveAssets();
@@ -49,7 +76,8 @@ namespace Game.Editor
                     locationPathName = GetArg("-customBuildPath") ?? defaultPath,
                     target = target,
                     targetGroup = BuildPipeline.GetBuildTargetGroup(target),
-                    options = BuildOptions.None,
+                    // Development builds show the overlays (telemetry, touch diagnostics) on device.
+                    options = development ? BuildOptions.Development : BuildOptions.None,
                 };
 
                 Debug.Log($"[BuildScript] Building {target} to {options.locationPathName}");
@@ -59,6 +87,8 @@ namespace Game.Editor
 
                 if (summary.result != BuildResult.Succeeded)
                     Fail($"Build {summary.result}");
+                else if (!Application.isBatchMode)
+                    EditorUtility.RevealInFinder(options.locationPathName);
             }
             catch (Exception e)
             {
@@ -70,57 +100,29 @@ namespace Game.Editor
         static void Fail(string reason)
         {
             Debug.LogError($"[BuildScript] FAILED: {reason}");
-            EditorApplication.Exit(1);
+            // Exit code for CI; never close an interactive Editor.
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+            else EditorUtility.DisplayDialog("Open Skies build failed", reason + "\n\nSee the Console for details.", "OK");
         }
 
-        static void EnsureMainScene()
+        static void EnsurePrototypeScene()
         {
-            if (!File.Exists(ScenePath))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
-                // Intentionally empty: Bootstrap builds everything from code.
-                var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-                if (!EditorSceneManager.SaveScene(scene, ScenePath))
-                    throw new InvalidOperationException($"Could not save {ScenePath}");
-                Debug.Log($"[BuildScript] Created {ScenePath}");
-            }
-
-            // Main first, keep any other scenes that are already registered.
-            var others = EditorBuildSettings.scenes.Where(s => s.path != ScenePath);
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) }.Concat(others).ToArray();
-        }
-
-        static void EnsureUrp()
-        {
-            if (GraphicsSettings.defaultRenderPipeline != null) return; // never override an existing choice
-
-            var asset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(UrpAssetPath);
-            if (asset == null)
-            {
-                Directory.CreateDirectory(SettingsFolder);
-                var renderer = ScriptableObject.CreateInstance<UniversalRendererData>();
-                AssetDatabase.CreateAsset(renderer, UrpRendererPath);
-
-                asset = UniversalRenderPipelineAsset.Create(renderer);
-                // Mobile defaults: no HDR, no MSAA, native resolution, short shadows,
-                // no extra depth/opaque copies. Post-processing data is left unset (off).
-                asset.supportsHDR = false;
-                asset.msaaSampleCount = 1;
-                asset.renderScale = 1f;
-                asset.shadowDistance = 20f;
-                asset.supportsCameraDepthTexture = false;
-                asset.supportsCameraOpaqueTexture = false;
-                AssetDatabase.CreateAsset(asset, UrpAssetPath);
-                Debug.Log($"[BuildScript] Created {UrpAssetPath}");
-            }
-
-            GraphicsSettings.defaultRenderPipeline = asset;
+            // A scene committed from an Editor is used as-is; CI only generates it when missing.
+            if (!File.Exists(FlightPrototypeSceneBuilder.ScenePath))
+                FlightPrototypeSceneBuilder.Build();
+            else
+                FlightPrototypeSceneBuilder.RegisterInBuildSettings();
         }
 
         static void ConfigureCommon()
         {
             PlayerSettings.productName = ProductName;
-            PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
+            // Landscape only, either way up.
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+            PlayerSettings.allowedAutorotateToLandscapeRight = true;
+            PlayerSettings.allowedAutorotateToPortrait = false;
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
 
             var version = GetArg("-buildVersion");
             if (!string.IsNullOrEmpty(version) && version != "none")
@@ -146,9 +148,11 @@ namespace Game.Editor
             PlayerSettings.WebGL.decompressionFallback = false;
         }
 
+        static bool HasArg(string name) => System.Array.IndexOf(System.Environment.GetCommandLineArgs(), name) >= 0;
+
         static string GetArg(string name)
         {
-            var args = Environment.GetCommandLineArgs();
+            var args = System.Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++)
                 if (args[i] == name && !args[i + 1].StartsWith("-"))
                     return args[i + 1];

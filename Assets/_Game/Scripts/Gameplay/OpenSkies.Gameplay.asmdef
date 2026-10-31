@@ -1,0 +1,21 @@
+{
+    "name": "OpenSkies.Gameplay",
+    "rootNamespace": "OpenSkies.Gameplay",
+    "references": [
+        "OpenSkies.FlightState",
+        "OpenSkies.Simulation",
+        "OpenSkies.FlightInput",
+        "OpenSkies.CameraSystems",
+        "OpenSkies.UI",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

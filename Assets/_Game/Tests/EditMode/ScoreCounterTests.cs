@@ -1,7 +1,8 @@
 using System;
 using NUnit.Framework;
+using OpenSkies.Gameplay;
 
-namespace Game.Tests
+namespace OpenSkies.Tests
 {
     public class ScoreCounterTests
     {

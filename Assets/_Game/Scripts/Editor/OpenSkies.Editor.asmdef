@@ -1,0 +1,27 @@
+{
+    "name": "OpenSkies.Editor",
+    "rootNamespace": "OpenSkies.Editor",
+    "references": [
+        "OpenSkies.FlightState",
+        "OpenSkies.Simulation",
+        "OpenSkies.FlightInput",
+        "OpenSkies.CameraSystems",
+        "OpenSkies.UI",
+        "OpenSkies.Gameplay",
+        "Unity.InputSystem",
+        "UnityEngine.UI",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

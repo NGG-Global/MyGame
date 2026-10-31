@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      development:
+        description: 'Development build (shows telemetry and touch diagnostics overlays)'
+        type: boolean
+        default: false
 
 # A newer push cancels the older build/deploy.
 concurrency:
@@ -14,7 +19,7 @@ permissions:
   contents: read
 
 env:
-  BUILD_NAME: MyGame
+  BUILD_NAME: OpenSkies
 
 jobs:
   build:
@@ -26,9 +31,9 @@ jobs:
       matrix:
         include:
           - targetPlatform: WebGL
-            buildMethod: Game.Editor.BuildScript.BuildWebGL
+            buildMethod: OpenSkies.Editor.BuildScript.BuildWebGL
           - targetPlatform: Android
-            buildMethod: Game.Editor.BuildScript.BuildAndroid
+            buildMethod: OpenSkies.Editor.BuildScript.BuildAndroid
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -60,6 +65,7 @@ jobs:
           targetPlatform: ${{ matrix.targetPlatform }}
           buildMethod: ${{ matrix.buildMethod }}
           buildName: ${{ env.BUILD_NAME }}
+          customParameters: ${{ inputs.development && '-developmentBuild' || '' }}
 
       - name: Upload APK
         if: matrix.targetPlatform == 'Android'
