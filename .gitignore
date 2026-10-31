@@ -1,25 +1,60 @@
-﻿[Ll]ibrary/
-[Tt]emp/
-[Oo]bj/
-[Bb]uild/
-[Bb]uilds/
-[Ll]ogs/
-[Uu]ser[Ss]ettings/
-[Mm]emoryCaptures/
-[Rr]ecordings/
+# Unity generated
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+/artifacts/
+/CodeCoverage/
+
+# Asset Store tools and generated plugin files
+/[Aa]ssets/AssetStoreTools*
+/[Aa]ssets/Plugins/Editor/JetBrains*
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# IDEs
 .vs/
 .vscode/
+.idea/
+.consulo/
+
+# Generated project files
+ExportedObj/
 *.csproj
+*.unityproj
 *.sln
 *.slnx
 *.suo
+*.tmp
 *.user
+*.userprefs
 *.pidb
 *.booproj
+*.svd
 *.pdb
 *.mdb
+*.opendb
+*.VC.db
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Build outputs and packages
 *.apk
 *.aab
 *.unitypackage
+*.app
+sysinfo.txt
 crashlytics-build.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings
 .claude/settings.local.json
