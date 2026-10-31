@@ -1,0 +1,17 @@
+{
+    "name": "OpenSkies.UI",
+    "rootNamespace": "OpenSkies.UI",
+    "references": [
+        "OpenSkies.FlightState",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
