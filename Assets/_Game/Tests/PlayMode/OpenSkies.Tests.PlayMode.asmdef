@@ -3,6 +3,7 @@
     "rootNamespace": "OpenSkies.Tests",
     "references": [
         "OpenSkies.FlightState",
+        "OpenSkies.Awareness",
         "OpenSkies.Simulation",
         "OpenSkies.FlightInput",
         "OpenSkies.CameraSystems",
@@ -11,7 +12,8 @@
         "UnityEngine.UI",
         "Unity.InputSystem",
         "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner"
+        "UnityEditor.TestRunner",
+        "OpenSkies.Cockpit"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

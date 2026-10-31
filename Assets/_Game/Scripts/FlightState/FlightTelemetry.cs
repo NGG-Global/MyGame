@@ -14,6 +14,12 @@ namespace OpenSkies.FlightState
         public float GroundspeedKnots;
         /// <summary>Height of the aircraft reference point (wheel contact level) above sea level. The prototype ground is at sea level.</summary>
         public float AltitudeFeet;
+        /// <summary>
+        /// Height of the aircraft reference point above the ground directly below
+        /// (radio-altimeter style, never negative). Beyond the radio-altimeter
+        /// range, or with no ground below, it falls back to height above sea level.
+        /// </summary>
+        public float HeightAboveGroundFeet;
         public float VerticalSpeedFeetPerMinute;
         /// <summary>Yaw angle as a compass heading, 0-360. True heading: magnetic variation is not modelled.</summary>
         public float HeadingDegrees;
@@ -30,6 +36,10 @@ namespace OpenSkies.FlightState
         /// <summary>Engine output, 0-1. Lags the throttle.</summary>
         public float EnginePower;
         public float Brake;
+        /// <summary>Actual flap position, 0 (up) to 1 (fully extended). Lags the selector.</summary>
+        public float FlapPosition;
+        public float FlapDegrees;
+        public EngineState EngineState;
         public bool WeightOnWheels;
         public bool StallWarning;
     }

@@ -31,9 +31,10 @@ A fictional four-seat, high-wing, single-engine light trainer with fixed
 tricycle landing gear. It is not modelled on a specific real aircraft and must
 not use any manufacturer's name or branding.
 
-- Controls: elevator, ailerons, rudder, throttle. Later: flaps, elevator
-  trim, mixture, brakes, carburettor heat (**Open question**: how many engine
-  controls to expose).
+- Controls: elevator, ailerons, rudder, throttle, wheel brakes, parking brake,
+  flaps (0/10/20/30°), ignition (simplified), landing and navigation lights.
+  Later: elevator trim, mixture, carburettor heat (**Open question**: how many
+  engine controls to expose).
 - Handling target: stable, forgiving, slow stall, clear feedback.
 - Performance figures are invented prototype tuning in
   `AircraftConfiguration`, not real-aircraft data (see `docs/FLIGHT_MODEL.md`).
@@ -47,8 +48,18 @@ not use any manufacturer's name or branding.
 | 2: Cockpit | Players who want instruments | First-person cockpit with readable, touchable instruments and controls. Replaces HUD information instead of adding to it. |
 | 3: Systems | Enthusiasts | Engine, electrical, fuel and avionics interactions, reached from the cockpit, never shown by default. |
 
+Layer 2 has a first playable version: a placeholder cockpit with six readable
+instruments, touch selection with enlarged views, and working flaps, parking
+brake, lights and ignition (`docs/COCKPIT.md`).
+
+Layer 1 is implemented as the contextual HUD with three player-selectable
+profiles (Cinematic, Smart by default, Detailed), driven by an estimate of the
+phase of flight. Rules, tables and limits: `docs/CONTEXTUAL_UI.md`.
+
 Rules:
 - Each layer is optional and reversible; nothing forces a deeper layer.
+- Flight controls are never part of disclosure: they are always reachable and
+  never move. Warnings override minimalism. Engaged systems stay visible.
 - A HUD element exists only if the same information is not visible in the
   current view. In cockpit view, the instruments are the information.
 - The current prototype's developer telemetry line is a temporary debugging

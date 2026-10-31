@@ -1,0 +1,20 @@
+{
+    "name": "OpenSkies.Cockpit",
+    "rootNamespace": "OpenSkies.Cockpit",
+    "references": [
+        "OpenSkies.FlightState",
+        "OpenSkies.FlightInput",
+        "OpenSkies.CameraSystems",
+        "Unity.InputSystem",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

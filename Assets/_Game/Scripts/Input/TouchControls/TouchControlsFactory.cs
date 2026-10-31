@@ -11,6 +11,9 @@ namespace OpenSkies.FlightInput.TouchControls
     /// </summary>
     public static class TouchControlsFactory
     {
+        /// <summary>Right edge of the joystick touch region, fraction of the safe-area width. Other layouts keep clear of it.</summary>
+        public const float JoystickRegionRight = 0.42f;
+
         static readonly Color Tint = new Color(1f, 1f, 1f, 0.3f);
         static readonly Color Invisible = new Color(1f, 1f, 1f, 0f);
 
@@ -41,7 +44,7 @@ namespace OpenSkies.FlightInput.TouchControls
         {
             var region = NewRect("JoystickRegion", parent);
             region.anchorMin = Vector2.zero;
-            region.anchorMax = new Vector2(0.42f, 0.78f);
+            region.anchorMax = new Vector2(JoystickRegionRight, 0.78f);
             region.pivot = Vector2.zero;
             region.offsetMin = new Vector2(16f, 16f);
             region.offsetMax = Vector2.zero;
@@ -132,9 +135,9 @@ namespace OpenSkies.FlightInput.TouchControls
             var text = NewText("TouchDiagnostics", parent, font, 22, TextAnchor.UpperLeft);
             var rect = text.rectTransform;
             rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0.75f, 1f);
+            rect.anchorMax = new Vector2(0.6f, 1f);
             rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(24f, -60f);
+            rect.anchoredPosition = new Vector2(24f, -264f); // below the contextual HUD's flight data and guides
             rect.sizeDelta = new Vector2(0f, 64f);
             text.color = new Color(1f, 1f, 1f, 0.7f);
             return text;

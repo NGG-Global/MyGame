@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
+using OpenSkies.Awareness;
 using OpenSkies.CameraSystems;
+using OpenSkies.Cockpit;
 using OpenSkies.FlightInput.TouchControls;
 using OpenSkies.Gameplay;
 using OpenSkies.Simulation;
@@ -31,9 +33,11 @@ namespace OpenSkies.Editor
         public const string ScenePath = "Assets/_Game/Scenes/FlightPrototype.unity";
         const string MaterialsFolder = "Assets/_Game/Art/Materials/Prototype";
         const string LitShader = "Universal Render Pipeline/Lit";
+        const string UnlitShader = "Universal Render Pipeline/Unlit";
         const string SkyShader = "Skybox/Procedural";
         const string BuiltinFont = "LegacyRuntime.ttf";
         const string AircraftConfigurationPath = "Assets/_Game/Settings/Aircraft/TrainerConfiguration.asset";
+        const string AwarenessConfigurationPath = "Assets/_Game/Settings/HUD/FlightAwarenessConfiguration.asset";
         const int AircraftLayer = 2; // built-in "Ignore Raycast": wheel raycasts must not hit the aircraft itself
 
         // Layout, in metres. The runway runs south to north along +Z.
@@ -75,17 +79,30 @@ namespace OpenSkies.Editor
             CreateGround(materials.Grass);
             CreateRunway(materials.Asphalt, materials.Marking);
             var configuration = LoadOrCreateAircraftConfiguration();
-            var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor);
+            var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
-            var hud = CreateHud(out var touchControls);
+            var hud = CreateHud(out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel);
+            cockpitInteraction.cameraRig = cameraRig;
             CreateEventSystem();
 
-            var session = new GameObject("FlightSession").AddComponent<FlightSession>();
+            // Wired while inactive so FlightSession.Awake sees every reference.
+            var sessionGo = new GameObject("FlightSession");
+            sessionGo.SetActive(false);
+            var session = sessionGo.AddComponent<FlightSession>();
             session.aircraft = aircraft;
             session.telemetry = aircraft.GetComponent<AircraftTelemetry>();
             session.cameraRig = cameraRig;
             session.hud = hud;
             session.touchControls = touchControls;
+            session.contextualHud = contextualHud;
+            session.cockpit = cockpit;
+            session.cockpitInteraction = cockpitInteraction;
+            session.focusPanel = focusPanel;
+            session.aircraftLights = lights;
+            session.awarenessConfiguration = LoadOrCreateAwarenessConfiguration();
+            // Runway 36/18: surface centred on the origin, primary landing direction north (+Z).
+            session.homeRunway = new RunwayInfo(Vector3.zero, 0f, RunwayLength, RunwayWidth);
+            sessionGo.SetActive(true);
 
             EditorFolders.Ensure(Path.GetDirectoryName(ScenePath));
             if (!EditorSceneManager.SaveScene(scene, ScenePath))
@@ -163,13 +180,27 @@ namespace OpenSkies.Editor
             return configuration;
         }
 
+        /// <summary>Phase, warning and HUD disclosure tuning: created once, then left alone like the aircraft configuration.</summary>
+        static FlightAwarenessConfiguration LoadOrCreateAwarenessConfiguration()
+        {
+            var configuration = AssetDatabase.LoadAssetAtPath<FlightAwarenessConfiguration>(AwarenessConfigurationPath);
+            if (configuration != null) return configuration;
+
+            EditorFolders.Ensure(Path.GetDirectoryName(AwarenessConfigurationPath));
+            configuration = ScriptableObject.CreateInstance<FlightAwarenessConfiguration>();
+            AssetDatabase.CreateAsset(configuration, AwarenessConfigurationPath);
+            Debug.Log($"[OpenSkies] Created {AwarenessConfigurationPath}");
+            return configuration;
+        }
+
         /// <summary>
         /// Placeholder four-seat high-wing trainer built from primitives, flown by
         /// Rigidbody physics. The root pivot sits at wheel-contact level with the
         /// gear fully extended; +Z is the nose. Wheel positions come from the
         /// configuration so visuals and physics agree.
         /// </summary>
-        static AircraftController CreateAircraft(AircraftConfiguration configuration, PrototypeMaterials materials, out Transform cockpitAnchor)
+        static AircraftController CreateAircraft(AircraftConfiguration configuration, PrototypeMaterials materials, out Transform cockpitAnchor,
+            out CockpitRig cockpit, out AircraftLightsView lights)
         {
             var rootGo = new GameObject("Aircraft");
             var root = rootGo.transform;
@@ -214,6 +245,13 @@ namespace OpenSkies.Editor
             cockpitAnchor.SetParent(root, false);
             // Eye height chosen so the view over the cowling (top at 1.75 m) reaches below the horizon.
             cockpitAnchor.localPosition = new Vector3(-0.3f, 1.9f, 0.9f);
+            // Resting view slightly down, so the instrument panel is in view (look offsets are relative to this).
+            cockpitAnchor.localRotation = Quaternion.Euler(CockpitLayout.RestingPitchDegrees, 0f, 0f);
+
+            // Placeholder cockpit interior (instruments, switches, flap selector) and exterior lights.
+            var font = Resources.GetBuiltinResource<Font>(BuiltinFont);
+            cockpit = CockpitFactory.BuildInterior(cockpitAnchor, font, materials.Cockpit);
+            lights = CockpitFactory.BuildExteriorLights(body, materials.Cockpit);
 
             SetLayerRecursively(rootGo, AircraftLayer);
 
@@ -257,7 +295,8 @@ namespace OpenSkies.Editor
             return rig;
         }
 
-        static HudPresenter CreateHud(out TouchFlightControls touchControls)
+        static HudPresenter CreateHud(out TouchFlightControls touchControls, out ContextualHud contextualHud,
+            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel)
         {
             var canvasGo = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasGo.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
@@ -272,13 +311,24 @@ namespace OpenSkies.Editor
 
             var font = Resources.GetBuiltinResource<Font>(BuiltinFont);
 
-            // Developer telemetry line, top-left, small. Temporary (see HudPresenter).
+            // Cockpit touch surface: first child, so it is behind every control and only receives
+            // the touches nothing else took. It draws nothing.
+            var surfaceGo = new GameObject("CockpitTouchSurface", typeof(RectTransform), typeof(TouchSurfaceGraphic));
+            var surfaceRect = (RectTransform)surfaceGo.transform;
+            surfaceRect.SetParent(safeArea, false);
+            Stretch(surfaceRect);
+            var surface = surfaceGo.GetComponent<TouchSurfaceGraphic>();
+            surface.raycastTarget = true;
+            cockpitInteraction = surfaceGo.AddComponent<CockpitInteractionManager>();
+            cockpitInteraction.surface = surface;
+
+            // Developer telemetry line, top-left below the player flight data and guides. Temporary (see HudPresenter).
             var readout = NewText("DeveloperReadout", safeArea, font, 26, TextAnchor.UpperLeft);
             var readoutRect = readout.rectTransform;
             readoutRect.anchorMin = new Vector2(0f, 1f);
-            readoutRect.anchorMax = new Vector2(1f, 1f);
+            readoutRect.anchorMax = new Vector2(0.6f, 1f);
             readoutRect.pivot = new Vector2(0f, 1f);
-            readoutRect.anchoredPosition = new Vector2(24f, -16f);
+            readoutRect.anchoredPosition = new Vector2(24f, -220f);
             readoutRect.sizeDelta = new Vector2(-48f, 40f);
             readout.color = new Color(1f, 1f, 1f, 0.8f);
             readout.raycastTarget = false;
@@ -290,6 +340,14 @@ namespace OpenSkies.Editor
             // Touch flight controls: joystick lower left, throttle and brakes lower right.
             // Built by runtime code so tests use the identical layout.
             touchControls = TouchControlsFactory.Build(safeArea, font);
+
+            // Cockpit focus panel (enlarged instruments, system selectors) in the free column between
+            // the joystick region and the action rail; before the contextual HUD so warnings draw over it.
+            focusPanel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
+
+            // Contextual HUD (flight data, guides, warnings, action rail, HUD profile, inspector),
+            // built after the touch controls so it draws on top; it overlaps none of them.
+            contextualHud = ContextualHudFactory.Build(safeArea, font);
 
             var hud = canvasGo.AddComponent<HudPresenter>();
             hud.developerReadout = readout;
@@ -365,12 +423,30 @@ namespace OpenSkies.Editor
             public readonly Material Accent = Lit("AirframeAccent", new Color(0.12f, 0.32f, 0.62f), 0.55f);
             public readonly Material Tyre = Lit("Tyre", new Color(0.06f, 0.06f, 0.06f), 0.15f);
             public readonly Material Sky = Skybox();
+            public readonly CockpitMaterials Cockpit = new CockpitMaterials
+            {
+                Panel = Lit("CockpitPanel", new Color(0.12f, 0.12f, 0.13f), 0.3f),
+                Frame = Lit("CockpitFrame", new Color(0.07f, 0.07f, 0.08f), 0.2f),
+                Switch = Lit("CockpitSwitch", new Color(0.8f, 0.8f, 0.8f), 0.6f),
+                Indicator = Unlit("CockpitIndicator", new Color(0.15f, 0.15f, 0.15f)),
+                LensWhite = Unlit("LightWhite", new Color(1f, 1f, 0.95f)),
+                LensRed = Unlit("LightRed", new Color(1f, 0.1f, 0.1f)),
+                LensGreen = Unlit("LightGreen", new Color(0.1f, 1f, 0.3f)),
+            };
 
             static Material Lit(string name, Color color, float smoothness)
             {
                 var material = LoadOrCreate(name, LitShader);
                 material.SetColor("_BaseColor", color);
                 material.SetFloat("_Smoothness", smoothness);
+                EditorUtility.SetDirty(material);
+                return material;
+            }
+
+            static Material Unlit(string name, Color color)
+            {
+                var material = LoadOrCreate(name, UnlitShader);
+                material.SetColor("_BaseColor", color);
                 EditorUtility.SetDirty(material);
                 return material;
             }
