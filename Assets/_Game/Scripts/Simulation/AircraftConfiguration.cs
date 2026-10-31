@@ -88,6 +88,20 @@ namespace OpenSkies.Simulation
         public float aileronAuthority = 0.05f;
         public float rudderAuthority = 0.03f;
 
+        [Header("Flaps")]
+        [Tooltip("Flap selector detents, degrees. The last one is full flap.")]
+        public float[] flapDetentDegrees = { 0f, 10f, 20f, 30f };
+        [Tooltip("Time for the flaps to travel from up to full, s (electric flaps).")]
+        public float flapTravelSeconds = 6f;
+        [Tooltip("Lift coefficient added at full flap.")]
+        public float flapLiftIncrement = 0.5f;
+        [Tooltip("Critical angle of attack change at full flap, degrees (flaps stall the wing earlier).")]
+        public float flapStallAngleChange = -2f;
+        [Tooltip("Parasitic drag coefficient added at full flap.")]
+        public float flapDragIncrement = 0.035f;
+        [Tooltip("Pitch moment coefficient added at full flap (negative: nose down).")]
+        public float flapPitchMoment = -0.03f;
+
         [Header("Control response")]
         [Tooltip("How fast each surface follows the stick, full travel per second. Large values are near-instant.")]
         public float controlSurfaceRate = 4f;
@@ -101,6 +115,8 @@ namespace OpenSkies.Simulation
         public float propellerEfficiency = 0.8f;
         [Tooltip("Engine power response time constant, s.")]
         public float engineResponseTime = 0.6f;
+        [Tooltip("Cranking time from ignition on to a running engine, s (simplified start).")]
+        public float engineStartSeconds = 1.5f;
 
         [Header("Landing gear")]
         public WheelDefinition[] wheels =
@@ -135,6 +151,8 @@ namespace OpenSkies.Simulation
         public float frictionSmoothingSpeed = 0.3f;
 
         public float AspectRatio => wingSpan * wingSpan / Mathf.Max(wingArea, 0.01f);
+
+        public float MaxFlapDegrees => flapDetentDegrees != null && flapDetentDegrees.Length > 0 ? flapDetentDegrees[flapDetentDegrees.Length - 1] : 0f;
     }
 
     [Serializable]

@@ -28,7 +28,7 @@ namespace OpenSkies.FlightInput.TouchControls
         public void OnPointerDown(PointerEventData eventData)
         {
             if (Ownership == null || IsEngaged || !CanEngage()) return; // one finger per control
-            Describe(eventData, out var kind, out int touchId);
+            DescribePointer(eventData, out var kind, out int touchId);
             if (!Ownership.TryClaim(eventData.pointerId, this, kind, touchId)) return;
             ActivePointer = eventData.pointerId;
             OnEngage(eventData);
@@ -78,7 +78,12 @@ namespace OpenSkies.FlightInput.TouchControls
         protected abstract void OnMove(PointerEventData eventData);
         protected abstract void OnRelease();
 
-        static void Describe(PointerEventData eventData, out PointerKind kind, out int touchId)
+        /// <summary>
+        /// How a pointer was produced (touch with its id, or mouse/pen), so the
+        /// ownership table can check later that it is still down on the device.
+        /// Every pointer consumer that claims ownership uses this.
+        /// </summary>
+        public static void DescribePointer(PointerEventData eventData, out PointerKind kind, out int touchId)
         {
             kind = PointerKind.Unknown;
             touchId = 0;

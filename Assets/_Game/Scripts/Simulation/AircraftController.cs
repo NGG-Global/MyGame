@@ -29,8 +29,8 @@ namespace OpenSkies.Simulation
 
         Rigidbody _body;
         EngineModel _engine;
-        FlightControls _controls;
-        FlightControls _surfaces;  // control surfaces follow _controls at a limited rate
+        FlightControls _controls = FlightControls.Neutral;
+        FlightControls _surfaces = FlightControls.Neutral;  // control surfaces and flaps follow _controls at limited rates
         AerodynamicForces _aero;
         Vector3 _startPosition;
         Quaternion _startRotation = Quaternion.identity;
@@ -41,6 +41,9 @@ namespace OpenSkies.Simulation
         public FlightControls Controls => _controls;
         public AerodynamicForces LastAerodynamics => _aero;
         public float EnginePower => _engine != null ? _engine.PowerFraction : 0f;
+        public EngineState EngineState => _engine != null ? _engine.State : EngineState.Running;
+        /// <summary>Actual flap position, 0-1 (follows the selected position at the flap travel rate).</summary>
+        public float FlapPosition => _surfaces.Flaps;
         public float Thrust { get; private set; }
         public bool WeightOnWheels { get; private set; }
         public float AirDensity { get; private set; } = Atmosphere.SeaLevelDensity;
@@ -107,8 +110,9 @@ namespace OpenSkies.Simulation
             float dt = Time.fixedDeltaTime;
             var c = configuration;
 
-            _surfaces = MoveSurfaces(_surfaces, _controls, c.controlSurfaceRate * dt);
-            _engine.Update(_controls.Throttle, dt);
+            float flapStep = c.flapTravelSeconds > 0f ? dt / c.flapTravelSeconds : 1f;
+            _surfaces = MoveSurfaces(_surfaces, _controls, c.controlSurfaceRate * dt, flapStep);
+            _engine.Update(_controls.Throttle, _controls.Ignition, dt);
 
             Quaternion toBody = Quaternion.Inverse(_body.rotation);
             Vector3 bodyVelocity = toBody * _body.linearVelocity;          // no wind yet: airflow = −velocity
@@ -163,14 +167,16 @@ namespace OpenSkies.Simulation
             WeightOnWheels = anyContact;
         }
 
-        static FlightControls MoveSurfaces(in FlightControls current, in FlightControls target, float maxStep)
+        static FlightControls MoveSurfaces(in FlightControls current, in FlightControls target, float maxStep, float flapStep)
         {
             return new FlightControls(
                 Mathf.MoveTowards(current.Pitch, target.Pitch, maxStep),
                 Mathf.MoveTowards(current.Roll, target.Roll, maxStep),
                 Mathf.MoveTowards(current.Yaw, target.Yaw, maxStep),
                 target.Throttle,
-                target.Brake);
+                target.Brake,
+                Mathf.MoveTowards(current.Flaps, target.Flaps, flapStep),
+                target.Ignition);
         }
 
         void OnDrawGizmos()

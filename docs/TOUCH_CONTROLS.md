@@ -12,6 +12,9 @@ nothing over the centre of the screen.
 | Brakes | Left of the throttle, 168 × 112 | Right | Hold to brake (main wheels). Shown only with weight on wheels; fades out after lift-off and releases any finger on it. |
 | CAM | Top right | Either | Switches chase/cockpit. Never changes flight input. |
 | RESET | Top right, left of CAM | Either | Back to the runway start at rest, throttle idle. |
+| HUD profile | Top right, left of RESET | Either | Cycles Smart, Detailed, Cinematic. Never changes flight input. |
+| SYSTEMS and action rail | Left of the throttle: SYSTEMS directly above BRAKE, contextual actions stacked above it | Right | SYSTEMS (always visible) opens every available action; actions appear by phase of flight. See `docs/CONTEXTUAL_UI.md`. |
+| Cockpit (cockpit view) | Any touch none of the above took | Either | Tap an instrument or switch, drag to look, pinch for field of view, double tap to look forward. See `docs/COCKPIT.md`. |
 
 Sizes are canvas units at the 1920 × 1080 reference; the canvas scales by
 height, so controls keep the same proportion of screen height on phones and
@@ -61,6 +64,11 @@ TouchFlightControls ◀── FlightSession (telemetry: weight on wheels; comman
      even if its release event never arrived.
 4. Anything added later that reacts to pointers (camera look, cockpit
    instruments, menus) **must ignore pointers that are owned** in this table.
+   The contextual HUD buttons (`HudButton`) act only on a press and release on
+   the same button, so a pointer owned by a flight control (pressed elsewhere)
+   can never trigger them; hidden HUD actions take no touches. The cockpit
+   (`CockpitInteractionManager`) sits on a touch surface behind every control,
+   ignores owned pointers and claims the ones it uses, so revocation covers it too.
 5. Screen-size, orientation and safe-area changes re-clamp the joystick base
    inside its region without ending the gesture.
 6. Camera mode changes do not affect touch controls or input.

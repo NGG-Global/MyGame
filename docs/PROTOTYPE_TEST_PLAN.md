@@ -33,6 +33,12 @@ Read with: `docs/FLIGHT_MODEL.md` (physics, tuning) and `docs/TOUCH_CONTROLS.md`
 | Space (hold) | Wheel brakes |
 | C | Chase / cockpit camera |
 | R | Reset to the runway start |
+| P | Parking brake (set on the ground / release) |
+| H | Next HUD profile (Smart, Detailed, Cinematic) |
+| F3 | Collapse or expand the HUD inspector (development) |
+| [ / ] | Flaps up / down one detent |
+| L / N | Landing light / navigation lights |
+| V, - / = | Cockpit view: look forward; wider / narrower field of view (hold) |
 
 Gamepad: left stick pitch/roll (up = nose down), right stick X rudder, triggers
 throttle, south button brakes, north button camera, select/back reset.
@@ -46,6 +52,8 @@ throttle, south button brakes, north button camera, select/back reset.
 | BRAKE | Left of the throttle, only on the ground | Hold |
 | CAM | Top right | Chase / cockpit |
 | RESET | Top right, left of CAM | Back to the runway start, idle |
+| HUD | Top right, left of RESET | HUD profile: Smart, Detailed, Cinematic |
+| SYSTEMS | Above BRAKE | Opens every available action (parking brake, approach and navigation guides) |
 
 No touch rudder yet: nosewheel steering is keyboard/gamepad only.
 
@@ -115,6 +123,35 @@ Record device model, Android version, build type and result per step.
 7. Phone with a notch or punch-hole: no control under the cutout; nothing
    under the gesture bar.
 
+### B2. Contextual HUD (Editor with the inspector open, then phone)
+
+Reference: `docs/CONTEXTUAL_UI.md`. Note the inspector line for any step that fails.
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Start, Smart profile | Inspector: PARKED. No flight data on screen; PARK BRAKE offered above SYSTEMS. |
+| 2 | P (or PARK BRAKE), full throttle | "BRAKE SET"; the aircraft holds. Release: it rolls. |
+| 3 | Take-off roll | TAKEOFF ROLL within ~2 s; IAS appears. |
+| 4 | Lift-off, climb | INITIAL CLIMB (reason lift-off), then CLIMB above ~600 ft; ALT and VS shown. |
+| 5 | Level off, wings level for 10 s | CRUISE, then "stable": IAS and ALT recede, HDG goes; NAV offered. |
+| 6 | Bank into a turn | Information returns at once. |
+| 7 | NAV | Arrow and distance to the airfield; stays until NAV is tapped again. |
+| 8 | Fly to ~5 NM on the extended centreline, below 1500 ft | APPROACH; approach guide with lights and centreline marker. |
+| 9 | Go around (full power, climb) from short final | INITIAL CLIMB, reason go-around; no ground phase. |
+| 10 | Land; touch-and-go | LANDING, then TAKEOFF ROLL (touch-and-go), INITIAL CLIMB. |
+| 11 | Land to a stop | LANDING, ROLLOUT, TAXI, PARKED; PARK BRAKE offered again. |
+| 12 | Rejected take-off at ~40 kt | ROLLOUT, reason take-off rejected. |
+| 13 | H through all profiles during flight | Stick and throttle keep working; joystick and throttle never move. Cinematic: no routine data in chase view. Detailed: all data and actions. |
+| 14 | Stall at altitude in Cinematic | STALL banner and airspeed appear; nothing blocks the controls. |
+| 15 | Dive steeply below 2000 ft | SINK RATE (amber); above 160 kt OVERSPEED (red). |
+| 16 | Android: Developer options › Remove animations, return to the app | HUD changes without fades or movement. |
+
+### B3. Cockpit
+
+Run the device checklist in `docs/COCKPIT.md` (fly a circuit from the cockpit,
+instrument focus, switch selectors, look and pinch, multitouch, focus loss, HUD
+and cockpit agreeing on flaps and parking brake, engine off confirmation).
+
 ### C. UX and legibility
 
 1. Centre of the screen (aircraft, runway ahead) unobstructed in both views.
@@ -139,8 +176,12 @@ Record device model, Android version, build type and result per step.
   build shows no airspeed or altitude. Test with development builds.
 - **No touch rudder:** touch-only players cannot steer the nosewheel on the
   ground; take-offs are straight, after landing use RESET.
-- **Cockpit view is a camera position only:** no modelled interior or instruments.
 - **Untuned flight model:** values are provisional (see `docs/FLIGHT_MODEL.md`).
+- **Contextual HUD thresholds untuned:** phase, warning and disclosure values are
+  provisional (`FlightAwarenessConfiguration`). No warning sounds.
+- **Cockpit is a placeholder:** primitive shapes and flat dials (`docs/COCKPIT.md`
+  lists the visual assets still to make). Flap values are untuned. On 4:3 tablets
+  some cockpit controls sit under the action rail at the resting view.
 - **RESET has no confirmation:** an accidental tap restarts the flight.
 - **Placeholder package name** `com.dor.openskies` must be replaced before any
   store upload.
@@ -150,8 +191,8 @@ Record device model, Android version, build type and result per step.
 
 ## 7. Deliberately deferred
 
-Touch rudder / nosewheel steering; cockpit interior and instruments; contextual
-layer-1 UI (flaps, trim, landing cues); flight assistance (interface only);
+Touch rudder / nosewheel steering; modelled cockpit art; trim; flight
+assistance (interface only);
 settings menu (including the 60 FPS option and control sensitivity); flaps,
 trim, propeller effects, wind, ground effect; scenery, coastline and airport
 buildings; audio; tutorials and challenges; any ads, analytics, accounts or

@@ -3,11 +3,13 @@
     "rootNamespace": "OpenSkies.Gameplay",
     "references": [
         "OpenSkies.FlightState",
+        "OpenSkies.Awareness",
         "OpenSkies.Simulation",
         "OpenSkies.FlightInput",
         "OpenSkies.CameraSystems",
         "OpenSkies.UI",
-        "UnityEngine.UI"
+        "UnityEngine.UI",
+        "OpenSkies.Cockpit"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

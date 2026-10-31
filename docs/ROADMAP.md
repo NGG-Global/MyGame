@@ -53,9 +53,47 @@ added here.
 - [ ] CI green
 - [ ] Owner: first Android device test (development build)
 
+## M3a: Contextual HUD foundation
+
+- [x] `OpenSkies.Awareness` layer: flight phase estimator (ten phases, confidence,
+      hysteresis, confirmation and minimum durations, touch-and-go, go-around,
+      rejected take-off), runway geometry, warning monitor (stall, sink rate,
+      overspeed), disclosure controller with Cinematic / Smart / Detailed profiles
+- [x] Contextual HUD: flight data strip, approach guide (PAPI-style lights,
+      centreline cue), navigation guide, warning banners, action rail with SYSTEMS,
+      HUD profile button; 0.2 s fades, reduced motion (Android system setting)
+- [x] Parking brake (input provider); height above ground in telemetry
+- [x] Development inspector (phase, confidence, profile, visible elements and
+      actions with reasons, warnings, transition log)
+- [x] EditMode tests with scripted telemetry; PlayMode layout and session tests
+- [ ] CI green
+- [ ] Owner: Editor run with the inspector open (full circuit, touch-and-go,
+      go-around, rejected take-off); tune `FlightAwarenessConfiguration`
+- [ ] Owner: phone test of legibility, banner placement and the action rail reach
+- [ ] Decide: warning sounds; motion option in a settings menu
+
+## M4a: Interactive cockpit, first version
+
+- [x] `AircraftSystems`: one authoritative state for flaps, parking brake,
+      lights and ignition, changed only through a shared gate (policy, confirmation)
+- [x] Flaps and simplified ignition in the flight model; ENGINE OFF caution
+- [x] Placeholder cockpit: six instruments (airspeed with arcs from the flight
+      model, attitude, altimeter, heading, vertical speed, GPS map), switch row,
+      flap selector, exterior lights
+- [x] `CockpitInteractionManager`: taps, look, pinch, double tap; shared pointer
+      ownership; generous picking
+- [x] Focus panel: enlarged instruments and touch-friendly system selectors
+- [x] Cockpit camera: drag-to-look with limits, smooth recentring, adjustable and
+      remembered field of view
+- [x] EditMode and PlayMode tests (`docs/COCKPIT.md`)
+- [ ] CI green
+- [ ] Owner: device checklist in `docs/COCKPIT.md`; tune flap values in a flight test
+- [ ] Modelled cockpit art (list in `docs/COCKPIT.md`)
+
 ## M2b: Flight model refinement
 
-- Flaps and elevator trim; propeller effects (torque, P-factor, slipstream)
+- Elevator trim; propeller effects (torque, P-factor, slipstream). Flaps are in
+  (M4a); validate their values in flight tests.
 - Ground effect; wind
 - Regression tests: take-off distance, stall speed, climb rate within
   design tolerances (PlayMode)
@@ -63,9 +101,10 @@ added here.
 ## M3: Assistance and contextual UI (layer 1)
 
 - Optional assistance (auto coordination, attitude hold, stall protection)
-- Contextual elements: flaps, trim, landing cue; appear and fade by phase of flight
+- Contextual elements: trim once modelled (flaps, the landing cue and phase-based
+  disclosure are done in M3a/M4a)
 
-## M4: Cockpit (layer 2)
+## M4: Cockpit (layer 2), remaining
 
 - Modelled cockpit interior with core instruments (airspeed, attitude,
   altimeter, turn coordinator, heading, vertical speed)

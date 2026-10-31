@@ -32,14 +32,21 @@ aircraft.
 | Thrust | min(static thrust · power, η·P/V) along the nose through the centre of mass; power lags throttle (first-order) | `EngineModel` |
 | Landing gear | Per wheel: raycast along the strut, spring-damper normal force, tyre side friction (saturating), rolling resistance and brakes (smoothed near zero speed), nosewheel steering from the rudder pedals | `LandingGear`, `AircraftController.ApplyLandingGear` |
 | Air density | ISA troposphere: ρ = 1.225·(T/288.15)^4.2559 | `Atmosphere` |
+| Flaps | Detents 0/10/20/30°, 6 s full travel. At full flap: C_L0 +0.5, critical angle −2°, C_D0 +0.035, C_m −0.03 | `Aerodynamics`, `AircraftController` |
+| Ignition | Off: no power; on from off: 1.5 s cranking, then running | `EngineModel` |
 
 Control effectiveness scales with dynamic pressure, so the controls are soft
 at low speed and firm at cruise. Damping moments scale with airspeed. There is
 no auto-levelling in the physics: any assistance must go through
 `IFlightAssist` and only change pilot commands.
 
-Not modelled yet: wind, ground effect, flaps, trim, propeller torque, P-factor
-and slipstream, adverse yaw, spins, compressibility, crash damage.
+Flap and ignition positions come from `AircraftSystems` (`docs/COCKPIT.md`),
+applied to the commands by the session. Stall speed at sea level with these
+values: about 51 kt clean, about 46 kt with full flap (`Aerodynamics.StallSpeed`,
+also used for the airspeed indicator arcs).
+
+Not modelled yet: wind, ground effect, trim, propeller torque, P-factor and
+slipstream, adverse yaw, spins, compressibility, crash damage, fuel and mixture.
 
 ## Indicated airspeed
 
@@ -65,6 +72,10 @@ Touch controls (joystick, throttle, brakes) are described in
 | Space (hold) | Wheel brakes (main wheels) | Brake 1 |
 | R | Reset to runway start, at rest, idle | session command |
 | C | Chase / cockpit camera | presentation command |
+| P | Parking brake: set (on the ground) / release | Brake 1 while set (session command) |
+| [ / ] | Flaps up / down one detent | Flaps (session command) |
+| L / N | Landing light / navigation lights | visual only |
+| V, - / = | Cockpit view: look forward; wider / narrower field of view | presentation command |
 
 Gamepad: left stick pitch/roll (up = nose down), right stick X rudder, right/left
 trigger throttle, south button brakes, north button camera, select/back reset.

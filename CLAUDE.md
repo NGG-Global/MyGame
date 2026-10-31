@@ -3,8 +3,9 @@
 Semi-realistic mobile flight simulator (working title). Android first, landscape.
 Differentiator: touch-first UX with progressive disclosure. Detail lives in
 `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/FLIGHT_MODEL.md`,
-`docs/TOUCH_CONTROLS.md` and `docs/ROADMAP.md`. Read them before changing
-design, architecture, physics or input.
+`docs/TOUCH_CONTROLS.md`, `docs/CONTEXTUAL_UI.md`, `docs/COCKPIT.md` and
+`docs/ROADMAP.md`. Read them before changing design, architecture, physics, input,
+the HUD or the cockpit.
 
 ## Essentials
 - Unity **6000.6.0f1** (`ProjectSettings/ProjectVersion.txt`), URP 17.6.0,
@@ -25,8 +26,12 @@ design, architecture, physics or input.
   - `Simulation`: Rigidbody flight (`AircraftController`), telemetry,
     `AircraftConfiguration`, and pure physics functions. Knows nothing about
     input, cameras or UI.
-  - `Input`, `Camera`, `UI`: never reference `Simulation`. Input produces
-    `FlightControls`; presentation reads `FlightTelemetry` or transforms.
+  - `Awareness`: phase of flight, warnings and HUD disclosure decisions in plain
+    C# (references FlightState only). See `docs/CONTEXTUAL_UI.md`.
+  - `Cockpit`: cockpit touch routing, picking, layout, switch and light views
+    (references FlightState, FlightInput, CameraSystems). See `docs/COCKPIT.md`.
+  - `Input`, `Camera`, `UI`, `Cockpit`: never reference `Simulation`. Input produces
+    `FlightControls`; presentation reads `FlightTelemetry`, awareness state or transforms.
   - `Gameplay`: composition root (`FlightSession`). The only place layers meet.
   - `Editor`: build script and scene builders.
 - Flight is Rigidbody physics: forces and torques in `FixedUpdate` only. Never
@@ -35,6 +40,13 @@ design, architecture, physics or input.
   `IFlightAssist` and only changes commands.
 - Physics formulas live in pure static functions with EditMode tests.
 - Camera switching and UI never change flight controls.
+- Switch and lever positions (flaps, parking brake, lights, ignition) live only
+  in `AircraftSystems`; change them only through `FlightSession.RequestSystemChange`
+  / `SystemChangeGate`. Never keep a second copy of a system's state in a view.
+- Cockpit objects never get colliders; picking uses `CockpitPicking`.
+- Flight controls (joystick, throttle, brakes, CAM, RESET) are outside HUD
+  disclosure: no disclosure rule may hide or move them. Disclosure thresholds go
+  in the settings classes (`FlightAwarenessConfiguration`), not in code.
 - All flight input goes through `FlightInputRouter` providers. Any new code that
   reacts to touches (camera look, cockpit, menus) must ignore pointers owned in
   `TouchFlightControls.Ownership`. New Input System only; no `UnityEngine.Input`.

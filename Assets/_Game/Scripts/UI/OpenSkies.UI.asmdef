@@ -3,6 +3,7 @@
     "rootNamespace": "OpenSkies.UI",
     "references": [
         "OpenSkies.FlightState",
+        "OpenSkies.Awareness",
         "UnityEngine.UI"
     ],
     "includePlatforms": [],
