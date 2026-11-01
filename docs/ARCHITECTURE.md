@@ -28,7 +28,8 @@ listed, the code cannot compile against it.
 
 | Folder | Assembly | Namespace | References | Responsibility |
 |---|---|---|---|---|
-| `FlightState/` | `OpenSkies.FlightState` | `OpenSkies.FlightState` | none | Contracts: `FlightControls` (pilot commands), `FlightTelemetry` (read-only snapshot), `IFlightAssist`, `FlightUnits`; `AircraftSystems` (the one authoritative state of switches and levers), its policy and `SystemChangeGate`. |
+| `FlightState/` | `OpenSkies.FlightState` | `OpenSkies.FlightState` | none | Contracts: `FlightControls` (pilot commands), `FlightTelemetry` (read-only snapshot), `IFlightAssist`, `FlightUnits`; `AircraftSystems` (the one authoritative state of switches and levers), its policy and `SystemChangeGate`; `FlightAssistProfile`, `ControlSensitivity`, `AircraftEnvelope`. |
+| `Assistance/` | `OpenSkies.Assistance` | `OpenSkies.Assistance` | FlightState | Flight assistance between the pilot and the aircraft (`FlightAssistController : IFlightAssist`): damping, coordination, bank and trim holds, gentle stall prevention, smooth profile blending. Plain C#. See `docs/FLIGHT_ASSISTANCE.md`. |
 | `Simulation/` | `OpenSkies.Simulation` | `OpenSkies.Simulation` | FlightState | `AircraftController` (Rigidbody forces), `AircraftTelemetry`, `AircraftConfiguration` (ScriptableObject); pure functions `Aerodynamics`, `EngineModel`, `LandingGear`, `Atmosphere`, `AttitudeMath`. See `docs/FLIGHT_MODEL.md`. |
 | `Input/` | `OpenSkies.FlightInput` | `OpenSkies.FlightInput`, `.TouchControls` | FlightState, Unity.InputSystem, UnityEngine.UI | `IFlightControlSource`, `IFlightInputProvider`, `FlightInputRouter` (merges providers, owns the throttle), keyboard/gamepad provider, `ParkingBrake` provider, touch controls with `PointerOwnership` (see `docs/TOUCH_CONTROLS.md`). |
 | `Camera/` | `OpenSkies.CameraSystems` | `OpenSkies.CameraSystems` | none | `CameraRig` (chase, cockpit with look, recentring and field of view), `ChaseCameraMath`, `CockpitLookMath`. |
@@ -49,7 +50,8 @@ Physics steps (`FixedUpdate`, default 50 Hz), in script execution order:
 
 1. `FlightSession` (order −50): `FlightInputRouter.Read(dt)` (keyboard/gamepad
    and touch providers merged) → `AircraftSystems.ApplyTo` (parking brake, flaps,
-   ignition) → `IFlightAssist.Apply` (pass-through for now) →
+   ignition) → `IFlightAssist.Apply` (the `FlightAssistController` for the player's
+   profile; the player's sensitivity is applied to the input first) →
    `AircraftController.SetControls`. Then awareness on the latest
    telemetry sample: runway geometry, `FlightPhaseEstimator.Update`,
    `FlightWarningMonitor.Update`.
@@ -85,7 +87,8 @@ is a `FlightControls` value from an `IFlightControlSource`.
 | Aerodynamics, engine and gear as pure functions | Physics formulas are unit-tested in EditMode without scenes; `AircraftController` only gathers state and applies results. |
 | Custom raycast landing gear, not `WheelCollider` | Predictable spring-damper and tyre friction tuned for an aircraft, plain code that can be tested; `WheelCollider` is tuned for cars. |
 | Aircraft colliders on the built-in "Ignore Raycast" layer | Wheel raycasts can never hit the aircraft itself. Revisit when touch picking of the cockpit needs raycasts against it. |
-| `IFlightAssist` between input and aircraft | Future assistance modifies commands only; the physics stays honest. |
+| `IFlightAssist` between input and aircraft | Assistance (`OpenSkies.Assistance`) modifies commands only, with rate limits and limited authority; every profile flies the same physics with the same telemetry. |
+| One telemetry builder (`TelemetryMath`) | The game and the EditMode flight lab report identical telemetry from the same state, so assistance is tested against what it will see. |
 | Input providers merged by `FlightInputRouter` | Touch, keyboard and gamepad work together; one throttle state; new devices need no physics changes. |
 | One `PointerOwnership` table for all touch consumers | A touch keeps its first owner until release; later consumers (camera look, cockpit) must respect it. |
 | Touch visuals generated at runtime, layout built in code | No art imports or hand-edited UI; identical layout in scene and tests. |

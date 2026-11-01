@@ -111,6 +111,9 @@ namespace OpenSkies.Gameplay
 
         public bool IsPanelOpen => _panel != null && _panel.IsOpen;
 
+        /// <summary>The focus panel opened (an instrument or a selector): other panels in the free column close.</summary>
+        public event Action PanelOpened;
+
         /// <summary>Per frame, after the telemetry is known.</summary>
         public void Update(in FlightTelemetry telemetry, in RunwayRelation runway, ViewMode view)
         {
@@ -174,6 +177,7 @@ namespace OpenSkies.Gameplay
             var item = (CockpitItem)(int)kind;
             _gate.Clear();
             _panel.ShowInstrument(kind, CockpitItems.DisplayName(item), CockpitItems.AccessibilityHint(item));
+            PanelOpened?.Invoke();
         }
 
         /// <summary>Opens the selector for a system (from the cockpit or from the contextual HUD).</summary>
@@ -185,6 +189,7 @@ namespace OpenSkies.Gameplay
             _shownConfirmation = -1;
             _panel.ShowSystem(system, CockpitItems.DisplayName(item), CockpitItems.AccessibilityHint(item), Options(system), _systems.PositionCount(system));
             RefreshSystemPanel();
+            PanelOpened?.Invoke();
         }
 
         public void Close()

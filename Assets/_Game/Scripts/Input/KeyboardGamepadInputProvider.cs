@@ -23,9 +23,12 @@ namespace OpenSkies.FlightInput
     ///   L / N          landing light / navigation lights
     ///   V              cockpit view: look forward again
     ///   - / =          cockpit view: wider / narrower field of view (hold)
+    ///   M              next flight assistance profile (Assisted, Standard, Manual)
+    ///   Home / End     pitch trim nose down / nose up (hold)
     /// Gamepad: left stick pitch/roll (up = nose down), right stick X rudder,
     /// right/left trigger throttle up/down, south button (A/Cross) brakes,
-    /// north button (Y/Triangle) camera, select/back reset.
+    /// north button (Y/Triangle) camera, select/back reset, d-pad up/down pitch
+    /// trim nose down/up.
     /// </summary>
     public sealed class KeyboardGamepadInputProvider : IFlightInputProvider
     {
@@ -123,6 +126,24 @@ namespace OpenSkies.FlightInput
         }
 
         /// <summary>Presentation command: cockpit view looks forward again.</summary>
+        /// <summary>Session command: next assistance profile.</summary>
+        public bool AssistProfileCyclePressedThisFrame()
+        {
+            var keyboard = Keyboard.current;
+            return keyboard != null && keyboard.mKey.wasPressedThisFrame;
+        }
+
+        /// <summary>Pitch trim input while held: −1 nose down, +1 nose up (Home/End, gamepad d-pad down/up = nose up/down).</summary>
+        public float PitchTrimAxis()
+        {
+            float axis = 0f;
+            var keyboard = Keyboard.current;
+            if (keyboard != null) axis += Axis(keyboard.endKey.isPressed, keyboard.homeKey.isPressed);
+            var gamepad = Gamepad.current;
+            if (gamepad != null) axis += Axis(gamepad.dpad.down.isPressed, gamepad.dpad.up.isPressed);
+            return Mathf.Clamp(axis, -1f, 1f);
+        }
+
         public bool RecentreViewPressedThisFrame()
         {
             var keyboard = Keyboard.current;

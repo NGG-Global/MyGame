@@ -67,10 +67,17 @@ Rules:
 
 ## Assistance
 
-Optional and adjustable, off by default for experienced players
-(**Open question**: default level for new players). Candidates: auto
-coordination (rudder), attitude hold on stick release, stall protection,
-landing guidance.
+Three profiles, chosen from ASSIST on the action rail and remembered
+(`docs/FLIGHT_ASSISTANCE.md`): **Assisted** (strong damping, bank and trim hold
+on stick release, rudder coordination, gentle stall prevention, flying tips),
+**Standard** (light damping, coordination, automatic trim as an option, no
+auto-levelling) and **Manual** (direct control, manual rudder and trim). Warnings
+stay on in all of them. Stick sensitivity is a separate setting. All profiles fly
+the same flight model.
+
+**Open question**: default level for new players. The prototype starts in
+Assisted on first launch (`FlightAssistConfiguration.defaultProfile`); confirm or
+change. Also open: a touch control for rudder and trim (Manual on touch has neither).
 
 ## Cameras
 

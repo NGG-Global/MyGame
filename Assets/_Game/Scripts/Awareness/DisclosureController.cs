@@ -338,6 +338,7 @@ namespace OpenSkies.Awareness
             {
                 case ContextAction.ParkingBrake: return input.Systems.HasParkingBrake;
                 case ContextAction.Flaps: return input.Systems.HasFlaps;
+                case ContextAction.Assistance: return input.HasAssistanceSettings;
                 default: return input.HasRunway;
             }
         }
@@ -377,6 +378,8 @@ namespace OpenSkies.Awareness
                            || (phase == FlightPhase.Descent && input.DistanceToRunwayNm <= _settings.approachGuideRangeNm);
                 case ContextAction.Navigation:
                     return phase == FlightPhase.Climb || phase == FlightPhase.Cruise || phase == FlightPhase.Descent;
+                case ContextAction.Assistance:
+                    return phase == FlightPhase.Parked; // choose before take-off; SYSTEMS reaches it any time
                 default:
                     return false;
             }

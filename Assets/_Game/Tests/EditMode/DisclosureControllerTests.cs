@@ -316,7 +316,9 @@ namespace OpenSkies.Tests
             for (int i = 0; i < ContextActions.Count; i++)
             {
                 var action = (ContextAction)i;
-                Assert.AreEqual(action != ContextAction.Flaps, d.IsActionVisible(action), action.ToString());
+                // Every available action; this input has no flaps and no assistance settings.
+                bool available = action != ContextAction.Flaps && action != ContextAction.Assistance;
+                Assert.AreEqual(available, d.IsActionVisible(action), action.ToString());
             }
         }
     }

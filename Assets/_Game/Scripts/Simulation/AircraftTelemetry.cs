@@ -6,13 +6,13 @@ namespace OpenSkies.Simulation
     /// <summary>
     /// Samples the aircraft once per physics step, after the controller, and
     /// publishes a <see cref="FlightTelemetry"/> snapshot in pilot units.
-    /// Read-only: nothing here changes the flight.
+    /// Read-only: nothing here changes the flight. The values are built by
+    /// <see cref="TelemetryMath"/>, which test harnesses share.
     /// </summary>
     [DefaultExecutionOrder(50)]
     [RequireComponent(typeof(AircraftController))]
     public sealed class AircraftTelemetry : MonoBehaviour
     {
-        const float StallWarningMinAirspeed = 5f; // m/s; no meaningful angle of attack below this
         const float GroundProbeStartAbove = 2f;   // m; the probe starts above the reference point, which sits slightly below the surface when the gear is compressed
 
         [Tooltip("Longest height the radio altimeter measures, m. Above it, height above ground falls back to height above sea level.")]
@@ -32,40 +32,24 @@ namespace OpenSkies.Simulation
         public FlightTelemetry Sample()
         {
             var body = _aircraft.Body;
-            var aero = _aircraft.LastAerodynamics;
-            var controls = _aircraft.Controls;
-            var c = _aircraft.configuration;
-            Vector3 velocity = body.linearVelocity;
             Quaternion rotation = body.rotation;
-            float trueAirspeed = velocity.magnitude; // no wind yet
-
-            float alphaDegrees = aero.AngleOfAttack * Mathf.Rad2Deg;
-            bool stallWarning = !_aircraft.WeightOnWheels
-                                && trueAirspeed > StallWarningMinAirspeed
-                                && alphaDegrees >= c.stallAngle - c.stallWarningMargin;
-
-            return new FlightTelemetry
+            Vector3 velocity = body.linearVelocity;
+            return TelemetryMath.Compose(new TelemetrySource
             {
-                IndicatedAirspeedKnots = FlightUnits.MetresPerSecondToKnots(Atmosphere.IndicatedFromTrueAirspeed(trueAirspeed, _aircraft.AirDensity)),
-                TrueAirspeedKnots = FlightUnits.MetresPerSecondToKnots(trueAirspeed),
-                GroundspeedKnots = FlightUnits.MetresPerSecondToKnots(new Vector2(velocity.x, velocity.z).magnitude),
-                AltitudeFeet = FlightUnits.MetresToFeet(body.position.y),
-                HeightAboveGroundFeet = FlightUnits.MetresToFeet(HeightAboveGround(body.position)),
-                VerticalSpeedFeetPerMinute = FlightUnits.MetresPerSecondToFeetPerMinute(velocity.y),
-                HeadingDegrees = AttitudeMath.HeadingDegrees(rotation),
-                PitchDegrees = AttitudeMath.PitchDegrees(rotation),
-                BankDegrees = AttitudeMath.BankDegrees(rotation),
-                AngleOfAttackDegrees = alphaDegrees,
-                SideslipDegrees = aero.Sideslip * Mathf.Rad2Deg,
-                Throttle = controls.Throttle,
+                Velocity = velocity,
+                TrueAirspeed = velocity.magnitude, // no wind yet
+                Rotation = rotation,
+                BodyAngularVelocity = Quaternion.Inverse(rotation) * body.angularVelocity,
+                Aerodynamics = _aircraft.LastAerodynamics,
+                Controls = _aircraft.Controls,
                 EnginePower = _aircraft.EnginePower,
-                Brake = controls.Brake,
-                FlapPosition = _aircraft.FlapPosition,
-                FlapDegrees = _aircraft.FlapPosition * c.MaxFlapDegrees,
                 EngineState = _aircraft.EngineState,
+                FlapPosition = _aircraft.FlapPosition,
                 WeightOnWheels = _aircraft.WeightOnWheels,
-                StallWarning = stallWarning,
-            };
+                AirDensity = _aircraft.AirDensity,
+                Altitude = body.position.y,
+                HeightAboveGround = HeightAboveGround(body.position),
+            }, _aircraft.configuration);
         }
 
         /// <summary>Radio-altimeter style: straight down to the first ground collider within range.</summary>

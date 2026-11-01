@@ -105,9 +105,25 @@ added here.
 - Regression tests: take-off distance, stall speed, climb rate within
   design tolerances (PlayMode)
 
+## M3b: Flight assistance profiles
+
+- [x] `OpenSkies.Assistance` layer between input and aircraft: Assisted,
+      Standard and Manual profiles; rate-limited corrections, pilot override,
+      smooth profile blending, shared trim (`docs/FLIGHT_ASSISTANCE.md`)
+- [x] Bank hold, automatic and manual trim, coordination, phugoid damping,
+      gentle stall prevention, flying tips for Assisted
+- [x] Settings card from ASSIST on the rail; stick sensitivity; remembered settings
+- [x] Shared `TelemetryMath`; body rates in telemetry; flap-aware stall warning
+- [x] EditMode flight lab with seven scenario families in every profile; PlayMode
+      tests with the Rigidbody aircraft and the UI
+- [ ] CI green
+- [ ] Owner: confirm the first-launch profile (Assisted for now); flight test and
+      tune `FlightAssistConfiguration`; device checklist in `docs/FLIGHT_ASSISTANCE.md`
+- [ ] Decide a touch rudder and trim control
+
 ## M3: Assistance and contextual UI (layer 1)
 
-- Optional assistance (auto coordination, attitude hold, stall protection)
+- Optional assistance: done in M3b
 - Contextual elements: trim once modelled (flaps, the landing cue and phase-based
   disclosure are done in M3a/M4a)
 

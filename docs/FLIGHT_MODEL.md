@@ -37,15 +37,18 @@ aircraft.
 
 Control effectiveness scales with dynamic pressure, so the controls are soft
 at low speed and firm at cruise. Damping moments scale with airspeed. There is
-no auto-levelling in the physics: any assistance must go through
-`IFlightAssist` and only change pilot commands.
+no auto-levelling in the physics: assistance goes through `IFlightAssist`
+(`OpenSkies.Assistance`, `docs/FLIGHT_ASSISTANCE.md`) and only changes pilot
+commands. Pitch trim lives in the assistance layer (one trim state for every
+profile: automatic in Assisted and Standard, manual keys in Manual); it moves the
+elevator command, there is no separate trim tab in the aerodynamics.
 
 Flap and ignition positions come from `AircraftSystems` (`docs/COCKPIT.md`),
 applied to the commands by the session. Stall speed at sea level with these
 values: about 51 kt clean, about 46 kt with full flap (`Aerodynamics.StallSpeed`,
 also used for the airspeed indicator arcs).
 
-Not modelled yet: wind, ground effect, trim, propeller torque, P-factor and
+Not modelled yet: wind, ground effect, a trim tab (trim is an elevator offset), propeller torque, P-factor and
 slipstream, adverse yaw, spins, compressibility, crash damage, fuel and mixture.
 
 ## Indicated airspeed
@@ -76,9 +79,12 @@ Touch controls (joystick, throttle, brakes) are described in
 | [ / ] | Flaps up / down one detent | Flaps (session command) |
 | L / N | Landing light / navigation lights | visual only |
 | V, - / = | Cockpit view: look forward; wider / narrower field of view | presentation command |
+| M | Next assistance profile (Assisted, Standard, Manual) | session command |
+| Home / End (hold) | Pitch trim nose down / nose up | trim in the assistance layer |
 
 Gamepad: left stick pitch/roll (up = nose down), right stick X rudder, right/left
-trigger throttle, south button brakes, north button camera, select/back reset.
+trigger throttle, south button brakes, north button camera, select/back reset,
+d-pad up/down pitch trim nose down/up.
 
 The throttle is a lever: it stays where it is left. The aircraft starts at
 idle with brakes off.

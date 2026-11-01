@@ -31,6 +31,12 @@ namespace OpenSkies.FlightState
         public float AngleOfAttackDegrees;
         /// <summary>Airflow from the right positive.</summary>
         public float SideslipDegrees;
+        /// <summary>Body-axis rotation rate about the wing axis, nose up positive (rate gyro).</summary>
+        public float PitchRateDegreesPerSecond;
+        /// <summary>Body-axis rotation rate about the longitudinal axis, right wing down positive.</summary>
+        public float RollRateDegreesPerSecond;
+        /// <summary>Body-axis rotation rate about the vertical axis, nose right positive.</summary>
+        public float YawRateDegreesPerSecond;
         /// <summary>Throttle lever position, 0-1.</summary>
         public float Throttle;
         /// <summary>Engine output, 0-1. Lags the throttle.</summary>
