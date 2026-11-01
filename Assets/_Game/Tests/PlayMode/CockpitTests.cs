@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using OpenSkies.Awareness;
 using OpenSkies.CameraSystems;
@@ -42,6 +43,7 @@ namespace OpenSkies.Tests
         CockpitRig _rig;
         CockpitInteractionManager _interaction;
         CockpitFocusPanel _panel;
+        CockpitViewControls _viewControls;
         TouchFlightControls _touch;
         CameraRig _camera;
         ContextualHud _hud;
@@ -96,6 +98,8 @@ namespace OpenSkies.Tests
             _touch = TouchControlsFactory.Build(safeArea, font);
             _touch.visibility = TouchControlsVisibility.Always;
             _panel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
+            _viewControls = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
+            _viewControls.SetReducedMotion(true);
             if (withHud)
             {
                 _hud = ContextualHudFactory.Build(safeArea, font);
@@ -114,6 +118,7 @@ namespace OpenSkies.Tests
             _session.cockpit = _rig;
             _session.cockpitInteraction = _interaction;
             _session.focusPanel = _panel;
+            _session.cockpitViewControls = _viewControls;
             _session.aircraftLights = _lights;
             _session.rememberHudPreferences = false;
             _session.homeRunway = new RunwayInfo(Vector3.zero, 0f, 2000f, 30f);
@@ -131,6 +136,22 @@ namespace OpenSkies.Tests
         }
 
         Vector2 ScreenPointOf(CockpitItem item) => _camera.ViewCamera.WorldToScreenPoint(_rig.Find(item).transform.position);
+
+        /// <summary>Screen-space bounds of a rectangle on the world-space instrument panel, as the cockpit camera sees it.</summary>
+        Rect ScreenRect(RectTransform rect)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+            foreach (var corner in corners)
+            {
+                Vector2 p = _camera.ViewCamera.WorldToScreenPoint(corner);
+                min = Vector2.Min(min, p);
+                max = Vector2.Max(max, p);
+            }
+            return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        }
 
         static Vector2 EmptySky => new Vector2(Screen.width * 0.5f, Screen.height * 0.93f);
 
@@ -396,6 +417,91 @@ namespace OpenSkies.Tests
             Assert.That(_camera.CockpitLook.magnitude, Is.LessThan(0.5f), "back to the resting view");
         }
 
+        [UnityTest]
+        public IEnumerator SelectedItem_IsFramedInTheCockpit_UntilThePanelCloses()
+        {
+            yield return Build(withHud: true);
+            var selection = _rig.selection;
+            Assert.IsNotNull(selection);
+            Assert.IsFalse(selection.IsShown, "nothing selected at first");
+
+            Tap(ScreenPointOf(CockpitItem.LandingLightSwitch));
+            yield return null;
+            Assert.IsTrue(selection.IsShown, "tapping a small switch visibly selects it");
+            Assert.AreEqual(CockpitItem.LandingLightSwitch, selection.Selected.item);
+            Rect frame = ScreenRect(selection.frame);
+            Assert.IsTrue(frame.Contains(ScreenPointOf(CockpitItem.LandingLightSwitch)), "the frame surrounds the switch on screen");
+            Assert.IsFalse(frame.Contains(ScreenPointOf(CockpitItem.NavigationLightsSwitch)), "and not its neighbour");
+            Assert.IsFalse(_session.Systems.LandingLightOn, "selecting never changes the system");
+
+            Tap(ScreenPointOf(CockpitItem.Altimeter));
+            yield return null;
+            Assert.AreEqual(CockpitItem.Altimeter, selection.Selected.item, "the frame follows the selection");
+            Assert.IsTrue(ScreenRect(selection.frame).Contains(ScreenPointOf(CockpitItem.Altimeter)));
+
+            _panel.instrumentClose.OnPointerClick(Pointer(22, Vector2.zero));
+            yield return null;
+            Assert.IsFalse(selection.IsShown, "closing the panel clears the frame");
+
+            // FLAPS on the contextual HUD opens the same selector and frames the lever it sets.
+            _hud.railSlots[_hud.SlotOf(ContextAction.Flaps)].OnPointerClick(Pointer(23, Vector2.zero));
+            yield return null;
+            Assert.IsTrue(selection.IsShown);
+            Assert.AreEqual(CockpitItem.FlapSelector, selection.Selected.item);
+
+            _camera.ToggleMode(); // any camera change closes the panel
+            yield return null;
+            Assert.IsFalse(selection.IsShown);
+        }
+
+        [UnityTest]
+        public IEnumerator LookForward_IsOfferedOnlyWhenLookingAway_AndReturnsTheViewSmoothly()
+        {
+            yield return Build();
+            _controls.Controls = new FlightControls(0.1f, -0.2f, 0f, 0.7f);
+            yield return null;
+            Assert.IsFalse(_viewControls.LookForwardShown, "looking forward: nothing to offer");
+
+            _camera.AddCockpitLook(-60f, 10f);
+            yield return null;
+            Assert.IsTrue(_viewControls.LookForwardShown, "offered once the view is turned away");
+            Assert.IsTrue(_viewControls.lookForwardGroup.blocksRaycasts);
+
+            _viewControls.lookForward.OnPointerClick(Pointer(24, Vector2.zero));
+            Assert.IsTrue(_camera.IsRecentring, "a smooth return, not a jump");
+            Assert.That(_camera.CockpitLook.magnitude, Is.GreaterThan(30f));
+            yield return null;
+            Assert.IsFalse(_viewControls.LookForwardShown, "hidden once the view is on its way back");
+            Assert.IsFalse(_viewControls.lookForwardGroup.blocksRaycasts);
+            yield return new WaitForSeconds(0.6f);
+            Assert.That(_camera.CockpitLook.magnitude, Is.LessThan(0.5f), "back to the resting view");
+            yield return new WaitForFixedUpdate();
+            Assert.AreEqual(0.7f, _session.aircraft.Controls.Throttle, 1e-4f, "the view control never touches flight input");
+            Assert.AreEqual(-0.2f, _session.aircraft.Controls.Roll, 1e-4f);
+            Assert.AreEqual(0.1f, _session.aircraft.Controls.Pitch, 1e-4f);
+
+            // A finger on the button keeps it in place even if the view comes back another way.
+            _camera.AddCockpitLook(30f, 0f);
+            yield return null;
+            var press = Pointer(25, Vector2.zero);
+            _viewControls.lookForward.OnPointerDown(press);
+            _camera.RecentreCockpitLook(); // e.g. double tap on the sky with the other hand
+            yield return null;
+            Assert.IsTrue(_viewControls.LookForwardShown, "never pulled away from under the finger");
+            _viewControls.lookForward.OnPointerUp(press);
+            yield return null;
+            Assert.IsFalse(_viewControls.LookForwardShown);
+
+            // Chase view: never offered; back in the cockpit, the remembered direction brings it back.
+            _camera.AddCockpitLook(40f, 0f);
+            _camera.ToggleMode();
+            yield return null;
+            Assert.IsFalse(_viewControls.LookForwardShown, "not in chase view");
+            _camera.ToggleMode();
+            yield return null;
+            Assert.IsTrue(_viewControls.LookForwardShown, "still looking away after the round trip");
+        }
+
         // ---- Systems: one state for cockpit, HUD and simulation -----------------------------
 
         [UnityTest]
@@ -560,6 +666,50 @@ namespace OpenSkies.Tests
             panel.Layout();
             Assert.That(WorldRect(panel.instrumentCard).height, Is.GreaterThanOrEqualTo(width > 1500f ? 450f : 340f),
                 "the enlarged instrument uses the free space (about a third to half of the screen height)");
+        }
+
+        [TestCase(1440f)]
+        [TestCase(1920f)]
+        [TestCase(2400f)]
+        public void LookForward_SitsInTheTopBar_ClearOfEverythingElse(float width)
+        {
+            _root = new GameObject("TopBarLayoutRoot");
+            new GameObject("EventSystem", typeof(EventSystem)).transform.SetParent(_root.transform);
+            var canvasGo = new GameObject("Canvas", typeof(Canvas));
+            canvasGo.transform.SetParent(_root.transform, false);
+            canvasGo.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
+            var canvas = (RectTransform)canvasGo.transform;
+            canvas.sizeDelta = new Vector2(width, 1080f);
+            canvas.pivot = Vector2.zero;
+            canvas.position = Vector3.zero;
+            var safeArea = new GameObject("SafeArea", typeof(RectTransform)).GetComponent<RectTransform>();
+            safeArea.SetParent(canvas, false);
+            safeArea.anchorMin = Vector2.zero;
+            safeArea.anchorMax = Vector2.one;
+            safeArea.offsetMin = safeArea.offsetMax = Vector2.zero;
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            var touch = TouchControlsFactory.Build(safeArea, font);
+            var panel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
+            var hud = ContextualHudFactory.Build(safeArea, font);
+            var view = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
+            Canvas.ForceUpdateCanvases();
+            panel.ShowSystem(AircraftSystem.Flaps, "Flaps", "hint", new[] { "UP", "10", "20", "30" }, 4);
+            panel.Layout();
+
+            Rect button = WorldRect(view.lookForward);
+            Assert.That(button.height, Is.GreaterThanOrEqualTo(96f), "touch target at least 96 units tall");
+            Assert.That(button.width, Is.GreaterThanOrEqualTo(96f));
+            Assert.That(button.xMin, Is.GreaterThanOrEqualTo(0f), "inside the safe area");
+            Assert.That(button.yMax, Is.LessThanOrEqualTo(1080f));
+            Assert.That(button.xMax, Is.LessThanOrEqualTo(WorldRect(hud.profileButton).xMin), "left of the HUD profile button (and so of RESET and CAM)");
+
+            var others = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton, hud.profileButton, hud.inspector,
+                hud.approachGuide, hud.navigationGuide, panel.systemCard, panel.instrumentCard };
+            others.AddRange(hud.railSlots);
+            others.AddRange(hud.dataItems);
+            others.AddRange(hud.warningSlots);
+            foreach (var other in others)
+                Assert.IsFalse(button.Overlaps(WorldRect(other)), $"LOOK FWD overlaps {other.name} at width {width}");
         }
     }
 }

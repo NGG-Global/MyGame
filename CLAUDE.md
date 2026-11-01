@@ -3,9 +3,9 @@
 Semi-realistic mobile flight simulator (working title). Android first, landscape.
 Differentiator: touch-first UX with progressive disclosure. Detail lives in
 `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/FLIGHT_MODEL.md`,
-`docs/TOUCH_CONTROLS.md`, `docs/CONTEXTUAL_UI.md`, `docs/COCKPIT.md` and
-`docs/ROADMAP.md`. Read them before changing design, architecture, physics, input,
-the HUD or the cockpit.
+`docs/TOUCH_CONTROLS.md`, `docs/CONTEXTUAL_UI.md`, `docs/COCKPIT.md`,
+`docs/FLIGHT_ASSISTANCE.md` and `docs/ROADMAP.md`. Read them before changing design,
+architecture, physics, input, assistance, the HUD or the cockpit.
 
 ## Essentials
 - Unity **6000.6.0f1** (`ProjectSettings/ProjectVersion.txt`), URP 17.6.0,
@@ -26,8 +26,11 @@ the HUD or the cockpit.
   - `Simulation`: Rigidbody flight (`AircraftController`), telemetry,
     `AircraftConfiguration`, and pure physics functions. Knows nothing about
     input, cameras or UI.
-  - `Awareness`: phase of flight, warnings and HUD disclosure decisions in plain
-    C# (references FlightState only). See `docs/CONTEXTUAL_UI.md`.
+  - `Awareness`: phase of flight, warnings, flying tips and HUD disclosure
+    decisions in plain C# (references FlightState only). See `docs/CONTEXTUAL_UI.md`.
+  - `Assistance`: the flight assistance profiles (`FlightAssistController :
+    IFlightAssist`) in plain C# (references FlightState only). See
+    `docs/FLIGHT_ASSISTANCE.md`.
   - `Cockpit`: cockpit touch routing, picking, layout, switch and light views
     (references FlightState, FlightInput, CameraSystems). See `docs/COCKPIT.md`.
   - `Input`, `Camera`, `UI`, `Cockpit`: never reference `Simulation`. Input produces
@@ -37,7 +40,9 @@ the HUD or the cockpit.
 - Flight is Rigidbody physics: forces and torques in `FixedUpdate` only. Never
   move the aircraft with `Transform.Translate/Rotate` or set its pose, except
   in reset. No fake auto-levelling in physics; assistance goes through
-  `IFlightAssist` and only changes commands.
+  `IFlightAssist` (`OpenSkies.Assistance`) and only changes commands: rate-limited,
+  limited authority, never the throttle, never the aircraft's constants. Telemetry
+  is built only by `TelemetryMath` (game and test lab alike).
 - Physics formulas live in pure static functions with EditMode tests.
 - Camera switching and UI never change flight controls.
 - Switch and lever positions (flaps, parking brake, lights, ignition) live only

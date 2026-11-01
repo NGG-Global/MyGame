@@ -39,6 +39,8 @@ namespace OpenSkies.Awareness
         Flaps = 1,
         ApproachGuide = 2,
         Navigation = 3,
+        /// <summary>Flight assistance and control settings (opens the selector). Offered before take-off.</summary>
+        Assistance = 4,
     }
 
     /// <summary>How strongly an element is shown.</summary>
@@ -98,6 +100,8 @@ namespace OpenSkies.Awareness
         public bool HasRunway;
         public float DistanceToRunwayNm;
         public AircraftSystemsState Systems;
+        /// <summary>The session can show the flight assistance and control settings.</summary>
+        public bool HasAssistanceSettings;
     }
 
     public static class HudElements
@@ -124,7 +128,7 @@ namespace OpenSkies.Awareness
 
     public static class ContextActions
     {
-        public const int Count = 4;
+        public const int Count = 5;
 
         public static string ShortLabel(ContextAction action)
         {
@@ -134,6 +138,7 @@ namespace OpenSkies.Awareness
                 case ContextAction.Flaps: return "FLAPS";
                 case ContextAction.ApproachGuide: return "APPR";
                 case ContextAction.Navigation: return "NAV";
+                case ContextAction.Assistance: return "ASSIST";
                 default: return "?";
             }
         }

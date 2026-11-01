@@ -1,3 +1,4 @@
+using OpenSkies.Assistance;
 using OpenSkies.Awareness;
 using OpenSkies.CameraSystems;
 using OpenSkies.Cockpit;
@@ -13,9 +14,10 @@ namespace OpenSkies.Gameplay
     /// <summary>
     /// Composition root for one flight. Before each physics step it reads the
     /// control source (by default a <see cref="FlightInputRouter"/> merging
-    /// keyboard/gamepad and touch), applies the aircraft systems (parking brake,
-    /// flaps, ignition), passes the commands through the optional flight assist
-    /// and hands them to the aircraft, then
+    /// keyboard/gamepad and touch), shapes it with the player's sensitivity,
+    /// applies the aircraft systems (parking brake, flaps, ignition), passes the
+    /// commands through the flight assistance layer (<see cref="FlightAssistController"/>,
+    /// the player's profile) and hands them to the aircraft, then
     /// updates flight awareness (phase of flight, warnings) from the latest
     /// telemetry. Each frame it handles session commands (reset, camera, systems,
     /// HUD profile), decides HUD disclosure, runs the cockpit and feeds the HUD
@@ -40,13 +42,23 @@ namespace OpenSkies.Gameplay
         public FlightAwarenessConfiguration awarenessConfiguration;
         [Tooltip("Home runway: approach detection, approach guide and navigation.")]
         public RunwayInfo homeRunway;
-        [Tooltip("Remember the HUD profile, motion preference and cockpit field of view between sessions (PlayerPrefs).")]
+        [Tooltip("Remember the HUD profile, motion preference, cockpit field of view and flight settings between sessions (PlayerPrefs).")]
         public bool rememberHudPreferences = true;
+
+        [Header("Flight assistance")]
+        [Tooltip("Assistance tuning and first-launch defaults. The defaults in code are used when empty.")]
+        public FlightAssistConfiguration assistConfiguration;
+        [Tooltip("Assistance profile, sensitivity and options (opened from ASSIST on the action rail).")]
+        public FlightSettingsPanel flightSettings;
+        [Tooltip("Flying tips for the Assisted profile.")]
+        public GuidanceLine guidanceLine;
 
         [Header("Cockpit")]
         public CockpitRig cockpit;
         public CockpitInteractionManager cockpitInteraction;
         public CockpitFocusPanel focusPanel;
+        [Tooltip("LOOK FWD and other cockpit view controls in the top bar.")]
+        public CockpitViewControls cockpitViewControls;
         public AircraftLightsView aircraftLights;
         [Tooltip("Cockpit field of view change per second while the keyboard zoom keys are held, degrees.")]
         public float fieldOfViewKeyRate = 20f;
@@ -56,6 +68,10 @@ namespace OpenSkies.Gameplay
 
         IFlightControlSource _controls;
         IFlightAssist _assist = NoFlightAssist.Instance;
+        bool _assistOverridden;
+        FlightAssistController _assistance;
+        FlightGuidanceAdvisor _guidance;
+        FlightPreferences.Settings _flight;
         KeyboardGamepadInputProvider _devices;
         FlightInputRouter _router;
         AircraftSystems _systems;
@@ -73,8 +89,29 @@ namespace OpenSkies.Gameplay
         /// <summary>Replace the control source, e.g. with touch controls or a test script.</summary>
         public void SetControlSource(IFlightControlSource source) => _controls = source;
 
-        /// <summary>Install an optional flight assist. Null restores direct control.</summary>
-        public void SetFlightAssist(IFlightAssist assist) => _assist = assist ?? NoFlightAssist.Instance;
+        /// <summary>Replace the assistance layer (tests, experiments). Null gives direct control.</summary>
+        public void SetFlightAssist(IFlightAssist assist)
+        {
+            _assist = assist ?? NoFlightAssist.Instance;
+            _assistOverridden = true;
+        }
+
+        /// <summary>The flight assistance layer (profile, trim, state).</summary>
+        public FlightAssistController Assistance => _assistance;
+        public FlightGuidanceAdvisor Guidance => _guidance;
+        public FlightAssistProfile AssistProfile => _flight.Profile;
+        public ControlSensitivity Sensitivity => _flight.Sensitivity;
+        public bool GuidanceEnabled => _flight.Guidance;
+        public bool FlightSettingsOpen => flightSettings != null && flightSettings.IsOpen;
+
+        public FlightSettingsState CurrentFlightSettings => new FlightSettingsState
+        {
+            Profile = _flight.Profile,
+            Sensitivity = _flight.Sensitivity,
+            StallPrevention = _flight.AssistedStallPrevention,
+            Guidance = _flight.Guidance,
+            AutoTrim = _flight.StandardAutoTrim,
+        };
 
         public FlightInputRouter Router => _router;
         /// <summary>The authoritative switch and lever positions of the aircraft.</summary>
@@ -93,6 +130,7 @@ namespace OpenSkies.Gameplay
             get
             {
                 int mask = ContextualHud.ActionBit(ContextAction.ParkingBrake) | ContextualHud.ActionBit(ContextAction.Flaps);
+                if (flightSettings != null) mask |= ContextualHud.ActionBit(ContextAction.Assistance);
                 if (homeRunway.IsDefined)
                     mask |= ContextualHud.ActionBit(ContextAction.ApproachGuide) | ContextualHud.ActionBit(ContextAction.Navigation);
                 return mask;
@@ -121,15 +159,40 @@ namespace OpenSkies.Gameplay
                 contextualHud.ConfigureActions(AvailableActions);
             }
             if (focusPanel != null && contextualHud != null) focusPanel.SetReducedMotion(contextualHud.ReducedMotion);
+            if (cockpitViewControls != null && contextualHud != null) cockpitViewControls.SetReducedMotion(contextualHud.ReducedMotion);
             if (cameraRig != null && rememberHudPreferences)
                 cameraRig.SetCockpitFieldOfView(HudPreferences.LoadCockpitFieldOfView(cameraRig.cockpitFieldOfView));
             _savedFieldOfView = cameraRig != null ? cameraRig.cockpitFieldOfView : 0f;
 
-            if (cockpit != null || cockpitInteraction != null || focusPanel != null || aircraftLights != null)
+            if (cockpit != null || cockpitInteraction != null || focusPanel != null || cockpitViewControls != null || aircraftLights != null)
             {
-                _cockpit = new CockpitSession(_systems, _gate, cockpit, cockpitInteraction, focusPanel, aircraftLights, cameraRig,
+                _cockpit = new CockpitSession(_systems, _gate, cockpit, cockpitInteraction, focusPanel, cockpitViewControls, aircraftLights, cameraRig,
                     touchControls != null ? touchControls.Ownership : null, AirspeedMarkingsFor(aircraftConfiguration, config.warnings));
+                _cockpit.PanelOpened += CloseFlightSettings; // one panel at a time in the free column
             }
+
+            // Flight assistance: the same aircraft data as the simulation, the player's saved choices.
+            var defaults = new FlightPreferences.Settings
+            {
+                Profile = assistConfiguration != null ? assistConfiguration.defaultProfile : FlightAssistProfile.Assisted,
+                Sensitivity = assistConfiguration != null ? assistConfiguration.defaultSensitivity : ControlSensitivity.Medium,
+                StandardAutoTrim = true,
+                AssistedStallPrevention = true,
+                Guidance = true,
+            };
+            _flight = rememberHudPreferences ? FlightPreferences.Load(defaults) : defaults;
+            var envelope = aircraftConfiguration != null
+                ? TelemetryMath.Envelope(aircraftConfiguration, config.warnings.neverExceedSpeedKnots)
+                : AircraftEnvelope.PrototypeTrainer;
+            _assistance = new FlightAssistController(assistConfiguration != null ? assistConfiguration.tuning : null, _flight.Profile);
+            _assistance.SetEnvelope(envelope);
+            _assistance.SetOptions(_flight.StandardAutoTrim, _flight.AssistedStallPrevention);
+            _assistance.SetProfile(_flight.Profile, immediate: true);
+            _guidance = new FlightGuidanceAdvisor(envelope);
+            if (!_assistOverridden) _assist = _assistance;
+            bool reduced = contextualHud != null && contextualHud.ReducedMotion;
+            if (flightSettings != null) flightSettings.SetReducedMotion(reduced);
+            if (guidanceLine != null) guidanceLine.SetReducedMotion(reduced);
         }
 
         /// <summary>Airspeed indicator markings from the aircraft (stall speeds from the flight model) and the warning limits.</summary>
@@ -181,6 +244,13 @@ namespace OpenSkies.Gameplay
                 contextualHud.SystemsToggleRequested += ToggleSystemsRail;
                 contextualHud.ProfileCycleRequested += CycleHudProfile;
             }
+            if (flightSettings != null)
+            {
+                flightSettings.ProfileChosen += SetAssistProfile;
+                flightSettings.SensitivityChosen += SetSensitivity;
+                flightSettings.OptionToggled += ToggleFlightOption;
+                flightSettings.CloseRequested += CloseFlightSettings;
+            }
         }
 
         void OnDisable()
@@ -196,13 +266,22 @@ namespace OpenSkies.Gameplay
                 contextualHud.SystemsToggleRequested -= ToggleSystemsRail;
                 contextualHud.ProfileCycleRequested -= CycleHudProfile;
             }
+            if (flightSettings != null)
+            {
+                flightSettings.ProfileChosen -= SetAssistProfile;
+                flightSettings.SensitivityChosen -= SetSensitivity;
+                flightSettings.OptionToggled -= ToggleFlightOption;
+                flightSettings.CloseRequested -= CloseFlightSettings;
+            }
         }
 
         void FixedUpdate()
         {
             if (aircraft == null) return;
             float dt = Time.fixedDeltaTime;
-            var pilot = _systems.ApplyTo(_controls.Read(dt)); // switches and levers apply to any control source
+            // The player's sensitivity, then the switches and levers (they apply to any control source), then assistance.
+            var pilot = _systems.ApplyTo(ControlResponse.Apply(_controls.Read(dt), _flight.Sensitivity));
+            _assistance.SetTrimInput(_devices.PitchTrimAxis());
             var commands = _assist.Apply(pilot, Telemetry, dt);
             aircraft.SetControls(commands);
             if (touchControls != null) touchControls.ReportFlightControls(commands);
@@ -220,6 +299,7 @@ namespace OpenSkies.Gameplay
             if (_devices.CameraTogglePressedThisFrame()) ToggleCamera();
             if (_devices.ParkingBrakeTogglePressedThisFrame()) ToggleParkingBrake();
             if (_devices.HudProfileCyclePressedThisFrame()) CycleHudProfile();
+            if (_devices.AssistProfileCyclePressedThisFrame()) SetAssistProfile(FlightAssistProfiles.Next(_flight.Profile));
             if (_devices.InspectorTogglePressedThisFrame() && contextualHud != null && contextualHud.inspector != null)
                 contextualHud.inspector.Toggle();
             HandleSystemKeys();
@@ -234,6 +314,81 @@ namespace OpenSkies.Gameplay
             }
             UpdateDisclosure(t, Time.deltaTime);
             _cockpit?.Update(t, _runway, CurrentView);
+            UpdateGuidance(t, Time.deltaTime);
+            if (flightSettings != null && flightSettings.IsOpen) flightSettings.Present(CurrentFlightSettings);
+        }
+
+        /// <summary>Flying tips, only for the Assisted profile with tips on.</summary>
+        void UpdateGuidance(in FlightTelemetry t, float deltaTime)
+        {
+            string tip = string.Empty;
+            if (_flight.Profile == FlightAssistProfile.Assisted && _flight.Guidance)
+            {
+                _guidance.Update(new FlightGuidanceAdvisor.Input
+                {
+                    Telemetry = t,
+                    Phase = _phase.Current.Phase,
+                    WarningMask = _warnings.ActiveMask,
+                    OnRunway = _runway.Valid && _runway.OnRunway,
+                    ParkingBrakeSet = _systems.ParkingBrakeSet,
+                }, deltaTime);
+                tip = _guidance.CurrentText;
+            }
+            if (guidanceLine != null) guidanceLine.Present(tip);
+        }
+
+        /// <summary>
+        /// Changes the assistance profile. In flight the behaviour blends over a couple of
+        /// seconds and the trim is kept, so the aircraft never jolts. Remembered.
+        /// </summary>
+        public void SetAssistProfile(FlightAssistProfile profile)
+        {
+            if (profile == _flight.Profile) return;
+            _flight.Profile = profile;
+            _assistance.SetProfile(profile);
+            SaveFlightSettings();
+        }
+
+        public void SetSensitivity(ControlSensitivity sensitivity)
+        {
+            if (sensitivity == _flight.Sensitivity) return;
+            _flight.Sensitivity = sensitivity;
+            SaveFlightSettings();
+        }
+
+        public void ToggleFlightOption(FlightSettingOption option)
+        {
+            switch (option)
+            {
+                case FlightSettingOption.StallPrevention: _flight.AssistedStallPrevention = !_flight.AssistedStallPrevention; break;
+                case FlightSettingOption.Guidance: _flight.Guidance = !_flight.Guidance; break;
+                case FlightSettingOption.AutoTrim: _flight.StandardAutoTrim = !_flight.StandardAutoTrim; break;
+            }
+            _assistance.SetOptions(_flight.StandardAutoTrim, _flight.AssistedStallPrevention);
+            SaveFlightSettings();
+        }
+
+        /// <summary>Opens or closes the flight settings (ASSIST on the rail). Opening closes the cockpit panel.</summary>
+        public void ToggleFlightSettings()
+        {
+            if (flightSettings == null) return;
+            if (flightSettings.IsOpen)
+            {
+                flightSettings.Close();
+                return;
+            }
+            _cockpit?.Close();
+            flightSettings.Open(CurrentFlightSettings);
+        }
+
+        public void CloseFlightSettings()
+        {
+            if (flightSettings != null) flightSettings.Close();
+        }
+
+        void SaveFlightSettings()
+        {
+            if (rememberHudPreferences) FlightPreferences.Save(_flight);
         }
 
         void HandleSystemKeys()
@@ -281,6 +436,7 @@ namespace OpenSkies.Gameplay
                     HasFlaps = true,
                     FlapsExtended = _systems.FlapDetent > 0,
                 },
+                HasAssistanceSettings = flightSettings != null,
             };
             _disclosure.Update(input, deltaTime);
 
@@ -311,6 +467,8 @@ namespace OpenSkies.Gameplay
             _systems.ResetToStartState();
             _gate.Clear();
             _cockpit?.OnReset();
+            _assistance.Reset(); // trim neutral, nothing held; the player's profile is kept
+            _guidance.Reset();
             if (telemetry != null) telemetry.Refresh(); // nobody reads the pre-reset state
             _phase.Reset(assumeOnGround: true);
             _warnings.Reset();
@@ -346,6 +504,7 @@ namespace OpenSkies.Gameplay
                 case ContextAction.ParkingBrake: ToggleParkingBrake(); break;
                 case ContextAction.ApproachGuide: _disclosure.ToggleGuide(HudElement.ApproachGuide); break;
                 case ContextAction.Navigation: _disclosure.ToggleGuide(HudElement.NavigationGuide); break;
+                case ContextAction.Assistance: ToggleFlightSettings(); break;
                 case ContextAction.Flaps:
                     // The same touch-friendly selector as the cockpit lever; without one, step down a detent (wrapping to up).
                     if (_cockpit != null && focusPanel != null) _cockpit.OpenSystem(AircraftSystem.Flaps);

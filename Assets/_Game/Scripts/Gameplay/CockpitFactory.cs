@@ -97,8 +97,44 @@ namespace OpenSkies.Gameplay
 
             rig.interactables = interactables.ToArray();
             rig.switchViews = switches.ToArray();
+            rig.selection = SelectionFrame(rootGo, canvasRect); // last on the canvas: drawn over the faces
             rootGo.SetActive(true);
             return rig;
+        }
+
+        /// <summary>Selection colour: the same amber as engaged HUD actions.</summary>
+        static readonly Color SelectionColour = new Color(0.96f, 0.74f, 0.22f, 1f);
+        const float SelectionLineWidth = 14f; // canvas units: 3.5 mm, about 5 px at the resting view on a 1080-px screen
+
+        /// <summary>A hollow frame (four edges, so the selected instrument stays readable), hidden until something is selected.</summary>
+        static CockpitSelectionView SelectionFrame(GameObject rigGo, RectTransform canvas)
+        {
+            var frame = new GameObject("SelectionFrame", typeof(RectTransform)).GetComponent<RectTransform>();
+            frame.SetParent(canvas, false);
+            frame.anchorMin = frame.anchorMax = frame.pivot = new Vector2(0.5f, 0.5f);
+            Edge(frame, "Top", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, SelectionLineWidth));
+            Edge(frame, "Bottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, SelectionLineWidth));
+            Edge(frame, "Left", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(SelectionLineWidth, 0f));
+            Edge(frame, "Right", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(SelectionLineWidth, 0f));
+            frame.gameObject.SetActive(false);
+
+            var view = rigGo.AddComponent<CockpitSelectionView>();
+            view.frame = frame;
+            return view;
+        }
+
+        static void Edge(RectTransform frame, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 size)
+        {
+            var edge = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
+            edge.SetParent(frame, false);
+            edge.anchorMin = anchorMin;
+            edge.anchorMax = anchorMax;
+            edge.pivot = new Vector2(0.5f, 0.5f);
+            edge.anchoredPosition = Vector2.zero;
+            edge.sizeDelta = size;
+            var image = edge.gameObject.AddComponent<Image>();
+            image.color = SelectionColour;
+            image.raycastTarget = false;
         }
 
         /// <summary>Landing light (spot light and lens) and navigation lights on the airframe.</summary>

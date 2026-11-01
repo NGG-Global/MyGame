@@ -12,6 +12,8 @@ namespace OpenSkies.Gameplay
         public InstrumentFace[] instruments = new InstrumentFace[CockpitFocusPanel.InstrumentCount];
         public CockpitInteractable[] interactables = new CockpitInteractable[0];
         public CockpitSwitchView[] switchViews = new CockpitSwitchView[0];
+        [Tooltip("Frame around the item whose enlarged view or selector is open.")]
+        public CockpitSelectionView selection;
 
         public CockpitInteractable Find(CockpitItem item)
         {

@@ -11,7 +11,8 @@
         "OpenSkies.Gameplay",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "OpenSkies.Cockpit"
+        "OpenSkies.Cockpit",
+        "OpenSkies.Assistance"
     ],
     "includePlatforms": [
         "Editor"

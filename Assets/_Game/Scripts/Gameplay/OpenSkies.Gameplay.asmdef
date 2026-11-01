@@ -9,7 +9,8 @@
         "OpenSkies.CameraSystems",
         "OpenSkies.UI",
         "UnityEngine.UI",
-        "OpenSkies.Cockpit"
+        "OpenSkies.Cockpit",
+        "OpenSkies.Assistance"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

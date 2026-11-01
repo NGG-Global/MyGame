@@ -466,6 +466,7 @@ namespace OpenSkies.UI
                 case ContextAction.Flaps: return "FLAPS";
                 case ContextAction.ApproachGuide: return "APPROACH";
                 case ContextAction.Navigation: return "NAV";
+                case ContextAction.Assistance: return "ASSIST";
                 default: return "?";
             }
         }

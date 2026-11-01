@@ -13,7 +13,8 @@
         "Unity.InputSystem",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "OpenSkies.Cockpit"
+        "OpenSkies.Cockpit",
+        "OpenSkies.Assistance"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

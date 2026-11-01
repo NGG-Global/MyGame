@@ -50,10 +50,12 @@ namespace OpenSkies.UI
             BuildApproachGuide(root, font, hud);
             BuildNavigationGuide(root, font, hud);
             BuildWarnings(root, font, hud);
+            // The development inspector is built before the rail: where the top rail slot (ASSIST) reaches
+            // under it, the rail button draws on top and takes the touch.
+            hud.inspector = BuildInspector(root, font);
             BuildRail(root, font, hud);
             hud.profileButton = BuildButton("HudProfileButton", root, font, 22, new Vector2(1f, 1f), new Vector2(-312f, -TopMargin),
                 new Vector2(128f, 96f), ContextualHud.ProfileLabel(HudProfile.Smart));
-            hud.inspector = BuildInspector(root, font);
 
             root.gameObject.SetActive(true);
             return hud;
@@ -208,7 +210,7 @@ namespace OpenSkies.UI
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
             rect.anchoredPosition = new Vector2(-Margin, -128f);
             rect.sizeDelta = new Vector2(520f, 216f);
-            text.raycastTarget = true; // tap to collapse; nothing interactive lies underneath
+            text.raycastTarget = true; // tap to collapse; rail buttons drawn over it keep their touches
             var inspector = text.gameObject.AddComponent<DisclosureInspector>();
             inspector.text = text;
             return inspector;

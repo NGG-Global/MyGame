@@ -13,7 +13,8 @@ controls.
 | No large duplicate overlays | One focus panel at a time, only on request, in the free column; it closes on any camera change. |
 | No precise taps | Every instrument and control has a pick volume larger than its visible part, plus a screen-space tolerance (6 % of the screen height). At the resting view each target is at least about 110 × 150 px on a 1080-px-high screen. |
 | Flight controls always accessible | The cockpit only receives touches no flight control or HUD element took, and never handles a pointer owned in the shared `PointerOwnership` table. Joystick, throttle and brake never move. |
-| Progressive disclosure for systems | A tap on a switch opens a selector with large options; it never changes the system by itself. Hazardous changes need a second tap. |
+| Progressive disclosure for systems | A tap on a switch selects it (an amber frame on the panel) and opens a selector with large options; it never changes the system by itself. Hazardous changes need a second tap. |
+| Return to forward is always one tap away | LOOK FWD appears in the top bar only while the view is turned away (more than 10° from rest), next to CAM; the double tap on the sky and **V** do the same. |
 | No accidental activation | Tap selection with a slop threshold; drags look around instead; selectors need a deliberate tap on a 96-unit option; engine off in flight needs confirmation; the parking brake cannot be set in the air. |
 
 ## Architecture
@@ -27,6 +28,8 @@ Touch (uGUI) ─▶ joystick / throttle / brake / HUD buttons (take their touche
                      double tap on nothing ─▶ CameraRig.RecentreCockpitLook
 
 CockpitSession (Gameplay) ─▶ CockpitFocusPanel (UI): enlarged InstrumentFace, or system selector
+                          ─▶ CockpitSelectionView (Cockpit): frame around the item the open panel refers to
+                          ─▶ CockpitViewControls (UI): LOOK FWD while CameraRig.IsLookingAway ─▶ CameraRig.RecentreCockpitLook
        option chosen ─▶ SystemChangeGate (policy, confirmation) ─▶ AircraftSystems (authoritative)
 ContextualHud rail (FLAPS, PARK BRAKE), keyboard ──────────────▶ SystemChangeGate ─▶ AircraftSystems
 AircraftSystems ─▶ FlightSession applies it to every control source ─▶ AircraftController (flaps, brake, ignition)
@@ -37,9 +40,9 @@ FlightTelemetry + RunwayRelation ─▶ InstrumentReadings ─▶ cockpit Instru
 | Assembly | New code |
 |---|---|
 | `OpenSkies.FlightState` | `AircraftSystems` (authoritative switch and lever state), `AircraftSystemsPolicy`, `SystemChangeGate`, `EngineState`; `FlightControls.Flaps` / `.Ignition`; telemetry `FlapPosition`, `FlapDegrees`, `EngineState`. |
-| `OpenSkies.Cockpit` (new; references FlightState, FlightInput, CameraSystems, Input System, uGUI) | `CockpitInteractionManager`, `CockpitInteractable`, `CockpitItems` (names, accessible labels), `CockpitLayout`, `CockpitPicking`, `CockpitSwitchView`, `AircraftLightsView`, `TouchSurfaceGraphic`. |
-| `OpenSkies.CameraSystems` | Cockpit look, limits, recentring and field of view on `CameraRig`; `CockpitLookMath`. |
-| `OpenSkies.UI` | `InstrumentFace`, `InstrumentFaceFactory`, `InstrumentMath`, `InstrumentReadings`, `AirspeedMarkings`, `CockpitFocusPanel`, `CockpitFocusPanelFactory`, `FitToSquare`. |
+| `OpenSkies.Cockpit` (new; references FlightState, FlightInput, CameraSystems, Input System, uGUI) | `CockpitInteractionManager`, `CockpitInteractable`, `CockpitItems` (names, accessible labels), `CockpitLayout`, `CockpitPicking`, `CockpitSwitchView`, `CockpitSelectionView`, `AircraftLightsView`, `TouchSurfaceGraphic`. |
+| `OpenSkies.CameraSystems` | Cockpit look, limits, recentring, look-away test and field of view on `CameraRig`; `CockpitLookMath`. |
+| `OpenSkies.UI` | `InstrumentFace`, `InstrumentFaceFactory`, `InstrumentMath`, `InstrumentReadings`, `AirspeedMarkings`, `CockpitFocusPanel`, `CockpitFocusPanelFactory`, `CockpitViewControls` (LOOK FWD), `FitToSquare`. |
 | `OpenSkies.Simulation` | Flap aerodynamics and actuator, simplified ignition in `EngineModel`, `Aerodynamics.StallSpeed`. |
 | `OpenSkies.Gameplay` | `CockpitSession`, `CockpitFactory`, `CockpitRig`; `FlightSession` owns `AircraftSystems` and the gate. |
 
@@ -59,7 +62,7 @@ liveness checks and focus-loss revocation also cancel cockpit gestures.
 |---|---|
 | Tap (< 0.35 s, < 2 % of screen height movement; 4.5 % when it started on a control) | Select the instrument or control under it, else the nearest within 6 % of the screen height. Selecting the open item again closes it. |
 | Tap on nothing | Close the focus panel. |
-| Double tap on nothing | Look forward again (0.35 s, eased). |
+| Double tap on nothing, or LOOK FWD | Look forward again (0.35 s, eased). |
 | Drag | Look around: 100° per screen height of drag; the view turns with the finger. |
 | Two fingers | Pinch to change the field of view (40° per screen height). Never a tap or a look. |
 | Third finger | Ignored. |
@@ -76,10 +79,21 @@ light, **N** navigation lights, **P** parking brake.
 | Resting direction | the eye anchor: 12° below the nose, so the panel is in view |
 | Look limits from rest | yaw ±135°, pitch −40° to +45° |
 | Return to rest | 0.35 s, smoothstep; automatic return after idle: off (`autoRecentreSeconds`) |
+| LOOK FWD offered | cockpit view, turned more than 10° from rest in yaw or pitch (`lookAwayDegrees`), not already returning |
 | Field of view | 62° (vertical), adjustable 50-80°; remembered between sessions |
 | Look direction | kept across camera switches and flight resets during the session |
 
 The camera only reads transforms; nothing in the cockpit view changes flight input.
+
+**LOOK FWD** (`CockpitViewControls`, built by `CockpitFocusPanelFactory.BuildViewControls`)
+sits in the top bar left of the HUD profile button (128 × 96 units, anchored 456 units
+from the right safe-area edge, 16 from the top), so all view buttons are together:
+LOOK FWD, HUD profile, RESET, CAM. It fades in (0.2 s, or at once with reduced motion)
+only while the view is turned away, stays put while a finger presses it, and starts the
+same smooth return as the double tap. A layout test checks at 4:3, 16:9 and 20:9 that it
+overlaps no flight control, HUD element, guide, banner or focus card. The 10° threshold
+is a camera setting on `CameraRig`, next to the other look settings; it is not a
+flight-awareness disclosure rule, so it is not in `FlightAwarenessConfiguration`.
 
 ## Panel layout
 
@@ -129,6 +143,13 @@ Dismissal: the close button, tapping the enlarged instrument, tapping nothing in
 the cockpit, tapping the same cockpit item again, or any camera change. A
 dismissed instrument fades out and its face is deactivated, so only the cockpit
 copy is drawn.
+
+**Selection frame.** While a focus view or selector is open, a steady amber frame
+(`CockpitSelectionView`, the same amber as engaged HUD actions) outlines the item it
+refers to on the instrument panel: the pick area plus a small margin, so it also shows
+how forgiving the target is. It is hollow, so a framed instrument stays readable. It
+follows the panel state each frame (no copy of it), so every way of closing the panel
+clears it, and FLAPS on the contextual HUD frames the cockpit flap lever it controls.
 
 ## Systems: one authoritative state
 
@@ -187,6 +208,8 @@ All cockpit visuals are placeholders built from primitives and flat colours:
 - Panel placards and labels as artwork.
 - Exterior light assets: landing light flare, navigation light glow, strobe/beacon.
 - Night lighting for the panel (instrument backlighting).
+- Selection frame: flat amber bars; a designed highlight (soft glow or bezel ring) would read better.
+- LOOK FWD: text label; an icon (eye and arrow, or a recentre glyph) once the HUD has an icon set.
 - Sound: switch clicks, flap motor, engine start.
 
 ## Tests
@@ -194,7 +217,7 @@ All cockpit visuals are placeholders built from primitives and flat colours:
 EditMode:
 - `AircraftSystemsTests`: start state, clamping, versions and events, policy, confirmation gate (confirm, expiry, cancellation, refusal), systems applied to any commands.
 - `FlapsAndEngineTests`: flaps add lift, drag and nose-down moment, lower the stall speed and stall earlier; clean model unchanged; ignition off/start/run states.
-- `CockpitMathTests`: every item tappable at 16:9, 18:9, 20:9 and at least 96 units wide; items on the panel and not overlapping; names and system mapping; ray/box and screen-tolerance picking; look clamping, recentring, field of view and drag scaling.
+- `CockpitMathTests`: every item tappable at 16:9, 18:9, 20:9 and at least 96 units wide; items on the panel and not overlapping; names and system mapping; ray/box and screen-tolerance picking; look clamping, recentring, field of view and drag scaling; the look-away threshold for LOOK FWD.
 - `InstrumentMathTests`: dial angles, map positions and range hysteresis, readings from shared telemetry.
 - Additions to `FlightWarningMonitorTests` (engine off) and `DisclosureControllerTests` (cockpit view).
 
@@ -206,10 +229,31 @@ PlayMode (`CockpitTests`, real session and Rigidbody aircraft):
 - settings changed from both the contextual HUD and the cockpit agree everywhere, including the simulation;
 - engine off in flight needs confirmation and restarts; reset restores systems and keeps the view;
 - drag-to-look limits, remembered direction and double-tap recentring;
-- `CockpitFocusPanelLayoutTests`: the panel fits between the controls at 4:3, 16:9 and 20:9 with large options.
+- the selected item is framed in the cockpit (switch, instrument, flap lever opened from the HUD) and the frame clears on every dismissal;
+- LOOK FWD appears only while looking away in cockpit view, returns the view smoothly, never changes flight input and stays under a pressing finger;
+- `CockpitFocusPanelLayoutTests`: the panel fits between the controls at 4:3, 16:9 and 20:9 with large options; LOOK FWD sits in the top bar clear of everything else.
 
 The tests prove routing, ownership, state and layout logic. They do not prove how
 touches arrive on a device, legibility, or comfort: use the device checklist.
+
+## Verification status
+
+CI has not run any of this yet: every Tests and Build run so far has stopped at Unity
+licence activation ("Invalid Credential", then "User is blocked due to continuous
+failures"). The owner needs to fix the `UNITY_EMAIL` / `UNITY_PASSWORD` (or
+`UNITY_LICENSE`) secrets: a Unity ID login without two-factor authentication, ideally a
+CI-only account, and the account may need unblocking first.
+
+Until then, a cloud session compiled every assembly (runtime, Editor, both test
+assemblies) with Roslyn at C# 9 against the managed assemblies shipped in the Unity
+6000.6.0f1 Linux editor, uGUI 2.6.0, Test Framework 1.8.0 and Input System 1.20.1 built
+from their package sources (URP stubbed with the members the Editor code uses, checked
+against the 17.6.0 source), in Editor and Android player configurations: no errors and
+no warnings. The EditMode tests were run outside Unity with Unity's Mono and a minimal
+NUnit runner: all cases that do not need the native engine pass (148); 39 flight-model
+cases call native engine code (`Quaternion.Euler`, `ScriptableObject.CreateInstance`,
+`Object.DestroyImmediate`) and could not run. PlayMode tests need the engine and have
+not run. None of this replaces CI.
 
 ## Device checklist (phone, then tablet)
 
@@ -217,8 +261,8 @@ touches arrive on a device, legibility, or comfort: use the device checklist.
 2. Fly a full circuit from the cockpit only (take-off, climb, turns, approach with the GPS map, landing).
 3. Tap each instrument with the thumb: the enlarged view opens at once; it closes by tap, close button, tapping the sky, or CAM.
 4. Keep flying (joystick and throttle held) while an instrument is enlarged.
-5. Tap each switch: a selector opens, nothing changes until an option is tapped. Try near misses: the right control is still selected.
-6. Drag on the sky to look around; double tap the sky to look forward; pinch to change the field of view.
+5. Tap each switch: it is framed in amber and a selector opens; nothing changes until an option is tapped. Try near misses: the right control is still selected (the frame shows which).
+6. Drag on the sky to look around; LOOK FWD appears top right: tap it to look forward; also double tap the sky; pinch to change the field of view.
 7. Hold the joystick with one thumb and tap or look with the other; try three fingers.
 8. Set flaps from the HUD rail (FLAPS) and check the cockpit lever; set the parking brake in the cockpit and check the HUD.
 9. In flight, tap OFF on the ignition: it asks for confirmation; restart the engine.

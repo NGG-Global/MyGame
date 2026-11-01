@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using OpenSkies.Assistance;
 using OpenSkies.Awareness;
 using OpenSkies.CameraSystems;
 using OpenSkies.Cockpit;
@@ -38,6 +39,7 @@ namespace OpenSkies.Editor
         const string BuiltinFont = "LegacyRuntime.ttf";
         const string AircraftConfigurationPath = "Assets/_Game/Settings/Aircraft/TrainerConfiguration.asset";
         const string AwarenessConfigurationPath = "Assets/_Game/Settings/HUD/FlightAwarenessConfiguration.asset";
+        const string AssistConfigurationPath = "Assets/_Game/Settings/Assistance/FlightAssistConfiguration.asset";
         const int AircraftLayer = 2; // built-in "Ignore Raycast": wheel raycasts must not hit the aircraft itself
 
         // Layout, in metres. The runway runs south to north along +Z.
@@ -81,7 +83,8 @@ namespace OpenSkies.Editor
             var configuration = LoadOrCreateAircraftConfiguration();
             var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
-            var hud = CreateHud(out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel);
+            var hud = CreateHud(out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel, out var viewControls,
+                out var flightSettings, out var guidanceLine);
             cockpitInteraction.cameraRig = cameraRig;
             CreateEventSystem();
 
@@ -98,8 +101,12 @@ namespace OpenSkies.Editor
             session.cockpit = cockpit;
             session.cockpitInteraction = cockpitInteraction;
             session.focusPanel = focusPanel;
+            session.cockpitViewControls = viewControls;
             session.aircraftLights = lights;
             session.awarenessConfiguration = LoadOrCreateAwarenessConfiguration();
+            session.assistConfiguration = LoadOrCreateAssistConfiguration();
+            session.flightSettings = flightSettings;
+            session.guidanceLine = guidanceLine;
             // Runway 36/18: surface centred on the origin, primary landing direction north (+Z).
             session.homeRunway = new RunwayInfo(Vector3.zero, 0f, RunwayLength, RunwayWidth);
             sessionGo.SetActive(true);
@@ -190,6 +197,19 @@ namespace OpenSkies.Editor
             configuration = ScriptableObject.CreateInstance<FlightAwarenessConfiguration>();
             AssetDatabase.CreateAsset(configuration, AwarenessConfigurationPath);
             Debug.Log($"[OpenSkies] Created {AwarenessConfigurationPath}");
+            return configuration;
+        }
+
+        /// <summary>Assistance tuning and first-launch defaults: created once, then left alone like the other configurations.</summary>
+        static FlightAssistConfiguration LoadOrCreateAssistConfiguration()
+        {
+            var configuration = AssetDatabase.LoadAssetAtPath<FlightAssistConfiguration>(AssistConfigurationPath);
+            if (configuration != null) return configuration;
+
+            EditorFolders.Ensure(Path.GetDirectoryName(AssistConfigurationPath));
+            configuration = ScriptableObject.CreateInstance<FlightAssistConfiguration>();
+            AssetDatabase.CreateAsset(configuration, AssistConfigurationPath);
+            Debug.Log($"[OpenSkies] Created {AssistConfigurationPath}");
             return configuration;
         }
 
@@ -296,7 +316,8 @@ namespace OpenSkies.Editor
         }
 
         static HudPresenter CreateHud(out TouchFlightControls touchControls, out ContextualHud contextualHud,
-            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel)
+            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel, out CockpitViewControls viewControls,
+            out FlightSettingsPanel flightSettings, out GuidanceLine guidanceLine)
         {
             var canvasGo = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasGo.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
@@ -345,9 +366,18 @@ namespace OpenSkies.Editor
             // the joystick region and the action rail; before the contextual HUD so warnings draw over it.
             focusPanel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
 
+            // Flight assistance settings (same free column, never open with the focus panel) and the flying-tip
+            // line along the bottom of that column; also before the contextual HUD, so warnings draw over them.
+            flightSettings = FlightSettingsPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
+            guidanceLine = FlightSettingsPanelFactory.BuildGuidanceLine(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
+
             // Contextual HUD (flight data, guides, warnings, action rail, HUD profile, inspector),
             // built after the touch controls so it draws on top; it overlaps none of them.
             contextualHud = ContextualHudFactory.Build(safeArea, font);
+
+            // Cockpit view controls (LOOK FWD) in the top bar, left of the HUD profile button; shown only
+            // in cockpit view while the view is turned away from rest.
+            viewControls = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
 
             var hud = canvasGo.AddComponent<HudPresenter>();
             hud.developerReadout = readout;

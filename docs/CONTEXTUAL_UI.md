@@ -162,6 +162,7 @@ shows a safe set instead (airborne: IAS, ALT, VS; on the ground: IAS).
 | FLAPS | Taxi, Takeoff roll, Initial climb, Approach, Landing | Opens the same flap selector as the cockpit lever (`docs/COCKPIT.md`). Stays visible while the flaps are out. |
 | APPROACH | Descent within 8 NM, Approach, Landing | Shows or hides the approach guide. |
 | NAV | Climb, Cruise, Descent | Shows or hides the navigation guide. |
+| ASSIST | Parked | Opens the flight assistance settings (profile, sensitivity, options; `docs/FLIGHT_ASSISTANCE.md`). Never "engaged". Available when the session has the settings card. Keyboard **M** cycles the profile. |
 
 Player choices: showing a guide lasts until the player hides it; hiding a guide
 lasts until it stops being relevant on its own, so it returns on the next
@@ -204,9 +205,12 @@ There is no warning sound yet.
 | Approach guide / navigation guide | top left, y = −112 (x 24 / 474) | 430 × 96 / 300 × 96 |
 | Warning banners | anchor 56 % of the width, y = −250, −334, −418, −502 | 380 × 72 |
 | HUD profile button | top right, left of RESET and CAM | 128 × 96 |
+| LOOK FWD (cockpit view, not part of disclosure) | top right, left of the HUD profile button (x = −456) | 128 × 96 |
 | SYSTEMS | bottom right, left of the throttle, directly above BRAKE | 168 × 96 |
-| Action rail | stacked above SYSTEMS, 112 apart, nearest the thumb first: PARK BRAKE, (FLAPS), APPROACH, NAV | 168 × 96 each |
-| Inspector (development only) | top right, under the buttons | 520 × 216 |
+| Action rail | stacked above SYSTEMS, 112 apart, nearest the thumb first: PARK BRAKE, (FLAPS), APPROACH, NAV, ASSIST | 168 × 96 each |
+| Inspector (development only) | top right, under the buttons; built before the rail, so where the top slot (ASSIST) reaches under it the rail button takes the touch | 520 × 216 |
+| Flight settings card | free column (as the cockpit focus panel, never both at once) | up to 600 × 486 |
+| Flying tips (Assisted) | bottom of the free column, 12-76 units up, below the panel band; takes no touches | column width × 64 |
 
 A PlayMode test checks at 4:3, 16:9 and 20:9 that no HUD target or banner
 overlaps the joystick region, the throttle or BRAKE, and that every target is at

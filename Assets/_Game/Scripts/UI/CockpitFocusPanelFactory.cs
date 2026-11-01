@@ -42,6 +42,38 @@ namespace OpenSkies.UI
             return panel;
         }
 
+        /// <summary>LOOK FWD: top bar, left of the HUD profile button (which is left of RESET and CAM).</summary>
+        public static readonly Vector2 LookForwardPosition = new Vector2(-456f, -ContextualHudFactory.TopMargin);
+        public static readonly Vector2 LookForwardSize = new Vector2(128f, 96f);
+
+        /// <summary>Cockpit view controls in the top bar, hidden until the session shows them.</summary>
+        public static CockpitViewControls BuildViewControls(RectTransform safeArea, Font font)
+        {
+            var root = NewRect("CockpitViewControls", safeArea);
+            root.gameObject.SetActive(false); // wire everything before Awake
+            Stretch(root);
+            var controls = root.gameObject.AddComponent<CockpitViewControls>();
+
+            var rect = NewRect("LookForwardButton", root);
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
+            rect.anchoredPosition = LookForwardPosition;
+            rect.sizeDelta = LookForwardSize;
+            controls.lookForwardGroup = Hidden(rect);
+            var image = rect.gameObject.AddComponent<Image>();
+            image.color = new Color(0f, 0f, 0f, 0.35f); // same as the HUD profile button
+            image.raycastTarget = true;
+            var button = rect.gameObject.AddComponent<HudButton>();
+            button.background = image;
+            var label = NewText("Label", rect, font, 22, TextAnchor.MiddleCenter, Color.white);
+            Stretch(label.rectTransform);
+            label.text = "LOOK\nFWD";
+            button.label = label;
+            controls.lookForward = button;
+
+            root.gameObject.SetActive(true);
+            return controls;
+        }
+
         static void BuildInstrumentCard(CockpitFocusPanel panel, RectTransform column, Font font)
         {
             var card = Centred("InstrumentCard", column, new Vector2(400f, 400f));
