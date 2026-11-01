@@ -117,6 +117,8 @@ namespace OpenSkies.Editor
         static void ConfigureCommon()
         {
             PlayerSettings.productName = ProductName;
+            // CPU and GPU frame times for the performance monitor (FrameTimingManager); a very small cost.
+            PlayerSettings.enableFrameTimingStats = true;
             // Landscape only, either way up.
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
             PlayerSettings.allowedAutorotateToLandscapeLeft = true;

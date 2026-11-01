@@ -13,9 +13,15 @@ namespace OpenSkies.FlightInput.TouchControls
     {
         /// <summary>Right edge of the joystick touch region, fraction of the safe-area width. Other layouts keep clear of it.</summary>
         public const float JoystickRegionRight = 0.42f;
+        /// <summary>The throttle's touch area: offset from the bottom-right corner and size, canvas units.</summary>
+        public static readonly Vector2 ThrottleOffset = new Vector2(-24f, 24f);
+        public static readonly Vector2 ThrottleAreaSize = new Vector2(220f, 620f);
+        /// <summary>Top of the throttle's touch area above the bottom of the safe area, canvas units.</summary>
+        public static float ThrottleAreaTop => ThrottleOffset.y + ThrottleAreaSize.y;
 
         static readonly Color Tint = new Color(1f, 1f, 1f, 0.3f);
-        static readonly Color Invisible = new Color(1f, 1f, 1f, 0f);
+        /// <summary>Throttle reference marks at 25, 50 and 75 %.</summary>
+        static readonly float[] ThrottleTicks = { 0.25f, 0.5f, 0.75f };
 
         public static TouchFlightControls Build(RectTransform safeArea, Font font)
         {
@@ -48,7 +54,7 @@ namespace OpenSkies.FlightInput.TouchControls
             region.pivot = Vector2.zero;
             region.offsetMin = new Vector2(16f, 16f);
             region.offsetMax = Vector2.zero;
-            AddImage(region, Invisible, raycast: true); // catches touches; draws nothing
+            AddHitArea(region); // catches touches; draws nothing (no overdraw over 40 % of the screen)
 
             var joystick = region.gameObject.AddComponent<FloatingJoystick>();
             float radius = joystick.settings.radius;
@@ -61,11 +67,13 @@ namespace OpenSkies.FlightInput.TouchControls
             var ring = NewRect("Ring", visual);
             Stretch(ring);
             joystick.baseRing = AddImage(ring, Tint, raycast: false);
+            TouchControlStyle.AddEdge(joystick.baseRing);
 
             var knob = NewRect("Knob", visual);
             knob.sizeDelta = Vector2.one * (radius * 0.85f);
             joystick.knob = knob;
             joystick.knobImage = AddImage(knob, Tint, raycast: false);
+            TouchControlStyle.AddEdge(joystick.knobImage);
             return joystick;
         }
 
@@ -76,9 +84,9 @@ namespace OpenSkies.FlightInput.TouchControls
         {
             var hitArea = NewRect("Throttle", parent);
             hitArea.anchorMin = hitArea.anchorMax = hitArea.pivot = new Vector2(1f, 0f);
-            hitArea.anchoredPosition = new Vector2(-24f, 24f);
-            hitArea.sizeDelta = new Vector2(220f, 620f);
-            AddImage(hitArea, Invisible, raycast: true);
+            hitArea.anchoredPosition = ThrottleOffset;
+            hitArea.sizeDelta = ThrottleAreaSize;
+            AddHitArea(hitArea);
             var slider = hitArea.gameObject.AddComponent<ThrottleSlider>();
 
             var track = NewRect("Track", hitArea);
@@ -87,6 +95,7 @@ namespace OpenSkies.FlightInput.TouchControls
             track.sizeDelta = new Vector2(64f, 460f);
             slider.track = track;
             slider.trackImage = AddImage(track, Tint, raycast: false);
+            TouchControlStyle.AddEdge(slider.trackImage);
 
             var fill = NewRect("Fill", track);
             fill.anchorMin = Vector2.zero;
@@ -102,8 +111,22 @@ namespace OpenSkies.FlightInput.TouchControls
             handle.sizeDelta = new Vector2(0f, 14f);
             slider.handle = handle;
             slider.handleImage = AddImage(handle, Color.white, raycast: false);
+            TouchControlStyle.AddEdge(slider.handleImage);
 
-            var label = NewText("Label", hitArea, font, 30, TextAnchor.MiddleCenter);
+            // Reference marks beside the track (not on it, so the fill stays readable).
+            slider.ticks = new Image[ThrottleTicks.Length];
+            for (int i = 0; i < ThrottleTicks.Length; i++)
+            {
+                var tick = NewRect("Tick" + Mathf.RoundToInt(ThrottleTicks[i] * 100f), track);
+                tick.anchorMin = tick.anchorMax = new Vector2(0f, ThrottleTicks[i]);
+                tick.pivot = new Vector2(1f, 0.5f);
+                tick.anchoredPosition = new Vector2(-6f, 0f);
+                tick.sizeDelta = new Vector2(i == 1 ? 18f : 12f, 3f);
+                slider.ticks[i] = AddImage(tick, Tint, raycast: false);
+            }
+
+            var label = NewText("Label", hitArea, font, TouchControlStyle.ValueSize, TextAnchor.MiddleCenter);
+            AddShadow(label);
             label.rectTransform.anchorMin = label.rectTransform.anchorMax = new Vector2(0.5f, 0f);
             label.rectTransform.anchoredPosition = new Vector2(0f, 30f);
             label.rectTransform.sizeDelta = new Vector2(200f, 44f);
@@ -123,7 +146,7 @@ namespace OpenSkies.FlightInput.TouchControls
             var button = rect.gameObject.AddComponent<HoldButton>();
             button.background = AddImage(rect, Tint, raycast: true);
 
-            var label = NewText("Label", rect, font, 28, TextAnchor.MiddleCenter);
+            var label = NewText("Label", rect, font, TouchControlStyle.ButtonSize + 2, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             label.text = "BRAKE";
             button.label = label;
@@ -149,6 +172,20 @@ namespace OpenSkies.FlightInput.TouchControls
             var rect = (RectTransform)go.transform;
             rect.SetParent(parent, false);
             return rect;
+        }
+
+        /// <summary>A touch area that draws nothing.</summary>
+        static void AddHitArea(RectTransform rect)
+        {
+            var graphic = rect.gameObject.AddComponent<RaycastOnlyGraphic>();
+            graphic.raycastTarget = true;
+        }
+
+        static void AddShadow(Graphic graphic)
+        {
+            var shadow = graphic.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = TouchControlStyle.TextShadow;
+            shadow.effectDistance = new Vector2(1.5f, -1.5f);
         }
 
         static Image AddImage(RectTransform rect, Color color, bool raycast)

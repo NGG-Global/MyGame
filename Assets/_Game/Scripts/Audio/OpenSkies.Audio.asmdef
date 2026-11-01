@@ -1,0 +1,17 @@
+{
+    "name": "OpenSkies.Audio",
+    "rootNamespace": "OpenSkies.Audio",
+    "references": [
+        "OpenSkies.FlightState",
+        "OpenSkies.Options"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

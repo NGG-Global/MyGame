@@ -102,6 +102,10 @@ namespace OpenSkies.Gameplay
 
         /// <summary>Raised after the player's RESET has put the aircraft back (runway start or the mode's checkpoint).</summary>
         public event Action ResetPerformed;
+        /// <summary>Raised after every restart of the flight (RESET, a mode's start): the aircraft was placed, not flown there.</summary>
+        public event Action FlightRestarted;
+        /// <summary>A switch or lever actually moved (applied through the gate), whatever asked for it.</summary>
+        public event Action<SystemChange> SystemChanged;
 
         public FlightTelemetry Telemetry => telemetry != null ? telemetry.Current : default;
 
@@ -340,7 +344,11 @@ namespace OpenSkies.Gameplay
             HandleSystemKeys();
 
             var t = Telemetry;
-            if (hud != null) hud.Present(t);
+            if (hud != null)
+            {
+                hud.Present(t);
+                hud.ShowView(CurrentView == ViewMode.Cockpit);
+            }
             if (touchControls != null)
             {
                 touchControls.ShowThrottle(aircraft != null ? aircraft.Controls.Throttle : _router.Throttle);
@@ -445,8 +453,36 @@ namespace OpenSkies.Gameplay
         /// the shared rules (parking brake only set on the ground; engine off in the
         /// air needs a confirmation, which only the cockpit selector can give).
         /// </summary>
-        public SystemChangeGate.Outcome RequestSystemChange(in SystemChange change) =>
-            _gate.Request(change, _systems, Telemetry.WeightOnWheels, Time.unscaledTime);
+        public SystemChangeGate.Outcome RequestSystemChange(in SystemChange change)
+        {
+            var outcome = _gate.Request(change, _systems, Telemetry.WeightOnWheels, Time.unscaledTime);
+            if (outcome == SystemChangeGate.Outcome.Applied) SystemChanged?.Invoke(change);
+            return outcome;
+        }
+
+        /// <summary>
+        /// The player's motion preference for every panel this session owns (HUD fades,
+        /// cockpit panel, view controls, flight settings, flying tips). Presentation only.
+        /// </summary>
+        public void ApplyMotionPreference(MotionPreference preference)
+        {
+            if (contextualHud == null) return;
+            contextualHud.SetMotionPreference(preference);
+            bool reduced = contextualHud.ReducedMotion;
+            if (focusPanel != null) focusPanel.SetReducedMotion(reduced);
+            if (cockpitViewControls != null) cockpitViewControls.SetReducedMotion(reduced);
+            if (flightSettings != null) flightSettings.SetReducedMotion(reduced);
+            if (guidanceLine != null) guidanceLine.SetReducedMotion(reduced);
+        }
+
+        /// <summary>The player's HUD opacity on the HUD this session owns. Flight controls stay findable (see TouchFlightControls).</summary>
+        public void ApplyHudOpacity(float opacity)
+        {
+            if (contextualHud != null) contextualHud.SetOpacity(opacity);
+            if (hud != null) hud.SetOpacity(opacity);
+            if (touchControls != null) touchControls.SetOpacityScale(opacity);
+            if (cockpitViewControls != null) cockpitViewControls.SetOpacity(opacity);
+        }
 
         void UpdateDisclosure(in FlightTelemetry t, float deltaTime)
         {
@@ -581,6 +617,7 @@ namespace OpenSkies.Gameplay
             _runway = default;
             _navigation = default;
             if (cameraRig != null) cameraRig.SnapToTarget();
+            FlightRestarted?.Invoke();
         }
 
         /// <summary>Changes only what the HUD shows; flight controls are never affected.</summary>

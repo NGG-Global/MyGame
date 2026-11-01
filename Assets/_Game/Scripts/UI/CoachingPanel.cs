@@ -24,10 +24,11 @@ namespace OpenSkies.UI
         public Text detailGlyph;
         public HudMotionSettings motion = new HudMotionSettings();
 
-        public Color instructionColor = new Color(1f, 1f, 1f, 0.85f);
-        public Color hintColor = new Color(0.96f, 0.74f, 0.22f, 1f);
-        public Color successColor = new Color(0.45f, 0.86f, 0.52f, 1f);
-        public Color safetyColor = new Color(0.95f, 0.3f, 0.25f, 1f);
+        // Tone colours from the style roles: amber is kept for safety, so a hint never looks like a caution.
+        public Color instructionColor = HudStyle.TextSecondary;
+        public Color hintColor = HudStyle.Selected;
+        public Color successColor = HudStyle.Active;
+        public Color safetyColor = HudStyle.Caution;
 
         HudFade _fade;
         bool _reducedMotion, _initialized;

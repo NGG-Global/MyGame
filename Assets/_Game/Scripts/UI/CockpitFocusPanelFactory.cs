@@ -14,9 +14,9 @@ namespace OpenSkies.UI
         public const float ColumnBottom = 0.17f;
         public const float ColumnTop = 0.69f;
 
-        static readonly Color CardColour = new Color(0.03f, 0.03f, 0.04f, 0.62f);
-        static readonly Color TitleColour = new Color(1f, 1f, 1f, 0.95f);
-        static readonly Color HintColour = new Color(1f, 1f, 1f, 0.7f);
+        static readonly Color CardColour = new Color(HudStyle.PanelSurface.r, HudStyle.PanelSurface.g, HudStyle.PanelSurface.b, 0.62f); // lighter: the instrument shows through less chrome
+        static readonly Color TitleColour = HudStyle.TextPrimary;
+        static readonly Color HintColour = HudStyle.TextSecondary;
         static readonly Color ConfirmColour = new Color(1f, 0.72f, 0.3f, 1f);
 
         /// <param name="joystickRegionRight">Right edge of the joystick touch region, fraction of the safe-area width.</param>
@@ -60,7 +60,7 @@ namespace OpenSkies.UI
             rect.sizeDelta = LookForwardSize;
             controls.lookForwardGroup = Hidden(rect);
             var image = rect.gameObject.AddComponent<Image>();
-            image.color = new Color(0f, 0f, 0f, 0.35f); // same as the HUD profile button
+            image.color = HudStyle.ControlSurface; // same as the HUD profile button
             image.raycastTarget = true;
             var button = rect.gameObject.AddComponent<HudButton>();
             button.background = image;
@@ -122,7 +122,7 @@ namespace OpenSkies.UI
                 image.raycastTarget = true;
                 var button = rect.gameObject.AddComponent<HudButton>();
                 button.background = image;
-                button.idleColor = new Color(1f, 1f, 1f, 0.12f);
+                button.idleColor = HudStyle.PanelControl;
                 var label = NewText("Label", rect, font, 30, TextAnchor.MiddleCenter, Color.white);
                 Stretch(label.rectTransform);
                 button.label = label;
@@ -149,7 +149,7 @@ namespace OpenSkies.UI
             image.raycastTarget = true;
             var button = rect.gameObject.AddComponent<HudButton>();
             button.background = image;
-            button.idleColor = new Color(1f, 1f, 1f, 0.1f);
+            button.idleColor = HudStyle.PanelControl;
             var label = NewText("Label", rect, font, 48, TextAnchor.MiddleCenter, Color.white);
             Stretch(label.rectTransform);
             label.text = "×"; // multiplication sign, in the built-in font

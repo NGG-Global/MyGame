@@ -25,11 +25,13 @@ namespace OpenSkies.UI
         public static readonly Vector2 MenuPosition = new Vector2(-24f, -128f);
         public static readonly Vector2 SkipPosition = new Vector2(-24f, -240f);
 
-        static readonly Color CardColour = new Color(0.03f, 0.03f, 0.04f, 0.78f);
-        static readonly Color ButtonColour = new Color(1f, 1f, 1f, 0.12f);
-        static readonly Color TitleColour = new Color(1f, 1f, 1f, 0.95f);
-        static readonly Color TextColour = new Color(1f, 1f, 1f, 0.82f);
-        static readonly Color QuietColour = new Color(1f, 1f, 1f, 0.55f);
+        static readonly Color CardColour = HudStyle.PanelSurface;
+        static readonly Color ButtonColour = HudStyle.PanelControl;
+        static readonly Color TitleColour = HudStyle.TextPrimary;
+        static readonly Color TextColour = HudStyle.TextSecondary;
+        static readonly Color QuietColour = HudStyle.TextQuiet;
+        /// <summary>The entry screen's SETTINGS button, top left under the mode buttons.</summary>
+        public static readonly Vector2 SettingsButtonSize = new Vector2(300f, 96f);
 
         // ---- Coaching message ---------------------------------------------------------------------
 
@@ -50,8 +52,9 @@ namespace OpenSkies.UI
             background.raycastTarget = true;
             var button = rect.gameObject.AddComponent<HudButton>();
             button.background = background;
-            button.idleColor = new Color(0f, 0f, 0f, 0.5f);
-            button.pressedColor = new Color(1f, 1f, 1f, 0.25f);
+            button.idleColor = new Color(0f, 0f, 0f, 0.5f); // a little firmer than other controls: it carries text over the world
+            button.pressedColor = HudStyle.ControlPressed;
+            button.pressScale = 1f; // a wide panel: shrinking it would read as movement
             panel.button = button;
 
             var accent = NewRect("Accent", rect);
@@ -127,7 +130,7 @@ namespace OpenSkies.UI
             var symbol = NewRect("Symbol", root);
             symbol.anchorMin = symbol.anchorMax = symbol.pivot = new Vector2(0.5f, 0.5f);
             symbol.sizeDelta = new Vector2(34f, 34f);
-            AddShadow(AddImage(symbol, new Color(1f, 1f, 1f, 0.95f)));
+            AddShadow(AddImage(symbol, HudStyle.Navigation)); // magenta: the destination
             marker.marker = symbol;
 
             marker.nameText = NewText("Name", symbol, font, 20, TextAnchor.LowerCenter, TextColour);
@@ -161,7 +164,7 @@ namespace OpenSkies.UI
 
             var scrim = NewRect("Scrim", root);
             Stretch(scrim);
-            card.scrim = AddImage(scrim, new Color(0f, 0f, 0f, 0.4f));
+            card.scrim = AddImage(scrim, HudStyle.Scrim);
             card.scrim.raycastTarget = true;
 
             var column = NewRect("Column", root);
@@ -178,11 +181,15 @@ namespace OpenSkies.UI
             background.raycastTarget = true; // taps on the card never reach the cockpit behind it
             card.card = panel;
 
-            card.title = NewText("Title", panel, font, 30, TextAnchor.MiddleLeft, TitleColour);
+            card.title = NewText("Title", panel, font, HudStyle.TitleSize - 2, TextAnchor.MiddleLeft, TitleColour);
             card.title.fontStyle = FontStyle.Bold;
             card.body = NewText("Body", panel, font, 22, TextAnchor.UpperLeft, TextColour, bestFit: true); // shrinks on narrow 4:3 columns
-            card.footnote = NewText("Footnote", panel, font, 17, TextAnchor.MiddleLeft, QuietColour, bestFit: true);
-            for (int i = 0; i < MissionCard.MaxButtons; i++) card.buttons[i] = Button("Button" + i, panel, font, 24, new Vector2(200f, 96f));
+            card.footnote = NewText("Footnote", panel, font, HudStyle.CaptionSize, TextAnchor.MiddleLeft, QuietColour, bestFit: true);
+            for (int i = 0; i < MissionCard.MaxButtons; i++)
+            {
+                card.buttons[i] = Button("Button" + i, panel, font, HudStyle.ButtonSize, new Vector2(200f, 96f));
+                card.buttons[i].feedback = UiFeedback.Confirm;
+            }
 
             root.gameObject.SetActive(true);
             return card;
@@ -192,11 +199,11 @@ namespace OpenSkies.UI
 
         /// <summary>MENU, top right under CAM (always), and SKIP TUTORIAL under it (First Flight only).</summary>
         public static HudButton BuildMenuButton(RectTransform safeArea, Font font) =>
-            SessionButton("MenuButton", safeArea, font, MenuPosition, "MENU", 24);
+            SessionButton("MenuButton", safeArea, font, MenuPosition, "MENU", HudStyle.ButtonSize);
 
         public static HudButton BuildSkipButton(RectTransform safeArea, Font font)
         {
-            var button = SessionButton("SkipButton", safeArea, font, SkipPosition, "SKIP\nTUTORIAL", 18);
+            var button = SessionButton("SkipButton", safeArea, font, SkipPosition, "SKIP\nTUTORIAL", HudStyle.CaptionSize);
             Hidden((RectTransform)button.transform);
             return button;
         }
@@ -208,16 +215,14 @@ namespace OpenSkies.UI
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
             rect.anchoredPosition = position;
             rect.sizeDelta = SessionButtonSize;
-            var image = AddImage(rect, new Color(0f, 0f, 0f, 0.3f));
+            var image = AddImage(rect, HudStyle.ControlSurface);
             image.raycastTarget = true;
             var button = rect.gameObject.AddComponent<HudButton>();
             button.background = image;
-            button.idleColor = new Color(0f, 0f, 0f, 0.3f);
-            var label = NewText("Label", rect, font, fontSize, TextAnchor.MiddleCenter, new Color(1f, 1f, 1f, 0.85f), shadow: false);
+            var label = NewText("Label", rect, font, fontSize, TextAnchor.MiddleCenter, HudStyle.TextPrimary, shadow: false);
             Stretch(label.rectTransform);
             label.text = caption;
             button.label = label;
-            button.labelColor = new Color(1f, 1f, 1f, 0.85f);
             rect.gameObject.SetActive(true);
             return button;
         }
@@ -237,15 +242,15 @@ namespace OpenSkies.UI
             screen.group = group;
 
             // A gradient-free dim over the world: the aircraft on the runway stays visible.
-            var scrim = AddImage(root, new Color(0f, 0f, 0f, 0.42f));
+            var scrim = AddImage(root, HudStyle.Scrim);
             scrim.raycastTarget = true;
 
             const float left = 120f;
-            screen.title = NewText("Title", root, font, 64, TextAnchor.LowerLeft, TitleColour);
+            screen.title = NewText("Title", root, font, HudStyle.DisplaySize, TextAnchor.LowerLeft, TitleColour);
             screen.title.fontStyle = FontStyle.Bold;
             TopLeft(screen.title.rectTransform, left, -96f, 900f, 80f);
             screen.title.text = "OPEN SKIES";
-            screen.subtitle = NewText("Subtitle", root, font, 26, TextAnchor.UpperLeft, TextColour);
+            screen.subtitle = NewText("Subtitle", root, font, HudStyle.BodySize + 2, TextAnchor.UpperLeft, TextColour);
             TopLeft(screen.subtitle.rectTransform, left, -182f, 900f, 40f);
             screen.subtitle.text = "Choose how you want to fly";
 
@@ -267,11 +272,17 @@ namespace OpenSkies.UI
             Place(screen.inTheAirButton, 304f, 0f, new Vector2(280f, 120f));
             screen.inTheAirButton.SetLabel("In the air");
 
-            var hint = NewText("Footer", root, font, 20, TextAnchor.LowerLeft, QuietColour);
+            // Settings under the modes: display, controls, sound and graphics before the first flight.
+            screen.settingsButton = Button("Settings", root, font, HudStyle.ButtonSize, SettingsButtonSize);
+            Place(screen.settingsButton, left, -680f, SettingsButtonSize);
+            screen.settingsButton.idleColor = new Color(0f, 0f, 0f, 0.45f);
+            screen.settingsButton.SetLabel("SETTINGS");
+
+            var hint = NewText("Footer", root, font, HudStyle.LabelSize, TextAnchor.LowerLeft, QuietColour);
             hint.rectTransform.anchorMin = hint.rectTransform.anchorMax = hint.rectTransform.pivot = new Vector2(0f, 0f);
             hint.rectTransform.anchoredPosition = new Vector2(left, 40f);
             hint.rectTransform.sizeDelta = new Vector2(1000f, 30f);
-            hint.text = "MENU (top right) pauses the flight and brings you back here.";
+            hint.text = "MENU (top right) pauses the flight; settings are there too.";
 
             root.gameObject.SetActive(true);
             return screen;
@@ -282,6 +293,8 @@ namespace OpenSkies.UI
             var button = Button(name, parent, font, 34, size);
             Place(button, topLeft.x, topLeft.y, size);
             button.idleColor = new Color(0f, 0f, 0f, 0.45f);
+            button.feedback = UiFeedback.Confirm;
+            button.pressScale = 0.98f; // large buttons: a smaller change reads the same
             var label = button.label;
             label.alignment = TextAnchor.UpperLeft;
             label.fontStyle = FontStyle.Bold;
@@ -306,7 +319,7 @@ namespace OpenSkies.UI
             var button = rect.gameObject.AddComponent<HudButton>();
             button.background = image;
             button.idleColor = ButtonColour;
-            var label = NewText("Label", rect, font, size, TextAnchor.MiddleCenter, Color.white, shadow: false);
+            var label = NewText("Label", rect, font, size, TextAnchor.MiddleCenter, HudStyle.TextPrimary, shadow: false);
             Stretch(label.rectTransform);
             button.label = label;
             return button;
@@ -377,7 +390,7 @@ namespace OpenSkies.UI
         static void AddShadow(Graphic graphic)
         {
             var effect = graphic.gameObject.AddComponent<Shadow>();
-            effect.effectColor = new Color(0f, 0f, 0f, 0.55f);
+            effect.effectColor = HudStyle.TextShadow;
             effect.effectDistance = new Vector2(1.5f, -1.5f);
         }
 

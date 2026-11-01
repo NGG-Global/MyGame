@@ -231,7 +231,8 @@ namespace OpenSkies.Tests
             Assert.IsTrue(_modes.IsPaused);
             Assert.AreEqual(0f, Time.timeScale);
             Assert.IsTrue(_card.IsModal, "the pause card dims and takes the touches");
-            Assert.AreEqual(4, _card.ButtonCount, "resume, restart, skip, change mode");
+            Assert.AreEqual(5, _card.ButtonCount, "resume, settings, restart, skip, change mode");
+            Assert.IsTrue(_card.FirstRowPaired, "RESUME and SETTINGS share the first row");
             Assert.AreEqual(FirstFlightTutorial.Status.Paused, _modes.Tutorial.State);
             Vector3 position = _session.aircraft.Body.position;
             for (int i = 0; i < 5; i++) yield return null;
@@ -283,7 +284,7 @@ namespace OpenSkies.Tests
             Assert.IsFalse(_session.Telemetry.WeightOnWheels, "started in the air");
 
             _modes.OpenMenu();
-            _card.buttons[3].OnPointerClick(Pointer()); // CHANGE MODE
+            _card.buttons[4].OnPointerClick(Pointer()); // CHANGE MODE (after RESUME, SETTINGS, GUIDE, RESTART)
             Assert.IsTrue(_modes.ModeSelectOpen);
             _modeSelect.landingButton.OnPointerClick(Pointer());
             Assert.AreEqual(GameMode.LandingChallenge, _modes.Mode);
@@ -296,7 +297,7 @@ namespace OpenSkies.Tests
             yield return Build(withUi: true);
             _modes.StartMode(GameMode.FreeFlight, FreeFlightStart.Airborne);
             _modes.OpenMenu();
-            _card.buttons[1].OnPointerClick(Pointer()); // GUIDE: next landmark
+            _card.buttons[2].OnPointerClick(Pointer()); // GUIDE: next landmark (after RESUME and SETTINGS)
             Assert.IsTrue(_modes.Destination >= 0);
             _card.buttons[0].OnPointerClick(Pointer()); // RESUME
             yield return new WaitForFixedUpdate();

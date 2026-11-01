@@ -34,6 +34,10 @@ namespace OpenSkies.Editor
                 asset.msaaSampleCount = 1;
                 asset.renderScale = 1f;
                 asset.shadowDistance = 60f;
+                // One cascade and a 1024 shadow map: the graphics presets change distance, resolution and
+                // MSAA at runtime, never features that need other shader variants (cascades, soft shadows).
+                asset.shadowCascadeCount = 1;
+                asset.mainLightShadowmapResolution = 1024;
                 asset.supportsCameraDepthTexture = false;
                 asset.supportsCameraOpaqueTexture = false;
                 AssetDatabase.CreateAsset(asset, UrpAssetPath);

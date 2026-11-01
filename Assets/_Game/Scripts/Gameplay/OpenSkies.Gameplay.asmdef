@@ -12,7 +12,10 @@
         "OpenSkies.Cockpit",
         "OpenSkies.Assistance",
         "OpenSkies.Missions",
-        "OpenSkies.World"
+        "OpenSkies.World",
+        "OpenSkies.Options",
+        "OpenSkies.Audio",
+        "OpenSkies.Platform"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

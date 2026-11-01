@@ -19,8 +19,16 @@ nothing over the centre of the screen.
 
 Sizes are canvas units at the 1920 × 1080 reference; the canvas scales by
 height, so controls keep the same proportion of screen height on phones and
-tablets. All visuals are translucent outlines and fills generated at runtime
-(`TouchControlSprites`); there are no opaque panels.
+tablets (the player's interface scale, 90-110 %, multiplies this; see
+`docs/CONTEXTUAL_UI.md`). All visuals are translucent outlines and fills generated at
+runtime (`TouchControlSprites`) with a soft dark edge for bright skies; there are no
+opaque panels. The joystick region and the throttle's touch area draw nothing
+(`RaycastOnlyGraphic`): they catch touches without overdraw.
+
+Active states (M12): the held joystick knob grows by 10 % and brightens; the held
+brake turns cyan with dark text; the throttle brightens while held and shows marks at
+25, 50 and 75 %. Feedback is immediate: no animation delays any input. The player's HUD
+opacity dims the controls only partly (never below 80 % of their normal opacity).
 
 Rudder has no touch control yet. In the air, the Assisted and Standard
 profiles coordinate turns automatically (`docs/FLIGHT_ASSISTANCE.md`); in Manual a

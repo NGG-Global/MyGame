@@ -21,7 +21,7 @@ namespace OpenSkies.UI
         [Tooltip("Index = bit of CoachHighlight: stick, throttle, brake, flaps, camera, reset.")]
         public RectTransform[] targets = new RectTransform[TargetCount];
         public Image[] frames = new Image[TargetCount];
-        public Color color = new Color(1f, 0.82f, 0.35f, 1f);
+        public Color color = HudStyle.Selected; // cyan: the control the coach means
         [Tooltip("Frame margin around the control, canvas units.")]
         public float padding = 10f;
         [Tooltip("One slow breath, s.")]

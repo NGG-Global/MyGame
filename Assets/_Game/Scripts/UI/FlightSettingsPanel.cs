@@ -87,6 +87,7 @@ namespace OpenSkies.UI
         {
             if (_initialized) return;
             _initialized = true;
+            RoundCard(card);
             if (group != null) _fade = new HudFade(group, interactive: true);
             if (close != null) close.Clicked += () => CloseRequested?.Invoke();
             for (int i = 0; i < profiles.Length; i++)
@@ -232,6 +233,13 @@ namespace OpenSkies.UI
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
             rect.anchoredPosition = new Vector2(x, top);
             rect.sizeDelta = new Vector2(width, height > 0f ? height : buttonHeight);
+        }
+
+        /// <summary>Runtime-generated sprites cannot be stored in a scene: the card gets its rounded shape here.</summary>
+        static void RoundCard(RectTransform rect)
+        {
+            var image = rect != null ? rect.GetComponent<Image>() : null;
+            if (image != null && image.sprite == null) HudStyle.Round(image, HudStyle.PanelRadius);
         }
     }
 }

@@ -34,12 +34,15 @@ listed, the code cannot compile against it.
 | `Input/` | `OpenSkies.FlightInput` | `OpenSkies.FlightInput`, `.TouchControls` | FlightState, Unity.InputSystem, UnityEngine.UI | `IFlightControlSource`, `IFlightInputProvider`, `FlightInputRouter` (merges providers, owns the throttle), keyboard/gamepad provider, `ParkingBrake` provider, touch controls with `PointerOwnership` (see `docs/TOUCH_CONTROLS.md`). |
 | `Camera/` | `OpenSkies.CameraSystems` | `OpenSkies.CameraSystems` | none | `CameraRig` (chase, cockpit with look, recentring and field of view), `ChaseCameraMath`, `CockpitLookMath`. |
 | `Awareness/` | `OpenSkies.Awareness` | `OpenSkies.Awareness` | FlightState | Situational awareness in plain C#: `FlightPhaseEstimator`, `RunwayGeometry`, `FlightWarningMonitor`, `DisclosureController`, their settings and `FlightAwarenessConfiguration`. See `docs/CONTEXTUAL_UI.md`. |
-| `UI/` | `OpenSkies.UI` | `OpenSkies.UI` | FlightState, Awareness, Missions, UnityEngine.UI | `HudPresenter`, `TelemetryReadout`, safe area; contextual HUD (`ContextualHud`, `ContextualHudFactory`, `HudButton`, `HudFade`, `DisclosureInspector`); instruments (`InstrumentFace`, `InstrumentFaceFactory`, `InstrumentMath`) the cockpit focus panel and cockpit view controls (LOOK FWD); mission UI (`ModeSelectScreen`, `CoachingPanel`, `ControlHighlights`, `CheckpointMarker`, `MissionCard`, `MissionUiFactory`). |
+| `UI/` | `OpenSkies.UI` | `OpenSkies.UI` | FlightState, Awareness, Missions, Options, UnityEngine.UI | Design tokens (`HudStyle`, `docs/VISUAL_STYLE_GUIDE.md`), the settings screen (`SettingsScreen`, `SettingsScreenFactory`), interface scale limits (`UiScaleMath`); `HudPresenter`, `TelemetryReadout`, safe area; contextual HUD (`ContextualHud`, `ContextualHudFactory`, `HudButton`, `HudFade`, `DisclosureInspector`); instruments (`InstrumentFace`, `InstrumentFaceFactory`, `InstrumentMath`) the cockpit focus panel and cockpit view controls (LOOK FWD); mission UI (`ModeSelectScreen`, `CoachingPanel`, `ControlHighlights`, `CheckpointMarker`, `MissionCard`, `MissionUiFactory`). |
 | `Cockpit/` | `OpenSkies.Cockpit` | `OpenSkies.Cockpit` | FlightState, FlightInput, CameraSystems, Unity.InputSystem, UnityEngine.UI | Interactive cockpit: `CockpitInteractionManager` (touch routing with the shared pointer ownership), `CockpitInteractable`, `CockpitLayout`, `CockpitPicking`, switch, selection-frame and exterior light views. See `docs/COCKPIT.md`. |
 | `Environment/` | `OpenSkies.World` | `OpenSkies.World` | none | The world's landmarks: `Landmark`, `LandmarkRegistry`, `PrototypeWorld` (placeholder layout shared by the scene builder and the missions), `LandmarkBeacon` (checkpoint light). Later: airport, water, time of day. |
 | `Missions/` | `OpenSkies.Missions` | `OpenSkies.Missions` | FlightState, Awareness, World | What the player is trying to do, in plain C#: `FirstFlightTutorial` (eight `TutorialStep`s as data, `Coach`, `WaypointTracker`), `LandingChallenge`, `LandingEvaluator` and scoring, `PlayerProgress`, `MissionConfiguration`. Reads telemetry, the phase estimate and the player's commands; never sends a control. See `docs/ONBOARDING_DESIGN.md`. |
-| `Gameplay/` | `OpenSkies.Gameplay` | `OpenSkies.Gameplay` | all runtime layers | `FlightSession` wires layers together (including awareness and the contextual HUD) and owns start states, the RESET target and the navigation target; `GameModeSession` runs the modes (entry screen, First Flight, Landing Challenge, pause, results, progress) on top of it; `MissionStarts`, `HudPreferences`, `PlayerPrefsProgressStore`, `AppBootstrap`, `GameConfig`. |
-| `Editor/` | `OpenSkies.Editor` | `OpenSkies.Editor` | runtime layers, URP, Input System | `BuildScript`, `FlightPrototypeSceneBuilder`, `RenderPipelineSetup`. |
+| `Options/` | `OpenSkies.Options` | `OpenSkies.Options` | none | The player's presentation and comfort options (`GameOptions`: interface scale, HUD opacity, motion, haptics, volumes, graphics preset, frame rate), their limits and steps (`GameOptionsRules`) and the store interface. Plain C#. |
+| `Audio/` | `OpenSkies.Audio` | `OpenSkies.Audio` | FlightState, Options | `AudioManager` (Audio Mixer routing, with a source-level fallback), `FlightAudioMath` (engine RPM and load, airflow, rolling, ambience, cockpit enclosure), `TouchdownDetector`, `AlertSoundScheduler`, `PlaceholderAudio` (generated placeholder clips), `GameAudioConfiguration`. Reads telemetry values; never input. |
+| `Platform/` | `OpenSkies.Platform` | `OpenSkies.Platform` | Options, URP, UnityEngine.UI | Device services: `GraphicsQuality` and `GraphicsPresets` (runtime copy of the URP asset), `FrameRatePolicy`, haptics (`HapticPolicy`, `AndroidHaptics`, `HapticFeedback`), `PerformanceMonitor` and `FrameStatistics`. |
+| `Gameplay/` | `OpenSkies.Gameplay` | `OpenSkies.Gameplay` | all runtime layers | `FlightSession` wires layers together (including awareness and the contextual HUD) and owns start states, the RESET target and the navigation target; `GameModeSession` runs the modes (entry screen, First Flight, Landing Challenge, pause, results, progress) on top of it; `PresentationSession` applies the player's options and runs sound, haptics, graphics presets and the settings screen; `MissionStarts`, `HudPreferences`, `PlayerPrefsProgressStore`, `PlayerPrefsOptionsStore`, `AppBootstrap`, `GameConfig`. |
+| `Editor/` | `OpenSkies.Editor` | `OpenSkies.Editor` | runtime layers, URP, Input System | `BuildScript`, `FlightPrototypeSceneBuilder`, `PrototypeEnvironment` (atmosphere, beach, hills, trees, runway surroundings), `AudioMixerSetup`, `RenderPipelineSetup`. |
 | `Tests/EditMode`, `Tests/PlayMode` | `OpenSkies.Tests.*` | `OpenSkies.Tests` | runtime layers | Unit tests and player-loop tests. |
 
 Namespaces avoid `Camera`, `Input` and `Environment` as final segments where
@@ -79,7 +82,13 @@ Frames:
    controls'.
    Touch widgets receive pointer events from `InputSystemUIInputModule` during
    `EventSystem.Update`; the provider reads their state at the next physics step.
-5. Rigidbody interpolation moves the aircraft transform smoothly between steps;
+5. `PresentationSession.Update` (order 60, after the modes): pause state of the
+   sound (menu, entry screen, app in the background), the flight's sound from this
+   frame's telemetry and view, alert sounds from the active warnings, a haptic pulse
+   when a red warning appears, the settings screen. At the physics rate it detects
+   touchdowns (sound and haptic). It never produces flight controls and never changes
+   the physics step.
+6. Rigidbody interpolation moves the aircraft transform smoothly between steps;
    `CameraRig.LateUpdate` follows it.
 
 Presentation never writes to the simulation. The only way to influence flight
@@ -110,14 +119,21 @@ is a `FlightControls` value from an `IFlightControlSource`.
 | Cockpit picking by math, not colliders | Pick boxes larger than the visuals and a screen tolerance; no colliders that could touch the aircraft's physics or the gear raycasts. |
 | Cockpit touch surface behind every control, sharing `PointerOwnership` | Flight controls and HUD buttons always win a touch; the cockpit claims what it uses, so revocation and liveness checks cover it. |
 | Scenes generated by Editor code | Repeatable and reviewable without an Editor; no hand-written scene YAML or invented GUIDs. |
-| uGUI with the built-in legacy font for now | Works without importing TextMeshPro resources; revisit with the HUD design milestone. |
+| uGUI with the built-in legacy font for now | Works without importing TextMeshPro resources; a licensed typeface and TextMeshPro are an open decision (`docs/VISUAL_STYLE_GUIDE.md`). |
+| Design tokens in one class per layer (`HudStyle`, mirrored by `TouchControlStyle`) | Every factory reads the same colours, sizes and timing; layers do not share code, so an EditMode test keeps the mirror in step. |
+| Options apart from flight preferences | Assistance, sensitivity and the HUD profile keep their own single stores; `GameOptions` holds only presentation and comfort, and none of it can reach the flight model. |
+| Audio through the Audio Mixer, with a fallback | Volumes and the cockpit filter are mixer parameters; the mixer is generated by Editor code through Unity's internal API (no public one exists), so `AudioManager` applies the same on its sources when the mixer or a parameter is missing. |
+| Placeholder sounds generated once, not synthesised per frame | No third-party recordings, no audio assets to license, a few milliseconds at start-up; designed clips replace them in the configuration. |
+| Graphics presets on a runtime copy of the URP asset | The asset on disk is never changed; only settings that need no other shader variants change at runtime (render scale, shadow distance and resolution, MSAA); the physics step never follows the frame rate. |
+| Hidden HUD elements culled, touch areas draw nothing | `HudFade` culls fully hidden graphics; the joystick and throttle touch areas use a graphic without geometry. Less overdraw on mobile GPUs. |
+| Haptics through the system's haptic feedback | Android `performHapticFeedback` follows the player's system setting and needs no vibration permission; a policy limits every event so nothing vibrates continuously. |
 | Mobile URP asset created in code | Settings are reviewable and do not depend on Editor clicks. |
 
 ## Scenes
 
 | Scene | Source | Contents |
 |---|---|---|
-| `Assets/_Game/Scenes/FlightPrototype.unity` | `FlightPrototypeSceneBuilder` | Land and sea planes with a placeholder coastline (headland and lighthouse, harbour breakwater, islet; `PrototypeWorld`), 1.5 km runway 36/18 (with colliders), entry screen and mission UI, `GameModes` (`GameModeSession`), Rigidbody aircraft with compound collider, placeholder cockpit interior and exterior lights, sun, procedural sky, chase/cockpit camera, minimal HUD with development overlay, contextual HUD, cockpit touch surface and focus panel, EventSystem. Uses `Assets/_Game/Settings/Aircraft/TrainerConfiguration.asset` and `Assets/_Game/Settings/HUD/FlightAwarenessConfiguration.asset`, `Assets/_Game/Settings/Assistance/FlightAssistConfiguration.asset` and `Assets/_Game/Settings/Missions/MissionConfiguration.asset` (each created once, never overwritten). |
+| `Assets/_Game/Scenes/FlightPrototype.unity` | `FlightPrototypeSceneBuilder` | Land and sea planes with a placeholder coastline (headland and lighthouse, harbour breakwater, islet; `PrototypeWorld`), haze, daylight ambient, a sloping beach, two-scale ground and sea detail, hills to the west, tree clusters, runway edge and aiming-point markings, an apron with two hangars (`PrototypeEnvironment`), audio (`AudioManager` with the generated mixer), the presentation session, settings screen and performance monitor, 1.5 km runway 36/18 (with colliders), entry screen and mission UI, `GameModes` (`GameModeSession`), Rigidbody aircraft with compound collider, placeholder cockpit interior and exterior lights, sun, procedural sky, chase/cockpit camera, minimal HUD with development overlay, contextual HUD, cockpit touch surface and focus panel, EventSystem. Uses `Assets/_Game/Settings/Aircraft/TrainerConfiguration.asset` and `Assets/_Game/Settings/HUD/FlightAwarenessConfiguration.asset`, `Assets/_Game/Settings/Assistance/FlightAssistConfiguration.asset` and `Assets/_Game/Settings/Missions/MissionConfiguration.asset` (each created once, never overwritten). |
 
 The builder rebuilds the scene from scratch each run (idempotent, no
 duplicates) and reuses its materials in `Assets/_Game/Art/Materials/Prototype/`.
@@ -135,5 +151,11 @@ in an Editor, commit the scene, its materials and their `.meta` files.
   motion) and composition (session delivers controls; camera switching does
   not interrupt control; contextual HUD layout and accessibility; phase
   detection and HUD profile changes with the physics aircraft).
-- Performance checks (frame time, allocations) arrive with device builds; see
-  `docs/ROADMAP.md`.
+- EditMode also covers the presentation logic: options, audio math, touchdown and
+  alert timing, placeholder sounds, graphics presets, frame-rate policy, haptic limits,
+  frame statistics, design tokens and contrast, interface scale limits.
+- PlayMode covers the settings screen, the HUD at the largest allowed interface scale,
+  pause and resume of the sound, options reaching the session, warnings never dimmed,
+  and rendering choices that never touch the physics step.
+- Performance is measured on devices with `PerformanceMonitor`; protocol and results
+  in `docs/MOBILE_PERFORMANCE_REPORT.md`.

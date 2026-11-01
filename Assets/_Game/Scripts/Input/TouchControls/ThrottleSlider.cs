@@ -20,6 +20,8 @@ namespace OpenSkies.FlightInput.TouchControls
         public Image fillImage;
         public Image handleImage;
         public Text label;
+        [Tooltip("Reference marks at 25, 50 and 75 %.")]
+        public Image[] ticks = new Image[0];
 
         [Tooltip("1 = the full track height covers 0-100 %. Lower values give finer control.")]
         [Range(0.2f, 2f)] public float dragGain = 1f;
@@ -36,8 +38,8 @@ namespace OpenSkies.FlightInput.TouchControls
 
         void Awake()
         {
-            if (trackImage != null && trackImage.sprite == null) { trackImage.sprite = TouchControlSprites.RoundedOutline; trackImage.type = Image.Type.Sliced; }
-            if (fillImage != null && fillImage.sprite == null) { fillImage.sprite = TouchControlSprites.RoundedRect; fillImage.type = Image.Type.Sliced; }
+            if (trackImage != null && trackImage.sprite == null) TouchControlStyle.Round(trackImage, outline: true);
+            if (fillImage != null && fillImage.sprite == null) TouchControlStyle.Round(fillImage, outline: false);
             if (handleImage != null && handleImage.sprite == null) { handleImage.sprite = TouchControlSprites.RoundedRect; handleImage.type = Image.Type.Sliced; }
             SetHighlight(false);
         }
@@ -94,6 +96,7 @@ namespace OpenSkies.FlightInput.TouchControls
             SetAlpha(fillImage, a * 0.6f);
             SetAlpha(handleImage, Mathf.Min(1f, a * 1.3f));
             if (label != null) SetAlpha(label, Mathf.Min(1f, a * 1.2f));
+            for (int i = 0; i < ticks.Length; i++) SetAlpha(ticks[i], a * 0.8f);
         }
 
 
