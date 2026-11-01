@@ -20,8 +20,11 @@ Read with: `docs/FLIGHT_MODEL.md` (physics, tuning) and `docs/TOUCH_CONTROLS.md`
    and (M12) the audio mixer `Assets/_Game/Audio/OpenSkiesMixer.mixer`, the audio
    configuration `Assets/_Game/Settings/Audio/AudioConfiguration.asset`, the ground and
    sea detail textures in `Assets/_Game/Art/Textures/Prototype/` and the tree meshes in
-   `Assets/_Game/Art/Meshes/Prototype/`. Check the Console for a warning from
-   `AudioMixerSetup`: if the mixer could not be generated, audio still works without it.
+   `Assets/_Game/Art/Meshes/Prototype/`, and the baked display aircraft in
+   `Assets/_Game/Art/Meshes/Display/`. Check the Console for warnings from
+   `AudioMixerSetup` (audio still works without the mixer) and from `DisplayAircraft`
+   (a missing model or a nose part not found skips that aircraft; a proportion warning
+   means its size needs a look).
 4. Open `FlightPrototype` and press Play.
 5. Run **Window › General › Test Runner**: EditMode › Run All, then PlayMode › Run All.
 6. Commit the generated scene, materials, settings assets and their `.meta`
@@ -189,6 +192,7 @@ build and result per step.
 | # | Step | Expected |
 |---|---|---|
 | 1 | Launch | Entry screen over the runway: three modes and SETTINGS; hazy horizon, beach between grass and sea, hills to the west, trees around the airfield, apron with two hangars. |
+| 1b | Taxi towards the apron; look at the three display aircraft | F-16, Spitfire and Beechcraft parked nose east, on their wheels (not floating or sunk), real proportions (Spitfire wider than long, F-16 longer than wide), flat colours (grey, dark green, red); taxiing into a fuselage stops the aircraft; they disappear smoothly with distance, no hitch when they appear. |
 | 2 | SETTINGS on the entry screen | Settings panel over a dimmed world: DISPLAY, CONTROLS, SOUND, GRAPHICS; every button easy to hit; DONE returns to the entry screen. |
 | 3 | Free Flight, look at the HUD in Smart, Detailed, Cinematic | Flight values on small dark plates, readable against bright sky; cyan for engaged buttons; nothing amber unless it is a caution. |
 | 4 | Stall at altitude; dive below 2000 ft | STALL banner red with an octagon symbol and a horn; SINK RATE amber with a triangle and one chime; OVERSPEED repeats a short tone. Banners stay fully opaque at 60 % HUD opacity. |

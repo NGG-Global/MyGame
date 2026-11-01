@@ -191,6 +191,17 @@ Numbered as in the owner's brief; delivered after M11. Detail in
 - [ ] Decide: typeface (TextMeshPro), engaged colour, a phone layout for larger
       physical touch targets, Linear colour space
 
+### Display aircraft (owner request, after M12)
+
+- [x] The owner's licensed F-16, Spitfire and Beechcraft Model 17 models parked on the
+      apron as static scenery: baked into one mesh each with flat colours (textures not
+      supplied), scaled to the real wingspans, nose found automatically, fuselage
+      collision, distance culling; licence record in `docs/THIRD_PARTY_ASSETS.md`
+- [ ] Owner: rebuild the scene; check size, orientation and colours on the apron
+- [ ] Supply the original textures, or keep flat colours
+- [ ] A lower-detail F-16 for mobile (about 148,000 polygons now)
+- [ ] Owner: trademark clearance before a commercial release (real names kept)
+
 ## M3: Assistance and contextual UI (layer 1)
 
 - Optional assistance: done in M3b

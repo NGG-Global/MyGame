@@ -9,6 +9,10 @@ Usage:
     python3 tools/unity_meta.py Assets/_Game/Scripts/Runtime/Foo.cs [more paths...]
     python3 tools/unity_meta.py --check        # list assets under Assets/ with no .meta,
                                                # orphan .meta files and duplicate GUIDs
+    python3 tools/unity_meta.py --guid-only Assets/.../Model.fbx
+        # for a type with a type-specific importer (models, images, audio): a .meta with
+        # only the GUID, no importer block. Unity adds its default importer settings on
+        # first import and keeps the GUID, so every machine and CI share it.
 
 Existing .meta files are never modified, so existing GUIDs never change.
 Folders are processed parent-first, so passing a file also creates metas for
@@ -126,7 +130,15 @@ def all_guids():
     return guids
 
 
-def write_meta(path, existing):
+GUID_ONLY_TEMPLATE = """fileFormatVersion: 2
+guid: {guid}
+"""
+
+GUID_ONLY_ALLOWED = {".fbx", ".obj", ".blend", ".png", ".jpg", ".jpeg", ".tga", ".psd", ".tif", ".exr", ".hdr",
+                     ".wav", ".mp3", ".ogg", ".ttf", ".otf"}
+
+
+def write_meta(path, existing, guid_only=False):
     meta = path + ".meta"
     if os.path.exists(meta):
         return False
@@ -134,16 +146,20 @@ def write_meta(path, existing):
         template = FOLDER
     else:
         ext = os.path.splitext(path)[1].lower()
-        if ext in REFUSE:
-            raise SystemExit(f"Refusing to hand-write a .meta for {path}: type-specific importer. See CLAUDE.md.")
-        template = BY_EXT.get(ext, DEFAULT)
+        if guid_only and ext in GUID_ONLY_ALLOWED:
+            template = GUID_ONLY_TEMPLATE
+        elif ext in REFUSE:
+            raise SystemExit(f"Refusing to hand-write a .meta for {path}: type-specific importer. "
+                             "Use --guid-only for a GUID-only .meta, or see CLAUDE.md.")
+        else:
+            template = BY_EXT.get(ext, DEFAULT)
     with open(meta, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(template.format(guid=new_guid(existing)))
     print("created", os.path.relpath(meta, ROOT))
     return True
 
 
-def ensure(path, existing):
+def ensure(path, existing, guid_only=False):
     path = os.path.abspath(path)
     if not path.startswith(ASSETS + os.sep):
         raise SystemExit(f"{path} is not under Assets/")
@@ -154,7 +170,7 @@ def ensure(path, existing):
         chain.append(p)
         p = os.path.dirname(p)
     for p in reversed(chain):
-        write_meta(p, existing)
+        write_meta(p, existing, guid_only and p == path)
 
 
 def check():
@@ -181,6 +197,8 @@ if __name__ == "__main__":
         print(__doc__); sys.exit(1)
     if args == ["--check"]:
         sys.exit(1 if check() else 0)
+    guid_only = "--guid-only" in args
     existing = set(all_guids())
     for a in args:
-        ensure(a, existing)
+        if a != "--guid-only":
+            ensure(a, existing, guid_only)
