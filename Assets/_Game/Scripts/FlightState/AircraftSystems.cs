@@ -132,11 +132,12 @@ namespace OpenSkies.FlightState
 
         /// <summary>
         /// Ready on the runway: engine running (ignition on), navigation lights on,
-        /// landing light off, flaps up, parking brake released.
+        /// landing light off, flaps up (or at <paramref name="flapDetent"/> for a scenario
+        /// that starts configured for landing; -1 = full), parking brake released.
         /// </summary>
-        public void ResetToStartState()
+        public void ResetToStartState(int flapDetent = 0)
         {
-            FlapDetent = 0;
+            FlapDetent = flapDetent < 0 ? _flapDetentDegrees.Length - 1 : Clamp(flapDetent, 0, _flapDetentDegrees.Length - 1);
             ParkingBrakeSet = false;
             LandingLightOn = false;
             NavigationLightsOn = true;

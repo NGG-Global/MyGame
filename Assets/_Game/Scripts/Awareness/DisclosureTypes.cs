@@ -67,6 +67,8 @@ namespace OpenSkies.Awareness
         Engaged,
         InstrumentsInView,
         NotAvailable,
+        /// <summary>A mission or tutorial asked for the guide (the player can still hide it).</summary>
+        Mission,
     }
 
     /// <summary>A player's explicit choice about a guide, overriding the automatic rules.</summary>
@@ -102,6 +104,16 @@ namespace OpenSkies.Awareness
         public AircraftSystemsState Systems;
         /// <summary>The session can show the flight assistance and control settings.</summary>
         public bool HasAssistanceSettings;
+        /// <summary>The navigation guide has a destination (the airfield or a mission checkpoint).</summary>
+        public bool HasNavigationTarget;
+        /// <summary>
+        /// Guides a mission or tutorial needs on screen, one bit per <see cref="HudElement"/>
+        /// (<see cref="HudElements.Bit"/>). They show in every profile and view; the player can
+        /// still hide them, and warnings still win.
+        /// </summary>
+        public int MissionGuides;
+        /// <summary>Rail actions a mission or tutorial points at, one bit per <see cref="ContextAction"/>: offered in every profile.</summary>
+        public int MissionActions;
     }
 
     public static class HudElements
@@ -109,6 +121,8 @@ namespace OpenSkies.Awareness
         public const int Count = 7;
 
         public static bool IsGuide(HudElement element) => element == HudElement.ApproachGuide || element == HudElement.NavigationGuide;
+
+        public static int Bit(HudElement element) => 1 << (int)element;
 
         public static string ShortLabel(HudElement element)
         {
@@ -161,6 +175,7 @@ namespace OpenSkies.Awareness
                 case DisclosureReason.Engaged: return "engaged";
                 case DisclosureReason.InstrumentsInView: return "instruments";
                 case DisclosureReason.NotAvailable: return "n/a";
+                case DisclosureReason.Mission: return "mission";
                 default: return "-";
             }
         }

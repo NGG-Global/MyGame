@@ -4,8 +4,9 @@ Semi-realistic mobile flight simulator (working title). Android first, landscape
 Differentiator: touch-first UX with progressive disclosure. Detail lives in
 `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/FLIGHT_MODEL.md`,
 `docs/TOUCH_CONTROLS.md`, `docs/CONTEXTUAL_UI.md`, `docs/COCKPIT.md`,
-`docs/FLIGHT_ASSISTANCE.md` and `docs/ROADMAP.md`. Read them before changing design,
-architecture, physics, input, assistance, the HUD or the cockpit.
+`docs/FLIGHT_ASSISTANCE.md`, `docs/ONBOARDING_DESIGN.md` and `docs/ROADMAP.md`. Read them
+before changing design, architecture, physics, input, assistance, the HUD, the cockpit,
+game modes or tutorials.
 
 ## Essentials
 - Unity **6000.6.0f1** (`ProjectSettings/ProjectVersion.txt`), URP 17.6.0,
@@ -31,15 +32,24 @@ architecture, physics, input, assistance, the HUD or the cockpit.
   - `Assistance`: the flight assistance profiles (`FlightAssistController :
     IFlightAssist`) in plain C# (references FlightState only). See
     `docs/FLIGHT_ASSISTANCE.md`.
+  - `World` (`Environment/`): landmark registry and the placeholder world layout
+    (`PrototypeWorld`), shared by the scene builder and the missions. No dependencies.
+  - `Missions`: game modes, the First Flight tutorial (steps as data), the Landing
+    Challenge, landing scoring and local progress in plain C# (references FlightState,
+    Awareness, World). Missions read telemetry, the phase estimate and the pilot's
+    commands; they never produce flight controls and never change the phase estimator.
+    See `docs/ONBOARDING_DESIGN.md`.
   - `Cockpit`: cockpit touch routing, picking, layout, switch and light views
     (references FlightState, FlightInput, CameraSystems). See `docs/COCKPIT.md`.
   - `Input`, `Camera`, `UI`, `Cockpit`: never reference `Simulation`. Input produces
     `FlightControls`; presentation reads `FlightTelemetry`, awareness state or transforms.
-  - `Gameplay`: composition root (`FlightSession`). The only place layers meet.
+  - `Gameplay`: composition root (`FlightSession`, and `GameModeSession` for the modes).
+    The only place layers meet.
   - `Editor`: build script and scene builders.
 - Flight is Rigidbody physics: forces and torques in `FixedUpdate` only. Never
   move the aircraft with `Transform.Translate/Rotate` or set its pose, except
-  in reset. No fake auto-levelling in physics; assistance goes through
+  in reset and in a mode's start (`FlightSession.StartFlight` with a state from
+  `FlightStartMath`, computed from the aircraft data). No fake auto-levelling in physics; assistance goes through
   `IFlightAssist` (`OpenSkies.Assistance`) and only changes commands: rate-limited,
   limited authority, never the throttle, never the aircraft's constants. Telemetry
   is built only by `TelemetryMath` (game and test lab alike).
@@ -50,7 +60,10 @@ architecture, physics, input, assistance, the HUD or the cockpit.
   / `SystemChangeGate`. Never keep a second copy of a system's state in a view.
 - Cockpit objects never get colliders; picking uses `CockpitPicking`.
 - Flight controls (joystick, throttle, brakes, CAM, RESET) are outside HUD
-  disclosure: no disclosure rule may hide or move them. Disclosure thresholds go
+  disclosure: no disclosure rule may hide or move them. Missions ask for guides and
+  rail actions only through `FlightSession.SetMissionGuidance` (disclosure), never
+  bypassing the player's choice or the warnings. Tutorial thresholds come from the
+  aircraft data (`TrainingSpeeds`) and `MissionConfiguration`, not from code. Disclosure thresholds go
   in the settings classes (`FlightAwarenessConfiguration`), not in code.
 - All flight input goes through `FlightInputRouter` providers. Any new code that
   reacts to touches (camera look, cockpit, menus) must ignore pointers owned in

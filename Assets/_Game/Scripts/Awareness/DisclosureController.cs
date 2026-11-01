@@ -133,6 +133,11 @@ namespace OpenSkies.Awareness
             {
                 var element = (HudElement)i;
                 var target = AutomaticProminence(element, input, out var reason);
+                if (MissionRequests(element, input))
+                {
+                    target = Prominence.Full;
+                    reason = DisclosureReason.Mission;
+                }
                 bool relevant = target != Prominence.Hidden;
                 if (_overrides[i] == PlayerOverride.Hide && _autoRelevant[i] && !relevant) _overrides[i] = PlayerOverride.None;
                 _autoRelevant[i] = relevant;
@@ -161,6 +166,7 @@ namespace OpenSkies.Awareness
                 DisclosureReason reason;
                 if (!available) { target = Prominence.Hidden; reason = DisclosureReason.NotAvailable; }
                 else if (engaged) { target = Prominence.Full; reason = DisclosureReason.Engaged; }
+                else if ((input.MissionActions & (1 << i)) != 0) { target = Prominence.Full; reason = DisclosureReason.Mission; }
                 else if (input.Profile == HudProfile.Detailed) { target = Prominence.Full; reason = DisclosureReason.Profile; }
                 else if (_railExpanded) { target = Prominence.Full; reason = DisclosureReason.RailExpanded; }
                 else if (input.Profile == HudProfile.Smart && IsRelevant(action, input))
@@ -286,6 +292,13 @@ namespace OpenSkies.Awareness
             }
             reason = DisclosureReason.Phase;
             return SmartShows(element, input.Phase.Phase) ? Prominence.Full : Prominence.Hidden;
+        }
+
+        /// <summary>A mission's guide request, when the guide has something to show.</summary>
+        static bool MissionRequests(HudElement element, in DisclosureInput input)
+        {
+            if (!HudElements.IsGuide(element) || (input.MissionGuides & HudElements.Bit(element)) == 0) return false;
+            return element == HudElement.ApproachGuide ? input.HasRunway : input.HasRunway || input.HasNavigationTarget;
         }
 
         /// <summary>When the phase is uncertain, show a safe superset instead of trusting the estimate.</summary>

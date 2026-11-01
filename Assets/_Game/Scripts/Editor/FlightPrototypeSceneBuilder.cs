@@ -7,8 +7,10 @@ using OpenSkies.CameraSystems;
 using OpenSkies.Cockpit;
 using OpenSkies.FlightInput.TouchControls;
 using OpenSkies.Gameplay;
+using OpenSkies.Missions;
 using OpenSkies.Simulation;
 using OpenSkies.UI;
+using OpenSkies.World;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -40,12 +42,12 @@ namespace OpenSkies.Editor
         const string AircraftConfigurationPath = "Assets/_Game/Settings/Aircraft/TrainerConfiguration.asset";
         const string AwarenessConfigurationPath = "Assets/_Game/Settings/HUD/FlightAwarenessConfiguration.asset";
         const string AssistConfigurationPath = "Assets/_Game/Settings/Assistance/FlightAssistConfiguration.asset";
+        const string MissionConfigurationPath = "Assets/_Game/Settings/Missions/MissionConfiguration.asset";
         const int AircraftLayer = 2; // built-in "Ignore Raycast": wheel raycasts must not hit the aircraft itself
 
-        // Layout, in metres. The runway runs south to north along +Z.
-        const float GroundSize = 4000f;
-        const float RunwayLength = 1500f;  // take-off needs ~350 m, landing roll ~250 m with brakes
-        const float RunwayWidth = 30f;
+        // Layout, in metres (PrototypeWorld). The runway runs south to north along +Z.
+        const float RunwayLength = PrototypeWorld.RunwayLengthMetres;  // take-off needs ~350 m, landing roll ~250 m with brakes
+        const float RunwayWidth = PrototypeWorld.RunwayWidthMetres;
         const float RunwayThickness = 0.1f;
         static readonly Vector3 AircraftStart = new Vector3(0f, 0f, -RunwayLength / 2f + 40f);
 
@@ -79,12 +81,13 @@ namespace OpenSkies.Editor
 
             CreateLighting(materials.Sky);
             CreateGround(materials.Grass);
+            var beacons = CreateCoast(materials);
             CreateRunway(materials.Asphalt, materials.Marking);
             var configuration = LoadOrCreateAircraftConfiguration();
             var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
-            var hud = CreateHud(out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel, out var viewControls,
-                out var flightSettings, out var guidanceLine);
+            var hud = CreateHud(cameraRig.ViewCamera, out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel,
+                out var viewControls, out var flightSettings, out var guidanceLine, out var missionUi);
             cockpitInteraction.cameraRig = cameraRig;
             CreateEventSystem();
 
@@ -108,8 +111,25 @@ namespace OpenSkies.Editor
             session.flightSettings = flightSettings;
             session.guidanceLine = guidanceLine;
             // Runway 36/18: surface centred on the origin, primary landing direction north (+Z).
-            session.homeRunway = new RunwayInfo(Vector3.zero, 0f, RunwayLength, RunwayWidth);
+            session.homeRunway = new RunwayInfo(PrototypeWorld.RunwayCentre, PrototypeWorld.RunwayHeadingDegrees, RunwayLength, RunwayWidth);
+            session.rememberCameraMode = true;
             sessionGo.SetActive(true);
+
+            // Game modes (entry screen, First Flight, Landing Challenge) on top of the flight session.
+            var modesGo = new GameObject("GameModes");
+            modesGo.SetActive(false);
+            var modes = modesGo.AddComponent<GameModeSession>();
+            modes.flight = session;
+            modes.configuration = LoadOrCreateMissionConfiguration();
+            modes.modeSelect = missionUi.ModeSelect;
+            modes.card = missionUi.Card;
+            modes.coach = missionUi.Coach;
+            modes.highlights = missionUi.Highlights;
+            modes.marker = missionUi.Marker;
+            modes.menuButton = missionUi.Menu;
+            modes.skipButton = missionUi.Skip;
+            modes.beacons = beacons;
+            modesGo.SetActive(true);
 
             EditorFolders.Ensure(Path.GetDirectoryName(ScenePath));
             if (!EditorSceneManager.SaveScene(scene, ScenePath))
@@ -141,11 +161,83 @@ namespace OpenSkies.Editor
 
         static void CreateGround(Material grass)
         {
-            // Unity's plane primitive is 10 m x 10 m at scale 1. It sits 10 cm below the
-            // runway so the two surfaces never z-fight at a distance.
-            var ground = Primitive(PrimitiveType.Plane, "Ground", null, new Vector3(0f, -0.1f, 0f), Vector3.one * (GroundSize / 10f), grass,
-                keepCollider: true);
+            // Unity's plane primitive is 10 m x 10 m at scale 1. The land sits 10 cm below the
+            // runway and ends at the shoreline, where the sea plane starts (no overlap, no depth fighting).
+            float width = PrototypeWorld.ShorelineX - PrototypeWorld.LandWestX;
+            float length = PrototypeWorld.WorldNorthZ - PrototypeWorld.WorldSouthZ;
+            var centre = new Vector3((PrototypeWorld.ShorelineX + PrototypeWorld.LandWestX) * 0.5f, PrototypeWorld.LandHeight,
+                (PrototypeWorld.WorldNorthZ + PrototypeWorld.WorldSouthZ) * 0.5f);
+            var ground = Primitive(PrimitiveType.Plane, "Ground", null, centre, new Vector3(width / 10f, 1f, length / 10f), grass, keepCollider: true);
             ground.isStatic = true;
+        }
+
+        /// <summary>
+        /// PLACEHOLDER coastline and landmarks from <see cref="PrototypeWorld"/> (replaced in M5):
+        /// the sea east of the shoreline, a low headland with a lighthouse, a harbour breakwater
+        /// with a light at its head and an islet. Surfaces have colliders (wheels and the radio
+        /// altimeter see them; there is no water physics). Returns the landmark lights.
+        /// </summary>
+        static LandmarkBeacon[] CreateCoast(PrototypeMaterials m)
+        {
+            var coast = new GameObject("Coast").transform;
+            float width = PrototypeWorld.SeaEastX - PrototypeWorld.ShorelineX;
+            float length = PrototypeWorld.WorldNorthZ - PrototypeWorld.WorldSouthZ;
+            var seaCentre = new Vector3((PrototypeWorld.SeaEastX + PrototypeWorld.ShorelineX) * 0.5f, PrototypeWorld.SeaHeight,
+                (PrototypeWorld.WorldNorthZ + PrototypeWorld.WorldSouthZ) * 0.5f);
+            Primitive(PrimitiveType.Plane, "Sea", coast, seaCentre, new Vector3(width / 10f, 1f, length / 10f), m.Sea, keepCollider: true);
+
+            // Headland: a low rocky block from the shore out to sea; its top is 3 m above the sea.
+            Vector3 size = PrototypeWorld.HeadlandSize;
+            float bottom = PrototypeWorld.SeaHeight - 1f;
+            var headland = PrototypeWorld.HeadlandCentre;
+            Primitive(PrimitiveType.Cube, "Headland", coast, new Vector3(headland.x, (size.y + bottom) * 0.5f, headland.z),
+                new Vector3(size.x, size.y - bottom, size.z), m.Rock, keepCollider: true);
+
+            // Lighthouse: white tower with red bands, lantern on top.
+            var lighthouse = new GameObject("Lighthouse").transform;
+            lighthouse.SetParent(coast, false);
+            lighthouse.localPosition = PrototypeWorld.LighthousePosition;
+            float tower = PrototypeWorld.LighthouseHeightMetres;
+            Primitive(PrimitiveType.Cylinder, "Tower", lighthouse, new Vector3(0f, tower * 0.5f, 0f), new Vector3(7f, tower * 0.5f, 7f), m.LighthouseWhite,
+                keepCollider: true);
+            Primitive(PrimitiveType.Cylinder, "BandLow", lighthouse, new Vector3(0f, tower * 0.35f, 0f), new Vector3(7.3f, 1.6f, 7.3f), m.LighthouseRed);
+            Primitive(PrimitiveType.Cylinder, "BandHigh", lighthouse, new Vector3(0f, tower * 0.72f, 0f), new Vector3(7.3f, 1.6f, 7.3f), m.LighthouseRed);
+            Primitive(PrimitiveType.Cylinder, "Gallery", lighthouse, new Vector3(0f, tower + 0.3f, 0f), new Vector3(9f, 0.3f, 9f), m.LighthouseRed);
+            Primitive(PrimitiveType.Sphere, "Lantern", lighthouse, new Vector3(0f, tower + 2.4f, 0f), Vector3.one * 4.2f, m.Glass);
+            var lighthouseLens = Primitive(PrimitiveType.Sphere, "Light", lighthouse, new Vector3(0f, tower + 2.4f, 0f), Vector3.one * 4.6f, m.Beacon);
+            var lighthouseBeacon = lighthouse.gameObject.AddComponent<LandmarkBeacon>();
+            lighthouseBeacon.landmarkId = PrototypeWorld.LighthouseId;
+            lighthouseBeacon.lens = lighthouseLens.GetComponent<Renderer>();
+
+            // Harbour: a breakwater from the shore out to sea, a short arm at its head, a light, moored boats.
+            var harbour = new GameObject("Harbour").transform;
+            harbour.SetParent(coast, false);
+            Vector3 start = PrototypeWorld.BreakwaterStart, head = PrototypeWorld.HarbourLightPosition;
+            float run = head.x - start.x;
+            Primitive(PrimitiveType.Cube, "Breakwater", harbour, new Vector3(start.x + run * 0.5f, (2f + bottom) * 0.5f, start.z),
+                new Vector3(run, 2f - bottom, 12f), m.Rock, keepCollider: true);
+            Primitive(PrimitiveType.Cube, "Arm", harbour, new Vector3(head.x, (2f + bottom) * 0.5f, start.z + 130f),
+                new Vector3(12f, 2f - bottom, 260f), m.Rock, keepCollider: true);
+            Primitive(PrimitiveType.Cylinder, "LightPost", harbour, new Vector3(head.x, head.y + 3f, head.z), new Vector3(1.4f, 3f, 1.4f), m.LighthouseRed);
+            var harbourLens = Primitive(PrimitiveType.Sphere, "Light", harbour, new Vector3(head.x, head.y + 6.8f, head.z), Vector3.one * 2.2f, m.Beacon);
+            var harbourBeacon = harbour.gameObject.AddComponent<LandmarkBeacon>();
+            harbourBeacon.landmarkId = PrototypeWorld.HarbourId;
+            harbourBeacon.lens = harbourLens.GetComponent<Renderer>();
+            var boats = new[] { new Vector3(1760f, 0f, -1700f), new Vector3(1840f, 0f, -1660f), new Vector3(1690f, 0f, -1630f) };
+            for (int i = 0; i < boats.Length; i++)
+                Primitive(PrimitiveType.Cube, "Boat", harbour, boats[i] + new Vector3(0f, PrototypeWorld.SeaHeight + 0.6f, 0f), new Vector3(3.5f, 1.4f, 10f),
+                    m.Airframe).transform.localRotation = Quaternion.Euler(0f, 15f * i, 0f);
+
+            // Islet: a low mound rising out of the sea (mesh collider for its real shape).
+            float radius = PrototypeWorld.IsletRadiusMetres, height = PrototypeWorld.IsletHeightMetres;
+            var islet = Primitive(PrimitiveType.Sphere, "Islet", coast,
+                new Vector3(PrototypeWorld.IsletCentre.x, PrototypeWorld.SeaHeight - height * 0.6f, PrototypeWorld.IsletCentre.z),
+                new Vector3(radius * 2f, height * 3.2f, radius * 2f), m.Grass);
+            islet.AddComponent<MeshCollider>().sharedMesh = islet.GetComponent<MeshFilter>().sharedMesh;
+
+            foreach (var renderer in coast.GetComponentsInChildren<Renderer>())
+                if (renderer.gameObject.name != "Light") renderer.gameObject.isStatic = true;
+            return new[] { lighthouseBeacon, harbourBeacon };
         }
 
         static void CreateRunway(Material asphalt, Material marking)
@@ -197,6 +289,19 @@ namespace OpenSkies.Editor
             configuration = ScriptableObject.CreateInstance<FlightAwarenessConfiguration>();
             AssetDatabase.CreateAsset(configuration, AwarenessConfigurationPath);
             Debug.Log($"[OpenSkies] Created {AwarenessConfigurationPath}");
+            return configuration;
+        }
+
+        /// <summary>Tutorial, landing challenge and scoring tuning: created once, then left alone like the other configurations.</summary>
+        static MissionConfiguration LoadOrCreateMissionConfiguration()
+        {
+            var configuration = AssetDatabase.LoadAssetAtPath<MissionConfiguration>(MissionConfigurationPath);
+            if (configuration != null) return configuration;
+
+            EditorFolders.Ensure(Path.GetDirectoryName(MissionConfigurationPath));
+            configuration = ScriptableObject.CreateInstance<MissionConfiguration>();
+            AssetDatabase.CreateAsset(configuration, MissionConfigurationPath);
+            Debug.Log($"[OpenSkies] Created {MissionConfigurationPath}");
             return configuration;
         }
 
@@ -315,10 +420,23 @@ namespace OpenSkies.Editor
             return rig;
         }
 
-        static HudPresenter CreateHud(out TouchFlightControls touchControls, out ContextualHud contextualHud,
-            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel, out CockpitViewControls viewControls,
-            out FlightSettingsPanel flightSettings, out GuidanceLine guidanceLine)
+        /// <summary>Mission UI parts, wired into the game modes.</summary>
+        sealed class MissionUi
         {
+            public ModeSelectScreen ModeSelect;
+            public MissionCard Card;
+            public CoachingPanel Coach;
+            public ControlHighlights Highlights;
+            public CheckpointMarker Marker;
+            public HudButton Menu;
+            public HudButton Skip;
+        }
+
+        static HudPresenter CreateHud(Camera viewCamera, out TouchFlightControls touchControls, out ContextualHud contextualHud,
+            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel, out CockpitViewControls viewControls,
+            out FlightSettingsPanel flightSettings, out GuidanceLine guidanceLine, out MissionUi missionUi)
+        {
+            missionUi = new MissionUi();
             var canvasGo = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasGo.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = canvasGo.GetComponent<CanvasScaler>();
@@ -371,6 +489,11 @@ namespace OpenSkies.Editor
             flightSettings = FlightSettingsPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
             guidanceLine = FlightSettingsPanelFactory.BuildGuidanceLine(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
 
+            // Mission coaching in the same place as the flying tips (never both), and the checkpoint
+            // marker, both under the contextual HUD so warnings draw over them.
+            missionUi.Coach = MissionUiFactory.BuildCoachingPanel(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
+            missionUi.Marker = MissionUiFactory.BuildCheckpointMarker(safeArea, font, viewCamera);
+
             // Contextual HUD (flight data, guides, warnings, action rail, HUD profile, inspector),
             // built after the touch controls so it draws on top; it overlaps none of them.
             contextualHud = ContextualHudFactory.Build(safeArea, font);
@@ -378,6 +501,15 @@ namespace OpenSkies.Editor
             // Cockpit view controls (LOOK FWD) in the top bar, left of the HUD profile button; shown only
             // in cockpit view while the view is turned away from rest.
             viewControls = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
+
+            // Session buttons under CAM, the control highlights over the controls (no touches), the
+            // mission card (a modal pause card dims and blocks everything else), and the entry screen on top.
+            missionUi.Menu = MissionUiFactory.BuildMenuButton(safeArea, font);
+            missionUi.Skip = MissionUiFactory.BuildSkipButton(safeArea, font);
+            missionUi.Highlights = MissionUiFactory.BuildHighlights(safeArea);
+            missionUi.Card = MissionUiFactory.BuildMissionCard(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset,
+                CockpitFocusPanelFactory.ColumnBottom, CockpitFocusPanelFactory.ColumnTop);
+            missionUi.ModeSelect = MissionUiFactory.BuildModeSelect(safeArea, font);
 
             var hud = canvasGo.AddComponent<HudPresenter>();
             hud.developerReadout = readout;
@@ -452,6 +584,12 @@ namespace OpenSkies.Editor
             public readonly Material Airframe = Lit("Airframe", new Color(0.93f, 0.93f, 0.95f), 0.55f);
             public readonly Material Accent = Lit("AirframeAccent", new Color(0.12f, 0.32f, 0.62f), 0.55f);
             public readonly Material Tyre = Lit("Tyre", new Color(0.06f, 0.06f, 0.06f), 0.15f);
+            public readonly Material Sea = Lit("Sea", new Color(0.09f, 0.29f, 0.42f), 0.85f);
+            public readonly Material Rock = Lit("Rock", new Color(0.47f, 0.44f, 0.4f), 0.1f);
+            public readonly Material LighthouseWhite = Lit("LighthouseWhite", new Color(0.95f, 0.95f, 0.93f), 0.3f);
+            public readonly Material LighthouseRed = Lit("LighthouseRed", new Color(0.72f, 0.12f, 0.1f), 0.3f);
+            public readonly Material Glass = Lit("LanternGlass", new Color(0.16f, 0.18f, 0.2f), 0.9f);
+            public readonly Material Beacon = Unlit("Beacon", new Color(1f, 0.93f, 0.7f));
             public readonly Material Sky = Skybox();
             public readonly CockpitMaterials Cockpit = new CockpitMaterials
             {

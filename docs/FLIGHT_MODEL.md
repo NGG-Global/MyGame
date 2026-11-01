@@ -73,7 +73,7 @@ Touch controls (joystick, throttle, brakes) are described in
 | Left Shift (hold) | Throttle up, 50 % per second | Throttle → 1 |
 | Left Ctrl (hold) | Throttle down | Throttle → 0 |
 | Space (hold) | Wheel brakes (main wheels) | Brake 1 |
-| R | Reset to runway start, at rest, idle | session command |
+| R | Reset to the mode's start (runway start in Free Flight; the checkpoint in the First Flight; final approach in the Landing Challenge) | session command |
 | C | Chase / cockpit camera | presentation command |
 | P | Parking brake: set (on the ground) / release | Brake 1 while set (session command) |
 | [ / ] | Flaps up / down one detent | Flaps (session command) |
@@ -81,13 +81,18 @@ Touch controls (joystick, throttle, brakes) are described in
 | V, - / = | Cockpit view: look forward; wider / narrower field of view | presentation command |
 | M | Next assistance profile (Assisted, Standard, Manual) | session command |
 | Home / End (hold) | Pitch trim nose down / nose up | trim in the assistance layer |
+| Esc | Pause menu (Android back button expected to arrive as Esc) | session command |
 
 Gamepad: left stick pitch/roll (up = nose down), right stick X rudder, right/left
 trigger throttle, south button brakes, north button camera, select/back reset,
-d-pad up/down pitch trim nose down/up.
+start pause menu, d-pad up/down pitch trim nose down/up.
 
-The throttle is a lever: it stays where it is left. The aircraft starts at
-idle with brakes off.
+The throttle is a lever: it stays where it is left. On the runway the aircraft
+starts at idle with brakes off. Airborne starts (Free Flight in the air, the
+Landing Challenge, First Flight checkpoints) place the Rigidbody once in a steady
+condition computed from this aircraft data by `FlightStartMath` (stick-free trimmed
+speed, the angle of attack for the lift, the throttle for the drag and the path,
+flaps already extended), then it flies exactly as from the runway.
 
 ## Tuning guide
 

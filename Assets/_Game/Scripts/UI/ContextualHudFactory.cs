@@ -160,13 +160,22 @@ namespace OpenSkies.UI
             label.rectTransform.anchoredPosition = new Vector2(76f, -12f);
             label.rectTransform.sizeDelta = new Vector2(220f, 26f);
             label.text = "AIRFIELD";
+            hud.navigationLabel = label;
 
             var distance = NewText("Distance", panel, font, 32, TextAnchor.UpperLeft, ValueColor);
             distance.rectTransform.anchorMin = distance.rectTransform.anchorMax = distance.rectTransform.pivot = new Vector2(0f, 1f);
             distance.rectTransform.anchoredPosition = new Vector2(76f, -40f);
-            distance.rectTransform.sizeDelta = new Vector2(220f, 44f);
+            distance.rectTransform.sizeDelta = new Vector2(124f, 44f);
             distance.text = "-";
             hud.navigationDistance = distance;
+
+            // Course to steer, quieter than the distance: optional heading guidance.
+            var bearing = NewText("Bearing", panel, font, 24, TextAnchor.UpperLeft, LabelColor);
+            bearing.rectTransform.anchorMin = bearing.rectTransform.anchorMax = bearing.rectTransform.pivot = new Vector2(0f, 1f);
+            bearing.rectTransform.anchoredPosition = new Vector2(204f, -46f);
+            bearing.rectTransform.sizeDelta = new Vector2(92f, 36f);
+            bearing.text = string.Empty;
+            hud.navigationBearing = bearing;
         }
 
         static void BuildWarnings(RectTransform parent, Font font, ContextualHud hud)

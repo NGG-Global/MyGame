@@ -32,7 +32,8 @@ Read with: `docs/FLIGHT_MODEL.md` (physics, tuning) and `docs/TOUCH_CONTROLS.md`
 | Left Shift / Left Ctrl (hold) | Throttle up / down (stays where left) |
 | Space (hold) | Wheel brakes |
 | C | Chase / cockpit camera |
-| R | Reset to the runway start |
+| R | Reset to the mode's start or checkpoint (runway start in Free Flight) |
+| Esc | Pause menu |
 | P | Parking brake (set on the ground / release) |
 | H | Next HUD profile (Smart, Detailed, Cinematic) |
 | F3 | Collapse or expand the HUD inspector (development) |
@@ -54,6 +55,9 @@ throttle, south button brakes, north button camera, select/back reset.
 | RESET | Top right, left of CAM | Back to the runway start, idle |
 | HUD | Top right, left of RESET | HUD profile: Smart, Detailed, Cinematic |
 | SYSTEMS | Above BRAKE | Opens every available action (parking brake, approach and navigation guides) |
+| MENU | Top right, under CAM | Pause menu: resume, restart, skip tutorial, change mode, guide destination |
+| SKIP TUTORIAL | Under MENU, First Flight only | Two taps end the tutorial; the flight carries on |
+| Coaching message | Bottom centre, between the joystick area and the rail | Tap for a short explanation ("?") |
 
 No touch rudder yet: nosewheel steering is keyboard/gamepad only.
 

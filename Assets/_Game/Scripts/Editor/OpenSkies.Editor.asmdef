@@ -14,7 +14,9 @@
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime",
         "OpenSkies.Cockpit",
-        "OpenSkies.Assistance"
+        "OpenSkies.Assistance",
+        "OpenSkies.Missions",
+        "OpenSkies.World"
     ],
     "includePlatforms": [
         "Editor"

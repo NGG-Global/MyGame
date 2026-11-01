@@ -121,6 +121,34 @@ added here.
       tune `FlightAssistConfiguration`; device checklist in `docs/FLIGHT_ASSISTANCE.md`
 - [ ] Decide a touch rudder and trim control
 
+## M11: First-flight experience and landing challenge
+
+Numbered as in the owner's brief; delivered after M3b. Detail in `docs/ONBOARDING_DESIGN.md`.
+
+- [x] Entry screen: Free Flight (runway or in the air), First Flight, Landing Challenge;
+      MENU pause card (resume, restart, skip, change mode, Free Flight destination)
+- [x] First Flight: eight steps as data, completed from telemetry, the phase of flight
+      and the world; coaching with priorities, quiet instructions, rate-limited hints,
+      explanation on tap, keyboard and profile texts; checkpoints for RESET; recovery
+      from abandoned take-offs, missed checkpoints, go-arounds and landings off the field
+- [x] Landing Challenge: start on final from the aircraft data (Rigidbody velocity,
+      attitude, power, flaps); configurable game scoring; result card with RETRY and
+      FREE FLIGHT; best score
+- [x] Navigation: destination name, distance and course on the guide; mission guides
+      through disclosure; checkpoint marker; flashing landmark lights
+- [x] `OpenSkies.World` landmark registry and placeholder coastline (headland and
+      lighthouse, harbour, islet); `OpenSkies.Missions`
+- [x] Local progress: First Flight status, best landing, camera view (assistance and
+      HUD profile were already remembered)
+- [x] EditMode tests (tutorial scenarios, scoring, progress, navigation, starts);
+      PlayMode tests (Rigidbody starts, pause, skip, entry screen, layout)
+- [ ] CI green (licence secrets)
+- [ ] Owner: rebuild the scene in the Editor; play the First Flight and the Landing
+      Challenge; the device checklist in `docs/ONBOARDING_DESIGN.md`
+- [ ] Owner: tune `MissionConfiguration` (coaching rhythm, scoring ranges) after playtests
+- [ ] Decide: start the First Flight automatically on the first launch, or keep the
+      entry screen with a recommendation
+
 ## M3: Assistance and contextual UI (layer 1)
 
 - Optional assistance: done in M3b
@@ -136,7 +164,8 @@ added here.
 
 ## M5: Regional airport and coastline
 
-- Fictional airport (runway, taxiways, apron, buildings) and coastline
+- Fictional airport (runway, taxiways, apron, buildings) and coastline, replacing the
+  M11 placeholders (`PrototypeWorld` keeps the landmark positions the missions use)
 - Terrain and water within the mobile budget; level-of-detail plan
 
 ## M6: Performance and device validation
@@ -146,5 +175,5 @@ added here.
 
 ## Later
 
-Tutorials, challenges, systems layer (engine, electrical, fuel, avionics),
-weather, time of day.
+More lessons and challenges (circuits, crosswind, engine failure), systems layer
+(engine, electrical, fuel, avionics), weather, time of day, localisation.

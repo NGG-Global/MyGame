@@ -10,7 +10,9 @@
         "OpenSkies.UI",
         "UnityEngine.UI",
         "OpenSkies.Cockpit",
-        "OpenSkies.Assistance"
+        "OpenSkies.Assistance",
+        "OpenSkies.Missions",
+        "OpenSkies.World"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
