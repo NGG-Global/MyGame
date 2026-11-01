@@ -19,6 +19,17 @@ namespace OpenSkies.CameraSystems
 
         public static float ClampFieldOfView(float degrees, float min, float max) => Mathf.Clamp(Finite(degrees, 0.5f * (min + max)), min, max);
 
+        /// <summary>
+        /// Whether the view is turned away from the resting direction by more than
+        /// <paramref name="thresholdDegrees"/> in yaw or pitch (when a look-forward
+        /// control is worth offering).
+        /// </summary>
+        public static bool IsLookingAway(Vector2 look, float thresholdDegrees)
+        {
+            float threshold = Mathf.Max(0f, Finite(thresholdDegrees));
+            return Mathf.Abs(Finite(look.x)) > threshold || Mathf.Abs(Finite(look.y)) > threshold;
+        }
+
         /// <summary>Screen drag in pixels to look degrees, independent of resolution (a full screen height turns <paramref name="degreesPerScreenHeight"/>).</summary>
         public static Vector2 DragToLook(Vector2 dragPixels, float screenHeightPixels, float degreesPerScreenHeight, bool followFinger)
         {

@@ -41,6 +41,8 @@ namespace OpenSkies.CameraSystems
         public float recentreSeconds = 0.35f;
         [Tooltip("Return to the resting direction by itself after this long without looking around, s. 0 = never.")]
         public float autoRecentreSeconds = 0f;
+        [Tooltip("The look-forward control is offered once the view is turned further than this from rest (yaw or pitch), degrees.")]
+        public float lookAwayDegrees = 10f;
 
         Camera _camera;
         Vector2 _look;               // x = yaw right, y = pitch up, degrees from the anchor direction
@@ -51,6 +53,8 @@ namespace OpenSkies.CameraSystems
         /// <summary>Current cockpit look offset (x yaw right, y pitch up), degrees.</summary>
         public Vector2 CockpitLook => _look;
         public bool IsRecentring => _recentreProgress < 1f;
+        /// <summary>Cockpit view turned away from rest (beyond <see cref="lookAwayDegrees"/>) and not already returning.</summary>
+        public bool IsLookingAway => !IsRecentring && CockpitLookMath.IsLookingAway(_look, lookAwayDegrees);
         public Camera ViewCamera => _camera != null ? _camera : _camera = GetComponent<Camera>();
 
         /// <summary>Turns the cockpit view; cancels a return to rest.</summary>

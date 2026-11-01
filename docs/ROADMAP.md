@@ -86,6 +86,13 @@ added here.
 - [x] Cockpit camera: drag-to-look with limits, smooth recentring, adjustable and
       remembered field of view
 - [x] EditMode and PlayMode tests (`docs/COCKPIT.md`)
+- [x] Selection frame on the cockpit item a panel refers to; LOOK FWD in the top
+      bar while the view is turned away
+- [x] Compiled outside Unity against the 6000.6.0f1 managed assemblies and package
+      sources (Editor and Android player); EditMode tests that need no native engine
+      run with Unity's Mono (`docs/COCKPIT.md`, Verification status). Not a substitute for CI.
+- [ ] Owner: fix the Unity licence secrets (CI stops at activation: invalid
+      credential, account blocked after repeated failures)
 - [ ] CI green
 - [ ] Owner: device checklist in `docs/COCKPIT.md`; tune flap values in a flight test
 - [ ] Modelled cockpit art (list in `docs/COCKPIT.md`)

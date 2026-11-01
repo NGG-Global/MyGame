@@ -15,8 +15,10 @@ namespace OpenSkies.Gameplay
     /// instrument, or a selector for a system), choices go through the shared
     /// <see cref="SystemChangeGate"/> into the authoritative
     /// <see cref="AircraftSystems"/>, and instruments are drawn from the shared
-    /// telemetry. The cockpit is only active in cockpit view; any camera change
-    /// closes the panel. Nothing here touches flight controls or time.
+    /// telemetry. The item the open panel refers to is framed in the cockpit, and
+    /// LOOK FWD is offered while the view is turned away. The cockpit is only
+    /// active in cockpit view; any camera change closes the panel. Nothing here
+    /// touches flight controls or time.
     /// </summary>
     public sealed class CockpitSession : IDisposable
     {
@@ -32,7 +34,9 @@ namespace OpenSkies.Gameplay
         readonly CockpitRig _rig;
         readonly CockpitInteractionManager _interaction;
         readonly CockpitFocusPanel _panel;
+        readonly CockpitViewControls _viewControls;
         readonly AircraftLightsView _lights;
+        readonly CameraRig _camera;
         readonly string[] _flapOptions;
         readonly string[][] _flapStates;   // [selected detent][actual degrees], built on first use
 
@@ -41,16 +45,22 @@ namespace OpenSkies.Gameplay
         bool _onGround;
         FlightTelemetry _telemetry;
         int _shownConfirmation = -1;
+        int _shownSelection = NoSelection;
+
+        const int NoSelection = -1;
 
         public CockpitSession(AircraftSystems systems, SystemChangeGate gate, CockpitRig rig, CockpitInteractionManager interaction,
-            CockpitFocusPanel panel, AircraftLightsView lights, CameraRig camera, PointerOwnership ownership, in AirspeedMarkings markings)
+            CockpitFocusPanel panel, CockpitViewControls viewControls, AircraftLightsView lights, CameraRig camera, PointerOwnership ownership,
+            in AirspeedMarkings markings)
         {
             _systems = systems ?? throw new ArgumentNullException(nameof(systems));
             _gate = gate ?? throw new ArgumentNullException(nameof(gate));
             _rig = rig;
             _interaction = interaction;
             _panel = panel;
+            _viewControls = viewControls;
             _lights = lights;
+            _camera = camera;
 
             int detents = systems.FlapDetentCount;
             _flapOptions = new string[detents];
@@ -81,6 +91,7 @@ namespace OpenSkies.Gameplay
                 _panel.CloseRequested += Close;
                 _panel.OptionChosen += OnOptionChosen;
             }
+            if (_viewControls != null) _viewControls.LookForwardRequested += LookForward;
         }
 
         public void Dispose()
@@ -95,6 +106,7 @@ namespace OpenSkies.Gameplay
                 _panel.CloseRequested -= Close;
                 _panel.OptionChosen -= OnOptionChosen;
             }
+            if (_viewControls != null) _viewControls.LookForwardRequested -= LookForward;
         }
 
         public bool IsPanelOpen => _panel != null && _panel.IsOpen;
@@ -124,6 +136,35 @@ namespace OpenSkies.Gameplay
                 if (_panel != null) _panel.Render(readings);
             }
             RefreshSystemPanel();
+            RefreshSelection();
+            if (_viewControls != null)
+                _viewControls.ShowLookForward(_view == ViewMode.Cockpit && _camera != null && _camera.IsLookingAway);
+        }
+
+        /// <summary>Turns the cockpit view smoothly back to rest (LOOK FWD). Never touches flight input.</summary>
+        public void LookForward()
+        {
+            if (_camera != null) _camera.RecentreCockpitLook();
+        }
+
+        /// <summary>The cockpit item the open panel refers to, or -1. Derived from the panel, so every way of closing it clears the frame.</summary>
+        int SelectedItem()
+        {
+            if (_panel == null) return NoSelection;
+            if (_panel.IsShowingInstrument(out var kind)) return (int)kind; // instruments share their values with CockpitItem
+            if (_panel.IsShowingSystem(out var system)) return (int)CockpitItems.ControlFor(system);
+            return NoSelection;
+        }
+
+        void RefreshSelection()
+        {
+            var view = _rig != null ? _rig.selection : null;
+            if (view == null) return;
+            int selected = SelectedItem();
+            if (selected == _shownSelection) return;
+            _shownSelection = selected;
+            if (selected == NoSelection) view.Hide();
+            else view.Show(_rig.Find((CockpitItem)selected));
         }
 
         /// <summary>Opens the enlarged view of an instrument.</summary>

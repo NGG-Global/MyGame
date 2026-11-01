@@ -81,7 +81,7 @@ namespace OpenSkies.Editor
             var configuration = LoadOrCreateAircraftConfiguration();
             var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
-            var hud = CreateHud(out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel);
+            var hud = CreateHud(out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel, out var viewControls);
             cockpitInteraction.cameraRig = cameraRig;
             CreateEventSystem();
 
@@ -98,6 +98,7 @@ namespace OpenSkies.Editor
             session.cockpit = cockpit;
             session.cockpitInteraction = cockpitInteraction;
             session.focusPanel = focusPanel;
+            session.cockpitViewControls = viewControls;
             session.aircraftLights = lights;
             session.awarenessConfiguration = LoadOrCreateAwarenessConfiguration();
             // Runway 36/18: surface centred on the origin, primary landing direction north (+Z).
@@ -296,7 +297,7 @@ namespace OpenSkies.Editor
         }
 
         static HudPresenter CreateHud(out TouchFlightControls touchControls, out ContextualHud contextualHud,
-            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel)
+            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel, out CockpitViewControls viewControls)
         {
             var canvasGo = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasGo.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
@@ -348,6 +349,10 @@ namespace OpenSkies.Editor
             // Contextual HUD (flight data, guides, warnings, action rail, HUD profile, inspector),
             // built after the touch controls so it draws on top; it overlaps none of them.
             contextualHud = ContextualHudFactory.Build(safeArea, font);
+
+            // Cockpit view controls (LOOK FWD) in the top bar, left of the HUD profile button; shown only
+            // in cockpit view while the view is turned away from rest.
+            viewControls = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
 
             var hud = canvasGo.AddComponent<HudPresenter>();
             hud.developerReadout = readout;

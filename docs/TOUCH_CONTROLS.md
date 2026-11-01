@@ -13,6 +13,7 @@ nothing over the centre of the screen.
 | CAM | Top right | Either | Switches chase/cockpit. Never changes flight input. |
 | RESET | Top right, left of CAM | Either | Back to the runway start at rest, throttle idle. |
 | HUD profile | Top right, left of RESET | Either | Cycles Smart, Detailed, Cinematic. Never changes flight input. |
+| LOOK FWD | Top right, left of the HUD profile button | Either | Cockpit view only, while the view is turned more than 10° away: returns it forward smoothly. Never changes flight input. |
 | SYSTEMS and action rail | Left of the throttle: SYSTEMS directly above BRAKE, contextual actions stacked above it | Right | SYSTEMS (always visible) opens every available action; actions appear by phase of flight. See `docs/CONTEXTUAL_UI.md`. |
 | Cockpit (cockpit view) | Any touch none of the above took | Either | Tap an instrument or switch, drag to look, pinch for field of view, double tap to look forward. See `docs/COCKPIT.md`. |
 

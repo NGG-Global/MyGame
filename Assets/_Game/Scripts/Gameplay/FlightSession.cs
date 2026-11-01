@@ -47,6 +47,8 @@ namespace OpenSkies.Gameplay
         public CockpitRig cockpit;
         public CockpitInteractionManager cockpitInteraction;
         public CockpitFocusPanel focusPanel;
+        [Tooltip("LOOK FWD and other cockpit view controls in the top bar.")]
+        public CockpitViewControls cockpitViewControls;
         public AircraftLightsView aircraftLights;
         [Tooltip("Cockpit field of view change per second while the keyboard zoom keys are held, degrees.")]
         public float fieldOfViewKeyRate = 20f;
@@ -121,13 +123,14 @@ namespace OpenSkies.Gameplay
                 contextualHud.ConfigureActions(AvailableActions);
             }
             if (focusPanel != null && contextualHud != null) focusPanel.SetReducedMotion(contextualHud.ReducedMotion);
+            if (cockpitViewControls != null && contextualHud != null) cockpitViewControls.SetReducedMotion(contextualHud.ReducedMotion);
             if (cameraRig != null && rememberHudPreferences)
                 cameraRig.SetCockpitFieldOfView(HudPreferences.LoadCockpitFieldOfView(cameraRig.cockpitFieldOfView));
             _savedFieldOfView = cameraRig != null ? cameraRig.cockpitFieldOfView : 0f;
 
-            if (cockpit != null || cockpitInteraction != null || focusPanel != null || aircraftLights != null)
+            if (cockpit != null || cockpitInteraction != null || focusPanel != null || cockpitViewControls != null || aircraftLights != null)
             {
-                _cockpit = new CockpitSession(_systems, _gate, cockpit, cockpitInteraction, focusPanel, aircraftLights, cameraRig,
+                _cockpit = new CockpitSession(_systems, _gate, cockpit, cockpitInteraction, focusPanel, cockpitViewControls, aircraftLights, cameraRig,
                     touchControls != null ? touchControls.Ownership : null, AirspeedMarkingsFor(aircraftConfiguration, config.warnings));
             }
         }

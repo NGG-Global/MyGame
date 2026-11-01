@@ -162,5 +162,18 @@ namespace OpenSkies.Tests
             Assert.AreEqual(-10f, look.y, 1e-4f);
             Assert.AreEqual(-50f, CockpitLookMath.DragToLook(new Vector2(540f, 0f), 1080f, 100f, followFinger: false).x, 1e-4f);
         }
+
+        [Test]
+        public void LookingAway_OnlyBeyondTheThresholdInYawOrPitch()
+        {
+            Assert.IsFalse(CockpitLookMath.IsLookingAway(Vector2.zero, 10f), "resting view");
+            Assert.IsFalse(CockpitLookMath.IsLookingAway(new Vector2(9.9f, -9.9f), 10f), "small offsets do not count");
+            Assert.IsFalse(CockpitLookMath.IsLookingAway(new Vector2(10f, 0f), 10f), "the threshold itself does not count");
+            Assert.IsTrue(CockpitLookMath.IsLookingAway(new Vector2(-10.1f, 0f), 10f), "left");
+            Assert.IsTrue(CockpitLookMath.IsLookingAway(new Vector2(0f, 25f), 10f), "up");
+            Assert.IsTrue(CockpitLookMath.IsLookingAway(new Vector2(135f, -40f), 10f), "at the limits");
+            Assert.IsFalse(CockpitLookMath.IsLookingAway(new Vector2(float.NaN, float.PositiveInfinity), 10f), "bad input reads as forward");
+            Assert.IsTrue(CockpitLookMath.IsLookingAway(new Vector2(0.5f, 0f), -5f), "a negative threshold acts as zero");
+        }
     }
 }
