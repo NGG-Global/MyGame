@@ -88,6 +88,8 @@ namespace OpenSkies.Editor
             PrototypeEnvironment.CreateApron(materials.Asphalt, materials.HangarWalls, materials.HangarRoof, RunwayWidth);
             PrototypeEnvironment.CreateHills(materials.Hills);
             PrototypeEnvironment.CreateTrees(materials.Trunk, materials.Foliage);
+            // The owner's licensed display aircraft on the apron (static scenery, not flyable).
+            DisplayAircraft.Create(materials.DisplayRoles, new[] { materials.DisplayPaintF16, materials.DisplayPaintSpitfire, materials.DisplayPaintBeech });
             var configuration = LoadOrCreateAircraftConfiguration();
             var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
@@ -655,6 +657,27 @@ namespace OpenSkies.Editor
             public readonly Material Trunk = Lit("Trunk", new Color(0.3f, 0.23f, 0.16f), 0.05f);
             public readonly Material HangarWalls = Lit("HangarWalls", new Color(0.82f, 0.82f, 0.8f), 0.3f);
             public readonly Material HangarRoof = Lit("HangarRoof", new Color(0.42f, 0.47f, 0.52f), 0.35f);
+            // Display aircraft: flat colours in place of the textures that were not supplied.
+            public readonly Material DisplayPaintF16 = Lit("DisplayPaintF16", new Color(0.56f, 0.59f, 0.62f), 0.45f);       // light air-superiority grey
+            public readonly Material DisplayPaintSpitfire = Lit("DisplayPaintSpitfire", new Color(0.26f, 0.31f, 0.21f), 0.3f); // dark green
+            public readonly Material DisplayPaintBeech = Lit("DisplayPaintBeech", new Color(0.62f, 0.08f, 0.07f), 0.6f);     // classic red
+            public readonly Material[] DisplayRoles;
+
+            public PrototypeMaterials()
+            {
+                // Index = DisplayAircraft.Role; Paint is replaced per aircraft.
+                DisplayRoles = new[]
+                {
+                    DisplayPaintF16,
+                    Lit("DisplaySecondary", new Color(0.46f, 0.48f, 0.5f), 0.35f),
+                    Lit("DisplayMetal", new Color(0.72f, 0.73f, 0.75f), 0.65f),
+                    Lit("DisplayGlass", new Color(0.12f, 0.15f, 0.19f), 0.92f), // opaque: no transparent overdraw
+                    Tyre,
+                    Lit("DisplayDark", new Color(0.09f, 0.09f, 0.1f), 0.25f),
+                    Cockpit.LensRed,
+                    Cockpit.LensGreen,
+                };
+            }
             public readonly Material Sky = Skybox();
             public readonly CockpitMaterials Cockpit = new CockpitMaterials
             {

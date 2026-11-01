@@ -68,6 +68,22 @@ Uncertainties to verify on the device (stated, not assumed):
 | Shadows | One directional light, hard shadows; cascades fixed at 1 in a newly created URP asset | Presets change distance, resolution and MSAA only (no shader-variant features at runtime) | Battery Saver removes the shadow pass entirely |
 | Trees | 34 clusters, each one mesh with two materials; culled below 1.2 % of screen height (LODGroup) | Vegetation distance follows the preset's LOD bias | About 2 draw calls per visible cluster; clusters beyond 1.7-4.3 km are not drawn *estimate* |
 
+Display aircraft (added after M12, owner's licensed models):
+
+| Model | Source size | Draw calls | Culled beyond (LOD bias 1) |
+|---|---|---|---|
+| F-16 | about 148,000 polygons (the landing gear alone about 85,000 vertices) | up to 8 (one per colour role) | about 850 m |
+| Spitfire | about 15,000 polygons | up to 8 | about 650 m |
+| Beechcraft Model 17 | about 35,000 polygons | up to 8 | about 550 m |
+
+*Estimates from the source files; the baked meshes keep every polygon.* The F-16 is far
+above a reasonable mobile budget for a scenery prop (a few thousand to about 20,000
+triangles). It is drawn only when close (near the apron, during taxi, take-off and
+landing), which is also when the GPU is busiest. Recommendation: a lower-detail F-16
+(target 20,000-30,000 triangles, without the interior) or a simplified version made with a
+mesh decimation tool; measure first with the protocol below (cruise vs. taxi past the
+apron).
+
 Known remaining risks (to measure, not to guess):
 
 - **Transparent HUD over the 3D view.** Translucent buttons and plates are blended

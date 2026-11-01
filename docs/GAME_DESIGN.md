@@ -39,6 +39,15 @@ not use any manufacturer's name or branding.
 - Performance figures are invented prototype tuning in
   `AircraftConfiguration`, not real-aircraft data (see `docs/FLIGHT_MODEL.md`).
 
+### Display aircraft (static scenery)
+
+Three licensed third-party models stand on the apron as parked display aircraft: an
+F-16, a Spitfire and a Beechcraft Model 17. They are scenery only: not flyable, no
+flight model, no labels in the game. Owner decision (1 November 2026): they keep their
+real names; trademark and likeness clearance for a commercial release is the owner's
+responsibility. The rule above (no real names or branding) still applies to the aircraft
+the player flies. Licences and provenance: `docs/THIRD_PARTY_ASSETS.md`.
+
 ## Progressive disclosure layers
 
 | Layer | Who it serves | What is on screen |
@@ -122,4 +131,4 @@ same aircraft with the same physics and the player's assistance profile.
 ## Out of scope for now
 
 Weather, time of day, world streaming, multiplayer, retractable gear, multiple
-aircraft, damage models, monetisation.
+flyable aircraft (the display aircraft are scenery), damage models, monetisation.
