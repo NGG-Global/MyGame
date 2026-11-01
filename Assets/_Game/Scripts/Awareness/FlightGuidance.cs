@@ -102,10 +102,7 @@ namespace OpenSkies.Awareness
             int rotate = Mathf.RoundToInt(_envelope.StallSpeedCleanKnots * s.rotateFactor / 5f) * 5;
             int climb = Mathf.RoundToInt(_envelope.StallSpeedCleanKnots * s.climbSpeedFactor / 5f) * 5;
             int approach = Mathf.RoundToInt(_envelope.StallSpeedFullFlapKnots * s.approachSpeedFactor / 5f) * 5;
-            _texts[(int)GuidanceHint.StallRecovery] = "Stall: lower the nose and add power";
-            _texts[(int)GuidanceHint.SinkRate] = "Sinking fast: add power, raise the nose gently";
-            _texts[(int)GuidanceHint.EngineOff] = "Engine off: switch the ignition on to restart";
-            _texts[(int)GuidanceHint.Overspeed] = "Too fast: reduce power, raise the nose gently";
+            for (var hint = GuidanceHint.StallRecovery; hint <= GuidanceHint.Overspeed; hint++) _texts[(int)hint] = SafetyText(hint);
             _texts[(int)GuidanceHint.SteepBank] = "Steep bank: roll the wings back towards level";
             _texts[(int)GuidanceHint.LowSpeed] = "Slow: lower the nose a little or add power";
             _texts[(int)GuidanceHint.ReleaseParkingBrake] = "Release the parking brake to roll";
@@ -208,9 +205,25 @@ namespace OpenSkies.Awareness
             }
         }
 
-        static GuidanceHint Safety(in Input input)
+        static GuidanceHint Safety(in Input input) => SafetyHintFor(input.WarningMask);
+
+        /// <summary>What to do about a warning, in a few words (constant strings; empty for other hints).</summary>
+        public static string SafetyText(GuidanceHint hint)
         {
-            int w = input.WarningMask;
+            switch (hint)
+            {
+                case GuidanceHint.StallRecovery: return "Stall: lower the nose and add power";
+                case GuidanceHint.SinkRate: return "Sinking fast: add power, raise the nose gently";
+                case GuidanceHint.EngineOff: return "Engine off: switch the ignition on to restart";
+                case GuidanceHint.Overspeed: return "Too fast: reduce power, raise the nose gently";
+                default: return string.Empty;
+            }
+        }
+
+        /// <summary>The safety tip for the most urgent active warning, or None (shared with mission coaching).</summary>
+        public static GuidanceHint SafetyHintFor(int warningMask)
+        {
+            int w = warningMask;
             if ((w & FlightWarnings.Bit(FlightWarning.Stall)) != 0) return GuidanceHint.StallRecovery;
             if ((w & FlightWarnings.Bit(FlightWarning.SinkRate)) != 0) return GuidanceHint.SinkRate;
             if ((w & FlightWarnings.Bit(FlightWarning.EngineOff)) != 0) return GuidanceHint.EngineOff;

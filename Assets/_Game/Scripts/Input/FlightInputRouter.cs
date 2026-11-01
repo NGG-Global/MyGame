@@ -34,6 +34,9 @@ namespace OpenSkies.FlightInput
             return Current;
         }
 
+        /// <summary>Sets the throttle lever (a scenario that starts in the air with power set).</summary>
+        public void SetThrottle(float position) => _throttle.Set(position);
+
         public void ResetControls()
         {
             _throttle.Set(0f);

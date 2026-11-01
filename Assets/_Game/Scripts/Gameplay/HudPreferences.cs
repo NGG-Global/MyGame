@@ -1,4 +1,5 @@
 using OpenSkies.Awareness;
+using OpenSkies.CameraSystems;
 using OpenSkies.UI;
 using UnityEngine;
 
@@ -6,7 +7,7 @@ namespace OpenSkies.Gameplay
 {
     /// <summary>
     /// The player's HUD and view choices (HUD profile, motion preference, cockpit
-    /// field of view), kept between sessions with PlayerPrefs. A settings menu will
+    /// field of view, chase or cockpit camera), kept between sessions with PlayerPrefs. A settings menu will
     /// expose the motion preference; until then it is set on the ContextualHud
     /// component. The cockpit look direction is kept for the session only.
     /// </summary>
@@ -15,6 +16,19 @@ namespace OpenSkies.Gameplay
         const string ProfileKey = "OpenSkies.Hud.Profile";
         const string MotionKey = "OpenSkies.Hud.Motion";
         const string CockpitFieldOfViewKey = "OpenSkies.View.CockpitFieldOfView";
+        const string CameraModeKey = "OpenSkies.View.CameraMode";
+
+        public static CameraMode LoadCameraMode(CameraMode fallback)
+        {
+            int value = PlayerPrefs.GetInt(CameraModeKey, (int)fallback);
+            return value == (int)CameraMode.Chase || value == (int)CameraMode.Cockpit ? (CameraMode)value : fallback;
+        }
+
+        public static void SaveCameraMode(CameraMode mode)
+        {
+            PlayerPrefs.SetInt(CameraModeKey, (int)mode);
+            PlayerPrefs.Save();
+        }
 
         public static HudProfile LoadProfile(HudProfile fallback)
         {

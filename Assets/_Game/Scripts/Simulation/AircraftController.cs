@@ -105,6 +105,32 @@ namespace OpenSkies.Simulation
             for (int i = 0; i < _gearForces.Length; i++) _gearForces[i] = Vector3.zero;
         }
 
+        /// <summary>
+        /// Starts a scenario: the given pose, velocity and attitude, controls neutral with the
+        /// throttle and flaps already where the state says (the flaps do not travel from up,
+        /// the engine does not spool up from idle). Like a reset, this is the only other time
+        /// the aircraft is placed rather than flown.
+        /// </summary>
+        public void ResetTo(in AircraftStartState state)
+        {
+            _body.linearVelocity = state.Velocity;
+            _body.angularVelocity = Vector3.zero;
+            _body.position = state.Position;
+            _body.rotation = state.Rotation;
+            transform.SetPositionAndRotation(state.Position, state.Rotation);
+            _engine.SetRunning(state.Throttle);
+            _controls = new FlightControls(0f, 0f, 0f, state.Throttle, 0f, state.Flaps, true);
+            _surfaces = _controls;
+            _aero = default;
+            Thrust = 0f;
+            WeightOnWheels = false;
+            for (int i = 0; i < _gearForces.Length; i++) _gearForces[i] = Vector3.zero;
+        }
+
+        /// <summary>The pose <see cref="ResetToStart"/> returns to (the runway start in the prototype).</summary>
+        public Vector3 StartPosition => _startPosition;
+        public Quaternion StartRotation => _startRotation;
+
         void FixedUpdate()
         {
             float dt = Time.fixedDeltaTime;

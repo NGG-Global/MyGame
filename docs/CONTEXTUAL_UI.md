@@ -175,8 +175,17 @@ approach. SYSTEMS stays open until closed. A reset clears guide choices.
   two white and two red on a 3° path to an aim point 150 m beyond the threshold)
   and a centreline marker that shows where the centreline is (steer towards it).
   The light angles approximate a standard 3° installation and are configurable.
-- **Navigation guide**: an arrow pointing to the airfield relative to the nose,
-  and the distance in NM.
+- **Navigation guide**: an arrow pointing to the destination relative to the nose,
+  the destination's name (AIRFIELD by default), the distance in NM and the course to
+  steer. A mode can set another destination (a mission checkpoint, a landmark).
+
+### Mission guides
+
+A mission or tutorial can ask for guides (`DisclosureInput.MissionGuides`) and rail
+actions (`MissionActions`). They go through the same controller with the reason
+"mission": shown in every profile and view (the cockpit GPS does not show mission
+checkpoints), still hidden by the player's own choice, still under warnings, and
+never touching the flight controls. See `docs/ONBOARDING_DESIGN.md`.
 
 ## Warnings
 
@@ -211,6 +220,8 @@ There is no warning sound yet.
 | Inspector (development only) | top right, under the buttons; built before the rail, so where the top slot (ASSIST) reaches under it the rail button takes the touch | 520 × 216 |
 | Flight settings card | free column (as the cockpit focus panel, never both at once) | up to 600 × 486 |
 | Flying tips (Assisted) | bottom of the free column, 12-76 units up, below the panel band; takes no touches | column width × 64 |
+| Mission coaching (`docs/ONBOARDING_DESIGN.md`) | same place, 12-108 units up (never with the tips); tap for the explanation | column width × 96 |
+| MENU / SKIP TUTORIAL | top right under CAM (x = −24, y = −128 / −240) | 128 × 96 |
 
 A PlayMode test checks at 4:3, 16:9 and 20:9 that no HUD target or banner
 overlaps the joystick region, the throttle or BRAKE, and that every target is at

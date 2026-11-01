@@ -90,13 +90,22 @@ change. Also open: a touch control for rudder and trim (Manual on touch has neit
 ## World
 
 One regional airport with a single runway and the surrounding coastline. The
-prototype uses a flat ground plane and a primitive runway. Real-world locations
+prototype uses a flat ground plane, a primitive runway and placeholder coastal
+landmarks (a lighthouse on a headland, a harbour, an islet) in `PrototypeWorld`. Real-world locations
 or airport names are not used (**Open question**: fictional name and layout).
 
 ## Modes
 
-- **Free flight**: first and only mode for now.
-- Later: tutorials (one skill per lesson) and challenges (landings, circuits).
+Chosen on a minimal entry screen (`docs/ONBOARDING_DESIGN.md`); every mode flies the
+same aircraft with the same physics and the player's assistance profile.
+
+- **Free Flight**: from the runway or already in the air; navigation to the airfield on
+  request, or to a landmark chosen from the menu.
+- **First Flight**: a guided take-off, a short coastal flight past the lighthouse and
+  the harbour, and a landing, learnt by flying. Skippable at any time.
+- **Landing Challenge**: start established on final, land, get a game score with short
+  feedback, retry.
+- Later: more lessons (circuits, crosswind, engine failure) and challenges.
 
 ## Platform and performance
 

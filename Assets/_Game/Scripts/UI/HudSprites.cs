@@ -11,7 +11,7 @@ namespace OpenSkies.UI
     {
         const int Size = 128;
         const int Supersample = 4;
-        static Sprite _disc, _roundedRect, _arrow, _ring, _bezel;
+        static Sprite _disc, _roundedRect, _arrow, _ring, _bezel, _roundedOutline, _diamond;
 
         /// <summary>Filled circle.</summary>
         public static Sprite Disc => _disc != null ? _disc : _disc = Create("HudDisc", false, (x, y) =>
@@ -22,13 +22,26 @@ namespace OpenSkies.UI
 
         /// <summary>Rounded rectangle, 9-sliced.</summary>
         public static Sprite RoundedRect => _roundedRect != null ? _roundedRect : _roundedRect = Create("HudRoundedRect", true, (x, y) =>
+            InsideRounded(x, y, 0.5f, 0.3f));
+
+        /// <summary>Rounded rectangle outline, 9-sliced: frames a control without covering it.</summary>
+        public static Sprite RoundedOutline => _roundedOutline != null ? _roundedOutline : _roundedOutline = Create("HudRoundedOutline", true, (x, y) =>
+            InsideRounded(x, y, 0.5f, 0.3f) && !InsideRounded(x, y, 0.44f, 0.24f));
+
+        /// <summary>Diamond outline: an understated checkpoint symbol.</summary>
+        public static Sprite Diamond => _diamond != null ? _diamond : _diamond = Create("HudDiamond", false, (x, y) =>
         {
-            const float r = 0.3f;
-            float qx = Mathf.Abs(x - 0.5f) - (0.5f - r);
-            float qy = Mathf.Abs(y - 0.5f) - (0.5f - r);
+            float d = Mathf.Abs(x - 0.5f) + Mathf.Abs(y - 0.5f);
+            return d <= 0.47f && d >= 0.36f;
+        });
+
+        static bool InsideRounded(float x, float y, float half, float r)
+        {
+            float qx = Mathf.Abs(x - 0.5f) - (half - r);
+            float qy = Mathf.Abs(y - 0.5f) - (half - r);
             if (qx <= 0f || qy <= 0f) return qx <= r && qy <= r;
             return qx * qx + qy * qy <= r * r;
-        });
+        }
 
         /// <summary>Arrowhead pointing up (+Y), used as a direction cue.</summary>
         public static Sprite Arrow => _arrow != null ? _arrow : _arrow = Create("HudArrow", false, (x, y) =>

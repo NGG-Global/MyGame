@@ -4,7 +4,8 @@
     "references": [
         "OpenSkies.FlightState",
         "OpenSkies.Awareness",
-        "UnityEngine.UI"
+        "UnityEngine.UI",
+        "OpenSkies.Missions"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

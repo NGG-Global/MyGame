@@ -25,10 +25,11 @@ namespace OpenSkies.FlightInput
     ///   - / =          cockpit view: wider / narrower field of view (hold)
     ///   M              next flight assistance profile (Assisted, Standard, Manual)
     ///   Home / End     pitch trim nose down / nose up (hold)
+    ///   Esc            pause menu (Android: the system back button arrives as Esc)
     /// Gamepad: left stick pitch/roll (up = nose down), right stick X rudder,
     /// right/left trigger throttle up/down, south button (A/Cross) brakes,
-    /// north button (Y/Triangle) camera, select/back reset, d-pad up/down pitch
-    /// trim nose down/up.
+    /// north button (Y/Triangle) camera, select/back reset, start pause menu,
+    /// d-pad up/down pitch trim nose down/up.
     /// </summary>
     public sealed class KeyboardGamepadInputProvider : IFlightInputProvider
     {
@@ -142,6 +143,15 @@ namespace OpenSkies.FlightInput
             var gamepad = Gamepad.current;
             if (gamepad != null) axis += Axis(gamepad.dpad.down.isPressed, gamepad.dpad.up.isPressed);
             return Mathf.Clamp(axis, -1f, 1f);
+        }
+
+        /// <summary>Session command: open or close the pause menu.</summary>
+        public bool MenuPressedThisFrame()
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame) return true;
+            var gamepad = Gamepad.current;
+            return gamepad != null && gamepad.startButton.wasPressedThisFrame;
         }
 
         public bool RecentreViewPressedThisFrame()

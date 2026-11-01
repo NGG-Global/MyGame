@@ -40,9 +40,13 @@ namespace OpenSkies.UI
 
         [Header("Navigation guide")]
         public CanvasGroup navigationGuide;
-        [Tooltip("Points towards the airfield relative to the nose.")]
+        [Tooltip("Points towards the destination (the airfield or a mission checkpoint) relative to the nose.")]
         public RectTransform navigationArrow;
         public Text navigationDistance;
+        [Tooltip("Destination name, e.g. AIRFIELD or LIGHTHOUSE.")]
+        public Text navigationLabel;
+        [Tooltip("Course to steer to the destination, degrees.")]
+        public Text navigationBearing;
 
         [Header("Warnings, most urgent first")]
         public CanvasGroup[] warningSlots = new CanvasGroup[WarningSlotCount];
@@ -89,6 +93,7 @@ namespace OpenSkies.UI
         static readonly NumberStrings NauticalMiles = new NumberStrings(0, 999, v => NumberStrings.Tenths(v) + " NM");
         static readonly NumberStrings HeightsFeet = new NumberStrings(0, 500, v => (v * 10).ToString() + " FT");  // tens of feet
         static readonly NumberStrings Runways = new NumberStrings(1, 36, v => "RWY " + v.ToString("00"));
+        static readonly NumberStrings Bearings = new NumberStrings(1, 360, v => NumberStrings.Heading(v) + "°");
 
         HudFade[] _dataFades;
         HudFade _approachFade, _navigationFade;
@@ -100,7 +105,7 @@ namespace OpenSkies.UI
         readonly int[] _shownAlert = new int[DataItemCount];
         readonly int[] _slotWarning = new int[WarningSlotCount];
         int _shownRunway = NoValue, _shownApproachDistance = NoValue, _shownApproachHeight = NoValue, _shownNavDistance = NoValue;
-        int _shownPapi = NoValue, _shownLateral = NoValue, _shownArrow = NoValue;
+        int _shownPapi = NoValue, _shownLateral = NoValue, _shownArrow = NoValue, _shownBearing = NoValue;
         HudProfile _shownProfile = (HudProfile)(-1);
         float _nextValueRefresh;
         bool _initialized, _actionsConfigured, _reducedMotion;
@@ -221,9 +226,14 @@ namespace OpenSkies.UI
             image.type = sliced ? Image.Type.Sliced : Image.Type.Simple;
         }
 
-        /// <summary>Updates targets and text. Call once per frame; animation runs in LateUpdate.</summary>
+        /// <summary>Updates targets and text with the airfield as the destination. Call once per frame.</summary>
         public void Present(in FlightTelemetry telemetry, in RunwayRelation runway, DisclosureController disclosure,
-            FlightWarningMonitor warnings, HudProfile profile)
+            FlightWarningMonitor warnings, HudProfile profile) =>
+            Present(telemetry, runway, NavigationMath.FromRunway(runway, telemetry.HeadingDegrees), disclosure, warnings, profile);
+
+        /// <summary>Updates targets and text. Call once per frame; animation runs in LateUpdate.</summary>
+        public void Present(in FlightTelemetry telemetry, in RunwayRelation runway, in NavigationRelation navigation,
+            DisclosureController disclosure, FlightWarningMonitor warnings, HudProfile profile)
         {
             if (disclosure == null) return;
             EnsureInitialized();
@@ -236,7 +246,7 @@ namespace OpenSkies.UI
 
             PresentFlightData(telemetry, disclosure, warningMask, fade, slide, refresh);
             PresentApproachGuide(runway, disclosure, fade, slide, refresh);
-            PresentNavigationGuide(telemetry, runway, disclosure, fade, slide, refresh);
+            PresentNavigationGuide(navigation, disclosure, fade, slide, refresh);
             PresentWarnings(warnings, fade);
             PresentRail(disclosure, profile, fade, slide);
         }
@@ -354,27 +364,39 @@ namespace OpenSkies.UI
             }
         }
 
-        void PresentNavigationGuide(in FlightTelemetry t, in RunwayRelation runway, DisclosureController disclosure, float fade, float slide, bool refresh)
+        void PresentNavigationGuide(in NavigationRelation nav, DisclosureController disclosure, float fade, float slide, bool refresh)
         {
             if (_navigationFade == null) return;
             _navigationFade.SetTarget(AlphaFor(disclosure.GetProminence(HudElement.NavigationGuide)), fade, slide);
-            if (!_navigationFade.IsShown || !runway.Valid) return;
+            if (!_navigationFade.IsShown || !nav.Valid) return;
 
             if (navigationArrow != null)
             {
                 // Whole degrees: the transform (and the canvas batch) changes only when the arrow visibly turns.
-                int relative = Mathf.RoundToInt(Mathf.DeltaAngle(SoftLogic.Finite(t.HeadingDegrees, 0f), runway.BearingToRunwayDegrees));
+                int relative = Mathf.RoundToInt(SoftLogic.Finite(nav.RelativeBearingDegrees, 0f));
                 if (relative != _shownArrow)
                 {
                     _shownArrow = relative;
                     navigationArrow.localRotation = Quaternion.Euler(0f, 0f, -relative); // UI rotation is counter-clockwise
                 }
             }
-            if (navigationDistance == null || !(refresh || _shownNavDistance == NoValue)) return;
-            int tenths = Mathf.Clamp(Mathf.RoundToInt(runway.DistanceToRunwayMetres / 185.2f), 0, 9999);
-            if (tenths == _shownNavDistance) return;
-            _shownNavDistance = tenths;
-            navigationDistance.text = NauticalMiles.Get(tenths);
+            // Cached names: the label changes only with the destination.
+            if (navigationLabel != null && nav.Target.Name != null && !ReferenceEquals(navigationLabel.text, nav.Target.Name))
+                navigationLabel.text = nav.Target.Name;
+            if (!(refresh || _shownNavDistance == NoValue)) return;
+            int tenths = Mathf.Clamp(Mathf.RoundToInt(nav.DistanceMetres / 185.2f), 0, 9999);
+            if (navigationDistance != null && tenths != _shownNavDistance)
+            {
+                _shownNavDistance = tenths;
+                navigationDistance.text = NauticalMiles.Get(tenths);
+            }
+            int bearing = Mathf.RoundToInt(SoftLogic.Finite(nav.BearingDegrees, 0f)) % 360;
+            if (bearing <= 0) bearing += 360; // compass cards show north as 360
+            if (navigationBearing != null && bearing != _shownBearing)
+            {
+                _shownBearing = bearing;
+                navigationBearing.text = Bearings.Get(bearing);
+            }
         }
 
         // ---- Warnings ---------------------------------------------------------------

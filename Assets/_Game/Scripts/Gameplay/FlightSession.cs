@@ -1,3 +1,4 @@
+using System;
 using OpenSkies.Assistance;
 using OpenSkies.Awareness;
 using OpenSkies.CameraSystems;
@@ -44,6 +45,8 @@ namespace OpenSkies.Gameplay
         public RunwayInfo homeRunway;
         [Tooltip("Remember the HUD profile, motion preference, cockpit field of view and flight settings between sessions (PlayerPrefs).")]
         public bool rememberHudPreferences = true;
+        [Tooltip("Remember the chase or cockpit view between sessions (PlayerPrefs). The prototype scene turns it on.")]
+        public bool rememberCameraMode;
 
         [Header("Flight assistance")]
         [Tooltip("Assistance tuning and first-launch defaults. The defaults in code are used when empty.")]
@@ -83,8 +86,36 @@ namespace OpenSkies.Gameplay
         DisclosureController _disclosure;
         RunwayRelation _runway;
         HudProfile _hudProfile = HudProfile.Smart;
+        AircraftEnvelope _envelope = AircraftEnvelope.PrototypeTrainer;
+        FlightControls _pilot = FlightControls.Neutral;
+
+        // Navigation: the airfield by default, or a mission's checkpoint.
+        NavigationTarget _navigationTarget;
+        bool _hasMissionTarget;
+        NavigationRelation _navigation;
+        int _missionGuides, _missionActions;
+
+        // Where RESET puts the aircraft: the runway start unless a mode sets a checkpoint.
+        bool _hasResetStart;
+        AircraftStartState _resetStart;
+        int _resetFlapDetent;
+
+        /// <summary>Raised after the player's RESET has put the aircraft back (runway start or the mode's checkpoint).</summary>
+        public event Action ResetPerformed;
 
         public FlightTelemetry Telemetry => telemetry != null ? telemetry.Current : default;
+
+        /// <summary>The pilot's commands of the last physics step: after sensitivity and the systems, before assistance.</summary>
+        public FlightControls PilotControls => _pilot;
+        /// <summary>The aircraft's limits from its data (stall speeds for coaching and scoring).</summary>
+        public AircraftEnvelope Envelope => _envelope;
+        public KeyboardGamepadInputProvider Devices => _devices;
+        /// <summary>Where the navigation guide points now, and how far.</summary>
+        public NavigationRelation Navigation => _navigation;
+        /// <summary>A mission's coaching replaces the Assisted flying tips while it is on screen.</summary>
+        public bool SuppressFlyingTips { get; set; }
+        /// <summary>Aircraft world position (physics pose), m.</summary>
+        public Vector3 AircraftPosition => aircraft != null && aircraft.Body != null ? aircraft.Body.position : Vector3.zero;
 
         /// <summary>Replace the control source, e.g. with touch controls or a test script.</summary>
         public void SetControlSource(IFlightControlSource source) => _controls = source;
@@ -162,6 +193,7 @@ namespace OpenSkies.Gameplay
             if (cockpitViewControls != null && contextualHud != null) cockpitViewControls.SetReducedMotion(contextualHud.ReducedMotion);
             if (cameraRig != null && rememberHudPreferences)
                 cameraRig.SetCockpitFieldOfView(HudPreferences.LoadCockpitFieldOfView(cameraRig.cockpitFieldOfView));
+            if (cameraRig != null && rememberCameraMode) cameraRig.SetMode(HudPreferences.LoadCameraMode(cameraRig.mode));
             _savedFieldOfView = cameraRig != null ? cameraRig.cockpitFieldOfView : 0f;
 
             if (cockpit != null || cockpitInteraction != null || focusPanel != null || cockpitViewControls != null || aircraftLights != null)
@@ -184,6 +216,7 @@ namespace OpenSkies.Gameplay
             var envelope = aircraftConfiguration != null
                 ? TelemetryMath.Envelope(aircraftConfiguration, config.warnings.neverExceedSpeedKnots)
                 : AircraftEnvelope.PrototypeTrainer;
+            _envelope = envelope;
             _assistance = new FlightAssistController(assistConfiguration != null ? assistConfiguration.tuning : null, _flight.Profile);
             _assistance.SetEnvelope(envelope);
             _assistance.SetOptions(_flight.StandardAutoTrim, _flight.AssistedStallPrevention);
@@ -281,6 +314,7 @@ namespace OpenSkies.Gameplay
             float dt = Time.fixedDeltaTime;
             // The player's sensitivity, then the switches and levers (they apply to any control source), then assistance.
             var pilot = _systems.ApplyTo(ControlResponse.Apply(_controls.Read(dt), _flight.Sensitivity));
+            _pilot = pilot;
             _assistance.SetTrimInput(_devices.PitchTrimAxis());
             var commands = _assist.Apply(pilot, Telemetry, dt);
             aircraft.SetControls(commands);
@@ -289,6 +323,7 @@ namespace OpenSkies.Gameplay
             // Awareness runs at the physics rate on every telemetry sample, so it is frame-rate independent.
             var sample = Telemetry;
             _runway = EvaluateRunway(sample);
+            _navigation = EvaluateNavigation(sample);
             _phase.Update(sample, _runway, dt);
             _warnings.Update(sample, dt);
         }
@@ -322,7 +357,7 @@ namespace OpenSkies.Gameplay
         void UpdateGuidance(in FlightTelemetry t, float deltaTime)
         {
             string tip = string.Empty;
-            if (_flight.Profile == FlightAssistProfile.Assisted && _flight.Guidance)
+            if (_flight.Profile == FlightAssistProfile.Assisted && _flight.Guidance && !SuppressFlyingTips)
             {
                 _guidance.Update(new FlightGuidanceAdvisor.Input
                 {
@@ -437,11 +472,14 @@ namespace OpenSkies.Gameplay
                     FlapsExtended = _systems.FlapDetent > 0,
                 },
                 HasAssistanceSettings = flightSettings != null,
+                HasNavigationTarget = _navigation.Valid,
+                MissionGuides = _missionGuides,
+                MissionActions = _missionActions,
             };
             _disclosure.Update(input, deltaTime);
 
             if (contextualHud == null) return;
-            contextualHud.Present(t, _runway, _disclosure, _warnings, _hudProfile);
+            contextualHud.Present(t, _runway, _navigation, _disclosure, _warnings, _hudProfile);
             if (contextualHud.inspector != null) contextualHud.inspector.Present(_phase, _warnings, _disclosure, _hudProfile, view);
         }
 
@@ -455,25 +493,93 @@ namespace OpenSkies.Gameplay
             return RunwayGeometry.Evaluate(homeRunway, body.position, track, _disclosure.Settings.aimPointMetres);
         }
 
+        NavigationRelation EvaluateNavigation(in FlightTelemetry t)
+        {
+            if (_hasMissionTarget) return NavigationMath.Evaluate(_navigationTarget, AircraftPosition, t.HeadingDegrees);
+            return NavigationMath.FromRunway(_runway, t.HeadingDegrees);
+        }
+
+        /// <summary>Points the navigation guide at a mission checkpoint instead of the airfield.</summary>
+        public void SetNavigationTarget(in NavigationTarget target)
+        {
+            _navigationTarget = target;
+            _hasMissionTarget = target.IsDefined;
+        }
+
+        /// <summary>The navigation guide points at the airfield again.</summary>
+        public void ClearNavigationTarget() => _hasMissionTarget = false;
+
         /// <summary>
-        /// Aircraft back to the runway start at rest; throttle idle; systems in their
-        /// start state (engine running, flaps up, brake off); awareness, HUD choices
-        /// and cockpit panels for the flight cleared. The cockpit view direction is kept.
+        /// Guides (HudElement bits) and rail actions (ContextAction bits) a mission needs on
+        /// screen. They go through the same disclosure rules: the player can still hide a
+        /// guide, warnings still win, flight controls are never affected.
+        /// </summary>
+        public void SetMissionGuidance(int guides, int actions)
+        {
+            _missionGuides = guides;
+            _missionActions = actions;
+        }
+
+        /// <summary>Where RESET puts the aircraft from now on (a mode's start or checkpoint).</summary>
+        public void SetResetStart(in AircraftStartState state, int flapDetent)
+        {
+            _resetStart = state;
+            _resetFlapDetent = flapDetent;
+            _hasResetStart = true;
+        }
+
+        /// <summary>RESET goes back to the runway start.</summary>
+        public void ClearResetStart() => _hasResetStart = false;
+
+        /// <summary>
+        /// The player's RESET: back to the runway start, or to the mode's checkpoint, with
+        /// everything for the flight cleared (see <see cref="Restart"/>). Then
+        /// <see cref="ResetPerformed"/> tells the mode.
         /// </summary>
         public void ResetFlight()
         {
-            if (aircraft != null) aircraft.ResetToStart();
+            if (_hasResetStart) Restart(false, _resetStart, _resetFlapDetent);
+            else Restart(true, default, 0);
+            ResetPerformed?.Invoke();
+        }
+
+        /// <summary>A mode begins on the runway (no <see cref="ResetPerformed"/>).</summary>
+        public void StartOnRunway() => Restart(true, default, 0);
+
+        /// <summary>A mode begins in the air or on final approach (no <see cref="ResetPerformed"/>).</summary>
+        public void StartFlight(in AircraftStartState state, int flapDetent)
+        {
+            if (state.Airborne) Restart(false, state, flapDetent);
+            else Restart(true, default, 0);
+        }
+
+        /// <summary>
+        /// Aircraft at the runway start at rest with the throttle idle, or in the given
+        /// airborne state with its power and flaps; systems in their start state (engine
+        /// running, brake off, flaps up or as given); awareness, HUD choices and cockpit
+        /// panels for the flight cleared. The cockpit view direction is kept.
+        /// </summary>
+        void Restart(bool onRunway, in AircraftStartState state, int flapDetent)
+        {
+            if (aircraft != null)
+            {
+                if (onRunway) aircraft.ResetToStart();
+                else aircraft.ResetTo(state);
+            }
             _controls.ResetControls();
-            _systems.ResetToStartState();
+            if (!onRunway) _router.SetThrottle(state.Throttle); // the lever where the engine is set
+            _pilot = FlightControls.Neutral;
+            _systems.ResetToStartState(onRunway ? 0 : flapDetent);
             _gate.Clear();
             _cockpit?.OnReset();
             _assistance.Reset(); // trim neutral, nothing held; the player's profile is kept
             _guidance.Reset();
             if (telemetry != null) telemetry.Refresh(); // nobody reads the pre-reset state
-            _phase.Reset(assumeOnGround: true);
+            _phase.Reset(assumeOnGround: onRunway);
             _warnings.Reset();
             _disclosure.Reset();
             _runway = default;
+            _navigation = default;
             if (cameraRig != null) cameraRig.SnapToTarget();
         }
 
@@ -513,10 +619,11 @@ namespace OpenSkies.Gameplay
             }
         }
 
-        void ToggleCamera()
+        public void ToggleCamera()
         {
             if (cameraRig != null) cameraRig.ToggleMode();
             SaveViewPreferences();
+            if (cameraRig != null && rememberCameraMode) HudPreferences.SaveCameraMode(cameraRig.mode);
         }
     }
 }

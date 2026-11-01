@@ -60,6 +60,14 @@ namespace OpenSkies.Simulation
             _startTimer = 0f;
         }
 
+        /// <summary>Running and settled at a power (a scenario that starts in the air, with power set).</summary>
+        public void SetRunning(float powerFraction)
+        {
+            PowerFraction = Mathf.Clamp01(powerFraction);
+            State = EngineState.Running;
+            _startTimer = 0f;
+        }
+
         /// <summary>Thrust in newtons at the current power and the given airspeed (m/s).</summary>
         public float Thrust(float airspeed) => ThrustAt(PowerFraction, airspeed, _c);
 
