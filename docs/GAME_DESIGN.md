@@ -110,7 +110,12 @@ same aircraft with the same physics and the player's assistance profile.
 ## Platform and performance
 
 - Android first, landscape only (both orientations).
-- Stable 30 FPS on baseline devices; 60 FPS as an option on capable devices.
+- Stable 30 FPS on baseline devices; 60 FPS as an option on capable devices
+  (Settings > Graphics, with three presets: Battery Saver, Balanced, High Quality).
+- Settings for comfort and access: interface scale, HUD opacity, reduced motion,
+  haptics, stick sensitivity, assistance, five volumes (`docs/VISUAL_STYLE_GUIDE.md`).
+- Sound: engine, airflow, wheels, surroundings, alerts and interface, enclosed in the
+  cockpit; generated placeholders until designed sound exists.
 - Touch targets at least 96 px tall at 1080p reference height. All UI respects
   the device safe area.
 

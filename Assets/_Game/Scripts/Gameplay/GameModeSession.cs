@@ -63,6 +63,7 @@ namespace OpenSkies.Gameplay
         {
             None = 0,
             Resume,
+            Settings,
             Restart,
             SkipTutorial,
             ChangeMode,
@@ -86,6 +87,8 @@ namespace OpenSkies.Gameplay
         string _resultTitle, _resultBody;
         readonly CardAction[] _cardActions = new CardAction[MissionCard.MaxButtons];
         HudFade _skipFade;
+        CanvasGroup _menuGroup;
+        float _hudOpacity = 1f;
         string[] _destinationLabels;
         string _airfieldDestinationLabel;
 
@@ -97,6 +100,13 @@ namespace OpenSkies.Gameplay
         public PlayerProgress Progress => _progress;
         public TrainingSpeeds Speeds => _speeds;
         public LandmarkRegistry World => _world;
+
+        /// <summary>The player asked for the settings screen (pause menu or entry screen).</summary>
+        public event System.Action SettingsRequested;
+        /// <summary>MENU/Esc while an overlay (the settings screen) is open: close it instead of resuming.</summary>
+        public event System.Action BackRequested;
+        /// <summary>An overlay above the pause menu or entry screen is open (set by the presentation session).</summary>
+        public bool OverlayOpen { get; set; }
         public bool ModeSelectOpen => modeSelect != null && modeSelect.IsOpen;
         /// <summary>Free Flight destination: a landmark index, or -1 for the airfield (guide on request).</summary>
         public int Destination => _destination;
@@ -143,15 +153,22 @@ namespace OpenSkies.Gameplay
             {
                 modeSelect.SetReducedMotion(reduced);
                 modeSelect.Chosen += OnModeChosen;
+                modeSelect.SettingsRequested += RaiseSettingsRequested;
             }
             if (highlights != null) highlights.SetReducedMotion(reduced);
-            if (menuButton != null) menuButton.Clicked += ToggleMenu;
+            if (menuButton != null)
+            {
+                menuButton.Clicked += ToggleMenu;
+                _menuGroup = menuButton.GetComponent<CanvasGroup>();
+                if (_menuGroup == null) _menuGroup = menuButton.gameObject.AddComponent<CanvasGroup>();
+            }
             if (skipButton != null)
             {
                 var group = skipButton.GetComponent<CanvasGroup>();
                 if (group != null) _skipFade = new HudFade(group, interactive: true);
                 skipButton.Clicked += OnSkipClicked;
             }
+            SetHudOpacity(_hudOpacity);
             flight.ResetPerformed += OnFlightReset;
             ResolveHighlightTargets();
 
@@ -187,6 +204,25 @@ namespace OpenSkies.Gameplay
                 int slot = contextual.SlotOf(ContextAction.Flaps);
                 if (slot >= 0 && contextual.railSlots[slot] != null) highlights.SetTarget(CoachHighlight.Flaps, (RectTransform)contextual.railSlots[slot].transform);
             }
+        }
+
+        void RaiseSettingsRequested() => SettingsRequested?.Invoke();
+
+        /// <summary>The player's motion preference for the mission UI.</summary>
+        public void SetReducedMotion(bool reduced)
+        {
+            if (coach != null) coach.SetReducedMotion(reduced);
+            if (card != null) card.SetReducedMotion(reduced);
+            if (modeSelect != null) modeSelect.SetReducedMotion(reduced);
+            if (highlights != null) highlights.SetReducedMotion(reduced);
+        }
+
+        /// <summary>The player's HUD opacity for MENU and SKIP TUTORIAL.</summary>
+        public void SetHudOpacity(float opacity)
+        {
+            _hudOpacity = opacity;
+            if (_menuGroup != null) _menuGroup.alpha = opacity;
+            _skipFade?.SetOpacityScale(opacity);
         }
 
         void OnDisable()
@@ -406,7 +442,11 @@ namespace OpenSkies.Gameplay
         void Update()
         {
             if (!_initialized) return;
-            if (flight.Devices != null && flight.Devices.MenuPressedThisFrame()) ToggleMenu();
+            if (flight.Devices != null && flight.Devices.MenuPressedThisFrame())
+            {
+                if (OverlayOpen) BackRequested?.Invoke();
+                else ToggleMenu();
+            }
 
             if (_modeActive && _mode == GameMode.FirstFlight && _tutorial.State == FirstFlightTutorial.Status.Completed && !_resultShown)
                 ShowFirstFlightComplete();
@@ -535,7 +575,7 @@ namespace OpenSkies.Gameplay
 
         public void ToggleMenu()
         {
-            if (ModeSelectOpen) return;
+            if (ModeSelectOpen || OverlayOpen) return;
             if (_paused) ResumeFromMenu();
             else OpenMenu();
         }
@@ -548,20 +588,21 @@ namespace OpenSkies.Gameplay
             Freeze();
             switch (_mode)
             {
+                // RESUME and SETTINGS share the first row, so five choices fit the column.
                 case GameMode.FirstFlight when _tutorial.IsActive:
-                    SetActions(CardAction.Resume, CardAction.Restart, CardAction.SkipTutorial, CardAction.ChangeMode);
+                    SetActions(CardAction.Resume, CardAction.Settings, CardAction.Restart, CardAction.SkipTutorial, CardAction.ChangeMode);
                     card.Show("Paused", "First Flight, step " + (_tutorial.StepIndex + 1) + " of " + _tutorial.StepCount + ": "
-                                        + _tutorial.Step.Title.ToLowerInvariant(), null, true,
-                        "RESUME", "RESTART FIRST FLIGHT", "SKIP TUTORIAL", "CHANGE MODE");
+                                        + _tutorial.Step.Title.ToLowerInvariant(), null, true, true,
+                        "RESUME", "SETTINGS", "RESTART FIRST FLIGHT", "SKIP TUTORIAL", "CHANGE MODE");
                     break;
                 case GameMode.LandingChallenge:
-                    SetActions(CardAction.Resume, CardAction.Restart, CardAction.ChangeMode, CardAction.None);
-                    card.Show("Paused", "Landing Challenge", null, true, "RESUME", "RETRY", "CHANGE MODE");
+                    SetActions(CardAction.Resume, CardAction.Settings, CardAction.Restart, CardAction.ChangeMode, CardAction.None);
+                    card.Show("Paused", "Landing Challenge", null, true, true, "RESUME", "SETTINGS", "RETRY", "CHANGE MODE", null);
                     break;
                 default:
-                    SetActions(CardAction.Resume, CardAction.CycleDestination, CardAction.Restart, CardAction.ChangeMode);
-                    card.Show("Paused", "Free Flight. The guide can lead you to a landmark.", null, true,
-                        "RESUME", DestinationLabel(), _freeStart == FreeFlightStart.Airborne ? "RESTART IN THE AIR" : "RESTART ON THE RUNWAY",
+                    SetActions(CardAction.Resume, CardAction.Settings, CardAction.CycleDestination, CardAction.Restart, CardAction.ChangeMode);
+                    card.Show("Paused", "Free Flight. The guide can lead you to a landmark.", null, true, true,
+                        "RESUME", "SETTINGS", DestinationLabel(), _freeStart == FreeFlightStart.Airborne ? "RESTART IN THE AIR" : "RESTART ON THE RUNWAY",
                         "CHANGE MODE");
                     break;
             }
@@ -575,12 +616,13 @@ namespace OpenSkies.Gameplay
             if (_openResult != OpenResult.None) ShowResultCard();
         }
 
-        void SetActions(CardAction a, CardAction b, CardAction c, CardAction d)
+        void SetActions(CardAction a, CardAction b, CardAction c = CardAction.None, CardAction d = CardAction.None, CardAction e = CardAction.None)
         {
             _cardActions[0] = a;
             _cardActions[1] = b;
             _cardActions[2] = c;
             _cardActions[3] = d;
+            _cardActions[4] = e;
         }
 
         void OnCardButton(int index)
@@ -590,6 +632,9 @@ namespace OpenSkies.Gameplay
             {
                 case CardAction.Resume:
                     ResumeFromMenu();
+                    break;
+                case CardAction.Settings:
+                    RaiseSettingsRequested(); // the pause card stays underneath
                     break;
                 case CardAction.Restart:
                     if (card != null) card.Close();
@@ -691,12 +736,12 @@ namespace OpenSkies.Gameplay
             if (card == null) return;
             if (_openResult == OpenResult.Landing)
             {
-                SetActions(CardAction.Restart, CardAction.FreeFlightHere, CardAction.None, CardAction.None);
+                SetActions(CardAction.Restart, CardAction.FreeFlightHere);
                 card.Show(_resultTitle, _resultBody, Footnote, false, "RETRY", "FREE FLIGHT");
             }
             else if (_openResult == OpenResult.FirstFlight)
             {
-                SetActions(CardAction.FreeFlightHere, CardAction.LandingChallenge, CardAction.None, CardAction.None);
+                SetActions(CardAction.FreeFlightHere, CardAction.LandingChallenge);
                 card.Show(_resultTitle, _resultBody, Footnote, false, "FREE FLIGHT", "LANDINGS");
             }
         }

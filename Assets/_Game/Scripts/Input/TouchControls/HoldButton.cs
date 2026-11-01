@@ -17,6 +17,9 @@ namespace OpenSkies.FlightInput.TouchControls
         public string ownerName = "Brake";
         [Range(0f, 1f)] public float idleAlpha = 0.3f;
         [Range(0f, 1f)] public float activeAlpha = 0.8f;
+        [Tooltip("Fill while held: a clear active state that does not rely on brightness alone.")]
+        public Color activeColor = TouchControlStyle.Selected;
+        public Color activeLabelColor = new Color(0.04f, 0.06f, 0.08f, 1f);
         [Tooltip("Fade time when becoming available or unavailable, seconds.")]
         public float fadeTime = 0.2f;
 
@@ -30,7 +33,7 @@ namespace OpenSkies.FlightInput.TouchControls
         void Awake()
         {
             _group = GetComponent<CanvasGroup>();
-            if (background != null && background.sprite == null) { background.sprite = TouchControlSprites.RoundedRect; background.type = Image.Type.Sliced; }
+            if (background != null && background.sprite == null) TouchControlStyle.Round(background, outline: false);
             SetHighlight(false);
         }
 
@@ -58,8 +61,10 @@ namespace OpenSkies.FlightInput.TouchControls
         void SetHighlight(bool engaged)
         {
             float a = engaged ? activeAlpha : idleAlpha;
+            if (background != null) background.color = engaged ? activeColor : Color.white;
             SetAlpha(background, a);
-            SetAlpha(label, a + 0.3f);
+            if (label != null) label.color = engaged ? activeLabelColor : TouchControlStyle.TextPrimary;
+            SetAlpha(label, engaged ? 1f : a + 0.3f);
         }
     }
 }

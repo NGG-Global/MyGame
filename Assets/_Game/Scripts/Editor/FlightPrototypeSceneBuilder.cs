@@ -2,12 +2,14 @@ using System;
 using System.IO;
 using System.Linq;
 using OpenSkies.Assistance;
+using OpenSkies.Audio;
 using OpenSkies.Awareness;
 using OpenSkies.CameraSystems;
 using OpenSkies.Cockpit;
 using OpenSkies.FlightInput.TouchControls;
 using OpenSkies.Gameplay;
 using OpenSkies.Missions;
+using OpenSkies.Platform;
 using OpenSkies.Simulation;
 using OpenSkies.UI;
 using OpenSkies.World;
@@ -79,15 +81,19 @@ namespace OpenSkies.Editor
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            CreateLighting(materials.Sky);
-            CreateGround(materials.Grass);
+            var sun = CreateLighting(materials.Sky);
+            CreateGround(materials);
             var beacons = CreateCoast(materials);
             CreateRunway(materials.Asphalt, materials.Marking);
+            PrototypeEnvironment.CreateApron(materials.Asphalt, materials.HangarWalls, materials.HangarRoof, RunwayWidth);
+            PrototypeEnvironment.CreateHills(materials.Hills);
+            PrototypeEnvironment.CreateTrees(materials.Trunk, materials.Foliage);
             var configuration = LoadOrCreateAircraftConfiguration();
             var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
             var hud = CreateHud(cameraRig.ViewCamera, out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel,
                 out var viewControls, out var flightSettings, out var guidanceLine, out var missionUi);
+            var audioManager = CreateAudio();
             cockpitInteraction.cameraRig = cameraRig;
             CreateEventSystem();
 
@@ -131,6 +137,22 @@ namespace OpenSkies.Editor
             modes.beacons = beacons;
             modesGo.SetActive(true);
 
+            // Presentation: options and settings screen, sound, haptics, graphics presets, pause of all of it.
+            var presentationGo = new GameObject("Presentation");
+            presentationGo.SetActive(false);
+            var presentation = presentationGo.AddComponent<PresentationSession>();
+            presentation.flight = session;
+            presentation.modes = modes;
+            presentation.audioManager = audioManager;
+            presentation.settings = missionUi.Settings;
+            presentation.canvasScaler = missionUi.Scaler;
+            presentation.sun = sun;
+            presentationGo.SetActive(true);
+
+            // Development builds: frame-time statistics and device counters on screen (and a CSV log on request).
+            var performance = new GameObject("PerformanceMonitor").AddComponent<PerformanceMonitor>();
+            performance.overlay = missionUi.PerformanceText;
+
             EditorFolders.Ensure(Path.GetDirectoryName(ScenePath));
             if (!EditorSceneManager.SaveScene(scene, ScenePath))
                 throw new InvalidOperationException($"Could not save {ScenePath}");
@@ -146,29 +168,33 @@ namespace OpenSkies.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) }.Concat(others).ToArray();
         }
 
-        static void CreateLighting(Material sky)
+        static Light CreateLighting(Material sky)
         {
             var sun = new GameObject("Sun").AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.intensity = 1.2f;
             sun.shadows = LightShadows.Hard; // soft shadow filtering is costly on mobile GPUs
             sun.transform.rotation = Quaternion.Euler(45f, -35f, 0f);
 
             RenderSettings.sun = sun;
             RenderSettings.skybox = sky;
-            RenderSettings.ambientMode = AmbientMode.Skybox;
+            PrototypeEnvironment.ApplyAtmosphere(sun, sky); // haze, daylight ambient, sky tuning
+            return sun;
         }
 
-        static void CreateGround(Material grass)
+        static void CreateGround(PrototypeMaterials m)
         {
             // Unity's plane primitive is 10 m x 10 m at scale 1. The land sits 10 cm below the
-            // runway and ends at the shoreline, where the sea plane starts (no overlap, no depth fighting).
-            float width = PrototypeWorld.ShorelineX - PrototypeWorld.LandWestX;
+            // runway and ends where the beach starts; the beach slopes under the sea (no coplanar
+            // surfaces, no depth fighting).
+            float width = PrototypeEnvironment.GrassEastX - PrototypeWorld.LandWestX;
             float length = PrototypeWorld.WorldNorthZ - PrototypeWorld.WorldSouthZ;
-            var centre = new Vector3((PrototypeWorld.ShorelineX + PrototypeWorld.LandWestX) * 0.5f, PrototypeWorld.LandHeight,
+            var centre = new Vector3((PrototypeEnvironment.GrassEastX + PrototypeWorld.LandWestX) * 0.5f, PrototypeWorld.LandHeight,
                 (PrototypeWorld.WorldNorthZ + PrototypeWorld.WorldSouthZ) * 0.5f);
-            var ground = Primitive(PrimitiveType.Plane, "Ground", null, centre, new Vector3(width / 10f, 1f, length / 10f), grass, keepCollider: true);
+            var ground = Primitive(PrimitiveType.Plane, "Ground", null, centre, new Vector3(width / 10f, 1f, length / 10f), m.Grass, keepCollider: true);
             ground.isStatic = true;
+            // Field patches every 1.6 km and grass grain every 40 m: two scales, so neither repeats visibly.
+            PrototypeEnvironment.ApplyDetail(m.Grass, "Grass", width, length, 1600f, 40f, new Color(0.86f, 0.8f, 0.58f), 0.18f, 0.35f, 11);
+            PrototypeEnvironment.ApplyDetail(m.Hills, "Hills", 1f, 1f, 0.25f, 0.02f, new Color(0.8f, 0.78f, 0.62f), 0.2f, 0.3f, 23);
         }
 
         /// <summary>
@@ -185,6 +211,9 @@ namespace OpenSkies.Editor
             var seaCentre = new Vector3((PrototypeWorld.SeaEastX + PrototypeWorld.ShorelineX) * 0.5f, PrototypeWorld.SeaHeight,
                 (PrototypeWorld.WorldNorthZ + PrototypeWorld.WorldSouthZ) * 0.5f);
             Primitive(PrimitiveType.Plane, "Sea", coast, seaCentre, new Vector3(width / 10f, 1f, length / 10f), m.Sea, keepCollider: true);
+            // Darker swells every 900 m and fine ripples every 25 m (detail only: no water simulation).
+            PrototypeEnvironment.ApplyDetail(m.Sea, "Sea", width, length, 900f, 25f, new Color(0.7f, 0.82f, 0.9f), 0.12f, 0.25f, 31);
+            PrototypeEnvironment.CreateBeach(coast, m.Sand);
 
             // Headland: a low rocky block from the shore out to sea; its top is 3 m above the sea.
             Vector3 size = PrototypeWorld.HeadlandSize;
@@ -260,7 +289,16 @@ namespace OpenSkies.Editor
                     new Vector3(x, 0.01f, end * (RunwayLength / 2f - 25f)), new Vector3(1.8f, 0.02f, 30f), marking);
             }
 
+            PrototypeEnvironment.CreateRunwayMarkings(runway, marking, RunwayLength, RunwayWidth);
             foreach (Transform child in runway) child.gameObject.isStatic = true;
+        }
+
+        /// <summary>The audio manager with the generated mixer and configuration (created once, then left alone).</summary>
+        static AudioManager CreateAudio()
+        {
+            var manager = new GameObject("Audio").AddComponent<AudioManager>();
+            manager.configuration = AudioMixerSetup.LoadOrCreateConfiguration();
+            return manager;
         }
 
         /// <summary>
@@ -430,6 +468,9 @@ namespace OpenSkies.Editor
             public CheckpointMarker Marker;
             public HudButton Menu;
             public HudButton Skip;
+            public SettingsScreen Settings;
+            public CanvasScaler Scaler;
+            public Text PerformanceText;
         }
 
         static HudPresenter CreateHud(Camera viewCamera, out TouchFlightControls touchControls, out ContextualHud contextualHud,
@@ -441,8 +482,9 @@ namespace OpenSkies.Editor
             canvasGo.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = canvasGo.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.referenceResolution = new Vector2(1920f, 1080f); // the player's interface scale changes this at runtime
             scaler.matchWidthOrHeight = 1f; // landscape: scale by height
+            missionUi.Scaler = scaler;
 
             var safeArea = new GameObject("SafeArea", typeof(RectTransform), typeof(SafeAreaFitter)).GetComponent<RectTransform>();
             safeArea.SetParent(canvasGo.transform, false);
@@ -472,9 +514,21 @@ namespace OpenSkies.Editor
             readout.color = new Color(1f, 1f, 1f, 0.8f);
             readout.raycastTarget = false;
 
+            // Development performance line under the telemetry line (PerformanceMonitor; never in release builds).
+            var perf = NewText("PerformanceReadout", safeArea, font, 22, TextAnchor.UpperLeft);
+            var perfRect = perf.rectTransform;
+            perfRect.anchorMin = new Vector2(0f, 1f);
+            perfRect.anchorMax = new Vector2(0.6f, 1f);
+            perfRect.pivot = new Vector2(0f, 1f);
+            perfRect.anchoredPosition = new Vector2(24f, -330f);
+            perfRect.sizeDelta = new Vector2(-48f, 32f);
+            perf.color = new Color(1f, 1f, 1f, 0.75f);
+            perf.raycastTarget = false;
+            missionUi.PerformanceText = perf;
+
             // Session buttons, top-right, away from the flight controls; at least 96 px tall at 1080p.
-            var cameraButton = NewHudButton("CameraButton", "CAM", safeArea, font, new Vector2(-24f, -16f));
-            var resetButton = NewHudButton("ResetButton", "RESET", safeArea, font, new Vector2(-168f, -16f));
+            var cameraButton = NewHudButton("CameraButton", "CAM\nCHASE", safeArea, font, new Vector2(-24f, -16f), HudStyle.LabelSize, out var cameraLabel);
+            var resetButton = NewHudButton("ResetButton", "RESET", safeArea, font, new Vector2(-168f, -16f), HudStyle.ButtonSize, out _);
 
             // Touch flight controls: joystick lower left, throttle and brakes lower right.
             // Built by runtime code so tests use the identical layout.
@@ -510,26 +564,31 @@ namespace OpenSkies.Editor
             missionUi.Card = MissionUiFactory.BuildMissionCard(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset,
                 CockpitFocusPanelFactory.ColumnBottom, CockpitFocusPanelFactory.ColumnTop);
             missionUi.ModeSelect = MissionUiFactory.BuildModeSelect(safeArea, font);
+            // Settings on top of everything: opened over the pause card or the entry screen.
+            missionUi.Settings = SettingsScreenFactory.Build(safeArea, font);
 
             var hud = canvasGo.AddComponent<HudPresenter>();
             hud.developerReadout = readout;
             hud.cameraButton = cameraButton;
             hud.resetButton = resetButton;
+            hud.cameraLabel = cameraLabel;
+            hud.opacityGroups = new[] { cameraButton.GetComponent<CanvasGroup>(), resetButton.GetComponent<CanvasGroup>() };
             return hud;
         }
 
-        static Button NewHudButton(string name, string caption, Transform parent, Font font, Vector2 topRightOffset)
+        /// <summary>CAM and RESET: uGUI buttons styled like the HUD buttons (HudPresenter gives them their rounded shape at runtime).</summary>
+        static Button NewHudButton(string name, string caption, Transform parent, Font font, Vector2 topRightOffset, int fontSize, out Text label)
         {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button), typeof(CanvasGroup));
             var rect = go.GetComponent<RectTransform>();
             rect.SetParent(parent, false);
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
             rect.anchoredPosition = topRightOffset;
             rect.sizeDelta = new Vector2(128f, 96f);
-            go.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.3f);
-            var label = NewText("Label", rect, font, 28, TextAnchor.MiddleCenter);
+            go.GetComponent<Image>().color = HudStyle.ControlSurface;
+            label = NewText("Label", rect, font, fontSize, TextAnchor.MiddleCenter);
             label.text = caption;
-            label.color = new Color(1f, 1f, 1f, 0.85f);
+            label.color = HudStyle.TextPrimary;
             label.raycastTarget = false;
             Stretch(label.rectTransform);
             return go.GetComponent<Button>();
@@ -590,6 +649,12 @@ namespace OpenSkies.Editor
             public readonly Material LighthouseRed = Lit("LighthouseRed", new Color(0.72f, 0.12f, 0.1f), 0.3f);
             public readonly Material Glass = Lit("LanternGlass", new Color(0.16f, 0.18f, 0.2f), 0.9f);
             public readonly Material Beacon = Unlit("Beacon", new Color(1f, 0.93f, 0.7f));
+            public readonly Material Sand = Lit("Sand", new Color(0.8f, 0.74f, 0.6f), 0.12f);
+            public readonly Material Hills = Lit("Hills", new Color(0.36f, 0.42f, 0.26f), 0.08f);
+            public readonly Material Foliage = Lit("Foliage", new Color(0.2f, 0.32f, 0.16f), 0.05f);
+            public readonly Material Trunk = Lit("Trunk", new Color(0.3f, 0.23f, 0.16f), 0.05f);
+            public readonly Material HangarWalls = Lit("HangarWalls", new Color(0.82f, 0.82f, 0.8f), 0.3f);
+            public readonly Material HangarRoof = Lit("HangarRoof", new Color(0.42f, 0.47f, 0.52f), 0.35f);
             public readonly Material Sky = Skybox();
             public readonly CockpitMaterials Cockpit = new CockpitMaterials
             {

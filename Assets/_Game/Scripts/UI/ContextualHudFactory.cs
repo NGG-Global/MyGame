@@ -32,10 +32,13 @@ namespace OpenSkies.UI
         public static float RailLeftInset => -(RailBase.x - RailButtonSize.x);
         /// <summary>Horizontal anchor of the warning banners, fraction of the safe-area width.</summary>
         public const float WarningColumn = 0.56f;
+        public static readonly Vector2 WarningSize = new Vector2(380f, 72f);
 
-        static readonly Color LabelColor = new Color(1f, 1f, 1f, 0.7f);
-        static readonly Color ValueColor = new Color(1f, 1f, 1f, 0.95f);
-        static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.55f);
+        static readonly Color LabelColor = HudStyle.TextSecondary;
+        static readonly Color ValueColor = HudStyle.TextPrimary;
+        static readonly Color ShadowColor = HudStyle.TextShadow;
+        /// <summary>Inner padding of the flight data and guide plates, canvas units.</summary>
+        const float PlatePadding = 10f;
 
         public static ContextualHud Build(RectTransform safeArea, Font font)
         {
@@ -45,23 +48,27 @@ namespace OpenSkies.UI
             Stretch(root);
             var hud = root.gameObject.AddComponent<ContextualHud>();
 
+            var backings = new System.Collections.Generic.List<Image>();
             for (int i = 0; i < ContextualHud.DataItemCount; i++)
-                BuildDataItem(root, font, (HudElement)i, i, out hud.dataItems[i], out hud.dataValues[i]);
-            BuildApproachGuide(root, font, hud);
-            BuildNavigationGuide(root, font, hud);
+                backings.Add(BuildDataItem(root, font, (HudElement)i, i, out hud.dataItems[i], out hud.dataValues[i]));
+            backings.Add(BuildApproachGuide(root, font, hud));
+            backings.Add(BuildNavigationGuide(root, font, hud));
+            hud.backings = backings.ToArray();
             BuildWarnings(root, font, hud);
             // The development inspector is built before the rail: where the top rail slot (ASSIST) reaches
             // under it, the rail button draws on top and takes the touch.
             hud.inspector = BuildInspector(root, font);
             BuildRail(root, font, hud);
-            hud.profileButton = BuildButton("HudProfileButton", root, font, 22, new Vector2(1f, 1f), new Vector2(-312f, -TopMargin),
+            hud.profileButton = BuildButton("HudProfileButton", root, font, HudStyle.LabelSize, new Vector2(1f, 1f), new Vector2(-312f, -TopMargin),
                 new Vector2(128f, 96f), ContextualHud.ProfileLabel(HudProfile.Smart));
+            hud.profileGroup = hud.profileButton.gameObject.AddComponent<CanvasGroup>();
 
             root.gameObject.SetActive(true);
             return hud;
         }
 
-        static void BuildDataItem(RectTransform parent, Font font, HudElement element, int slot, out CanvasGroup group, out Text value)
+        /// <summary>One flight data item: a faint plate, a small label and the value. Returns the plate.</summary>
+        static Image BuildDataItem(RectTransform parent, Font font, HudElement element, int slot, out CanvasGroup group, out Text value)
         {
             var item = NewRect(element + "Readout", parent);
             item.anchorMin = item.anchorMax = item.pivot = new Vector2(0f, 1f);
@@ -69,18 +76,24 @@ namespace OpenSkies.UI
             item.sizeDelta = DataItemSize;
             group = Hidden(item);
 
-            var label = NewText("Label", item, font, 20, TextAnchor.UpperLeft, LabelColor);
+            var plate = NewRect("Plate", item);
+            Stretch(plate);
+            var backing = AddImage(plate, HudStyle.DataBacking);
+
+            var label = NewText("Label", item, font, HudStyle.LabelSize, TextAnchor.UpperLeft, LabelColor);
             label.rectTransform.anchorMin = new Vector2(0f, 1f);
             label.rectTransform.anchorMax = new Vector2(1f, 1f);
             label.rectTransform.pivot = new Vector2(0f, 1f);
-            label.rectTransform.anchoredPosition = Vector2.zero;
-            label.rectTransform.sizeDelta = new Vector2(0f, 26f);
+            label.rectTransform.anchoredPosition = new Vector2(PlatePadding, -4f);
+            label.rectTransform.sizeDelta = new Vector2(-PlatePadding, 26f);
             label.text = DataLabel(element);
 
-            value = NewText("Value", item, font, 40, TextAnchor.LowerLeft, ValueColor);
+            value = NewText("Value", item, font, HudStyle.ValueSize, TextAnchor.LowerLeft, ValueColor);
             Stretch(value.rectTransform);
+            value.rectTransform.offsetMin = new Vector2(PlatePadding, 2f);
             value.rectTransform.offsetMax = new Vector2(0f, -24f);
             value.text = "-";
+            return backing;
         }
 
         static string DataLabel(HudElement element)
@@ -95,13 +108,14 @@ namespace OpenSkies.UI
             }
         }
 
-        static void BuildApproachGuide(RectTransform parent, Font font, ContextualHud hud)
+        static Image BuildApproachGuide(RectTransform parent, Font font, ContextualHud hud)
         {
             var panel = NewRect("ApproachGuide", parent);
             panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0f, 1f);
             panel.anchoredPosition = new Vector2(Margin, -112f);
             panel.sizeDelta = new Vector2(430f, 96f);
             hud.approachGuide = Hidden(panel);
+            var backing = Plate(panel);
 
             hud.approachRunway = TopRowText("Runway", panel, font, 0f, 120f);
             hud.approachDistance = TopRowText("Distance", panel, font, 130f, 140f);
@@ -134,28 +148,30 @@ namespace OpenSkies.UI
             var marker = NewRect("CentrelineMarker", track);
             marker.anchorMin = marker.anchorMax = marker.pivot = new Vector2(0.5f, 0.5f);
             marker.sizeDelta = new Vector2(12f, 26f);
-            AddShadow(AddImage(marker, new Color(1f, 0.85f, 0.3f, 1f)));
+            AddShadow(AddImage(marker, HudStyle.Navigation));
             hud.lateralMarker = marker;
             hud.lateralHalfTravel = 80f;
+            return backing;
         }
 
-        static void BuildNavigationGuide(RectTransform parent, Font font, ContextualHud hud)
+        static Image BuildNavigationGuide(RectTransform parent, Font font, ContextualHud hud)
         {
             var panel = NewRect("NavigationGuide", parent);
             panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0f, 1f);
             panel.anchoredPosition = new Vector2(474f, -112f);
             panel.sizeDelta = new Vector2(300f, 96f);
             hud.navigationGuide = Hidden(panel);
+            var backing = Plate(panel);
 
             var arrow = NewRect("Arrow", panel);
             arrow.anchorMin = arrow.anchorMax = new Vector2(0f, 0.5f);
             arrow.pivot = new Vector2(0.5f, 0.5f);
             arrow.anchoredPosition = new Vector2(32f, 0f);
             arrow.sizeDelta = new Vector2(56f, 56f);
-            AddShadow(AddImage(arrow, new Color(1f, 1f, 1f, 0.95f)));
+            AddShadow(AddImage(arrow, HudStyle.Navigation)); // magenta: course to the destination
             hud.navigationArrow = arrow;
 
-            var label = NewText("Label", panel, font, 20, TextAnchor.UpperLeft, LabelColor);
+            var label = NewText("Label", panel, font, HudStyle.LabelSize, TextAnchor.UpperLeft, LabelColor);
             label.rectTransform.anchorMin = label.rectTransform.anchorMax = label.rectTransform.pivot = new Vector2(0f, 1f);
             label.rectTransform.anchoredPosition = new Vector2(76f, -12f);
             label.rectTransform.sizeDelta = new Vector2(220f, 26f);
@@ -176,6 +192,7 @@ namespace OpenSkies.UI
             bearing.rectTransform.sizeDelta = new Vector2(92f, 36f);
             bearing.text = string.Empty;
             hud.navigationBearing = bearing;
+            return backing;
         }
 
         static void BuildWarnings(RectTransform parent, Font font, ContextualHud hud)
@@ -188,13 +205,22 @@ namespace OpenSkies.UI
                 slot.anchorMin = slot.anchorMax = new Vector2(WarningColumn, 1f);
                 slot.pivot = new Vector2(0.5f, 1f);
                 slot.anchoredPosition = new Vector2(0f, -250f - k * 84f);
-                slot.sizeDelta = new Vector2(380f, 72f);
+                slot.sizeDelta = WarningSize;
                 hud.warningSlots[k] = Hidden(slot);
                 hud.warningBackgrounds[k] = AddImage(slot, hud.warningColor);
+
+                // Severity symbol on the left; the word is centred in the rest of the banner.
+                var icon = NewRect("Icon", slot);
+                icon.anchorMin = icon.anchorMax = icon.pivot = new Vector2(0f, 0.5f);
+                icon.anchoredPosition = new Vector2(16f, 0f);
+                icon.sizeDelta = new Vector2(44f, 44f);
+                hud.warningIcons[k] = AddImage(icon, Color.white);
 
                 var label = NewText("Label", slot, font, 34, TextAnchor.MiddleCenter, Color.white, shadow: false);
                 label.fontStyle = FontStyle.Bold;
                 Stretch(label.rectTransform);
+                label.rectTransform.offsetMin = new Vector2(60f, 0f);
+                label.rectTransform.offsetMax = new Vector2(-16f, 0f);
                 hud.warningLabels[k] = label;
             }
         }
@@ -202,11 +228,13 @@ namespace OpenSkies.UI
         static void BuildRail(RectTransform parent, Font font, ContextualHud hud)
         {
             var corner = new Vector2(1f, 0f);
-            hud.systemsButton = BuildButton("SystemsButton", parent, font, 24, corner, RailBase, RailButtonSize, "SYSTEMS");
+            hud.systemsButton = BuildButton("SystemsButton", parent, font, HudStyle.ButtonSize, corner, RailBase, RailButtonSize, "SYSTEMS");
+            hud.systemsGroup = hud.systemsButton.gameObject.AddComponent<CanvasGroup>();
             for (int i = 0; i < ContextualHud.RailSlotCount; i++)
             {
                 var position = RailBase + new Vector2(0f, (i + 1) * RailStep);
-                var button = BuildButton("RailSlot" + i, parent, font, 24, corner, position, RailButtonSize, string.Empty);
+                var button = BuildButton("RailSlot" + i, parent, font, HudStyle.ButtonSize, corner, position, RailButtonSize, string.Empty);
+                button.feedback = UiFeedback.Confirm; // rail actions change a system or a guide
                 Hidden((RectTransform)button.transform);
                 hud.railSlots[i] = button;
             }
@@ -232,7 +260,7 @@ namespace OpenSkies.UI
             rect.anchorMin = rect.anchorMax = rect.pivot = anchor;
             rect.anchoredPosition = position;
             rect.sizeDelta = size;
-            var image = AddImage(rect, new Color(0f, 0f, 0f, 0.35f));
+            var image = AddImage(rect, HudStyle.ControlSurface);
             image.raycastTarget = true;
             var button = rect.gameObject.AddComponent<HudButton>();
             button.background = image;
@@ -253,6 +281,16 @@ namespace OpenSkies.UI
             rect.sizeDelta = new Vector2(width, 40f);
             text.text = "-";
             return text;
+        }
+
+        /// <summary>A faint plate behind a guide, a little larger than the guide so its text has room.</summary>
+        static Image Plate(RectTransform panel)
+        {
+            var plate = NewRect("Plate", panel);
+            Stretch(plate);
+            plate.offsetMin = new Vector2(-PlatePadding, -4f);
+            plate.offsetMax = new Vector2(PlatePadding, 4f);
+            return AddImage(plate, HudStyle.DataBacking);
         }
 
         /// <summary>Adds a CanvasGroup that starts invisible and ignores touches.</summary>

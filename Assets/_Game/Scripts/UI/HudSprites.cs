@@ -11,7 +11,9 @@ namespace OpenSkies.UI
     {
         const int Size = 128;
         const int Supersample = 4;
-        static Sprite _disc, _roundedRect, _arrow, _ring, _bezel, _roundedOutline, _diamond;
+        /// <summary>Corner radius of <see cref="RoundedRect"/> in texels (canvas units at pixels-per-unit multiplier 1).</summary>
+        public const float RoundedRectRadius = Size * 0.3f;
+        static Sprite _disc, _roundedRect, _arrow, _ring, _bezel, _roundedOutline, _diamond, _cautionIcon, _warningIcon;
 
         /// <summary>Filled circle.</summary>
         public static Sprite Disc => _disc != null ? _disc : _disc = Create("HudDisc", false, (x, y) =>
@@ -34,6 +36,42 @@ namespace OpenSkies.UI
             float d = Mathf.Abs(x - 0.5f) + Mathf.Abs(y - 0.5f);
             return d <= 0.47f && d >= 0.36f;
         });
+
+        /// <summary>Caution symbol: a triangle with an exclamation mark (severity is never shown by colour alone).</summary>
+        public static Sprite CautionIcon => _cautionIcon != null ? _cautionIcon : _cautionIcon = Create("HudCautionIcon", false, (x, y) =>
+            (InsidePolygon(CautionOuter, x, y) && !InsidePolygon(CautionInner, x, y)) || Exclamation(x, y, 0.36f));
+
+        /// <summary>Warning symbol: an octagon with an exclamation mark.</summary>
+        public static Sprite WarningIcon => _warningIcon != null ? _warningIcon : _warningIcon = Create("HudWarningIcon", false, (x, y) =>
+        {
+            float dx = Mathf.Abs(x - 0.5f), dy = Mathf.Abs(y - 0.5f);
+            bool outer = Mathf.Max(dx, dy) <= 0.46f && dx + dy <= 0.65f;
+            bool inner = Mathf.Max(dx, dy) <= 0.38f && dx + dy <= 0.54f;
+            return (outer && !inner) || Exclamation(x, y, 0.3f);
+        });
+
+        static readonly Vector2[] CautionOuter = { new Vector2(0.5f, 0.95f), new Vector2(0.96f, 0.1f), new Vector2(0.04f, 0.1f) };
+        static readonly Vector2[] CautionInner = { new Vector2(0.5f, 0.78f), new Vector2(0.83f, 0.18f), new Vector2(0.17f, 0.18f) };
+
+        /// <summary>An exclamation mark: a bar above a dot whose centre is at <paramref name="dotY"/>.</summary>
+        static bool Exclamation(float x, float y, float dotY)
+        {
+            float dx = x - 0.5f;
+            bool bar = Mathf.Abs(dx) <= 0.045f && y >= dotY + 0.1f && y <= dotY + 0.36f;
+            float dy = y - dotY;
+            return bar || dx * dx + dy * dy <= 0.05f * 0.05f;
+        }
+
+        static bool InsidePolygon(Vector2[] shape, float x, float y)
+        {
+            bool inside = false;
+            for (int i = 0, j = shape.Length - 1; i < shape.Length; j = i++)
+            {
+                Vector2 a = shape[i], b = shape[j];
+                if ((a.y > y) != (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+            }
+            return inside;
+        }
 
         static bool InsideRounded(float x, float y, float half, float r)
         {

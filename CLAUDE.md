@@ -4,9 +4,10 @@ Semi-realistic mobile flight simulator (working title). Android first, landscape
 Differentiator: touch-first UX with progressive disclosure. Detail lives in
 `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/FLIGHT_MODEL.md`,
 `docs/TOUCH_CONTROLS.md`, `docs/CONTEXTUAL_UI.md`, `docs/COCKPIT.md`,
-`docs/FLIGHT_ASSISTANCE.md`, `docs/ONBOARDING_DESIGN.md` and `docs/ROADMAP.md`. Read them
-before changing design, architecture, physics, input, assistance, the HUD, the cockpit,
-game modes or tutorials.
+`docs/FLIGHT_ASSISTANCE.md`, `docs/ONBOARDING_DESIGN.md`, `docs/VISUAL_STYLE_GUIDE.md`,
+`docs/MOBILE_PERFORMANCE_REPORT.md` and `docs/ROADMAP.md`. Read them before changing
+design, architecture, physics, input, assistance, the HUD, the cockpit, game modes,
+tutorials, visuals, audio, settings or performance.
 
 ## Essentials
 - Unity **6000.6.0f1** (`ProjectSettings/ProjectVersion.txt`), URP 17.6.0,
@@ -41,10 +42,19 @@ game modes or tutorials.
     See `docs/ONBOARDING_DESIGN.md`.
   - `Cockpit`: cockpit touch routing, picking, layout, switch and light views
     (references FlightState, FlightInput, CameraSystems). See `docs/COCKPIT.md`.
+  - `Options`: the player's presentation and comfort options (`GameOptions`) and
+    their rules. No dependencies. Assistance, sensitivity and HUD profile keep their
+    own stores; never duplicate them here.
+  - `Audio`: `AudioManager` on the Audio Mixer (source-level fallback), pure
+    `FlightAudioMath`, generated placeholder clips (references FlightState, Options).
+    Reads telemetry values only.
+  - `Platform`: graphics presets, frame rate, haptics, performance monitor
+    (references Options, URP).
   - `Input`, `Camera`, `UI`, `Cockpit`: never reference `Simulation`. Input produces
     `FlightControls`; presentation reads `FlightTelemetry`, awareness state or transforms.
-  - `Gameplay`: composition root (`FlightSession`, and `GameModeSession` for the modes).
-    The only place layers meet.
+  - `Gameplay`: composition root (`FlightSession`, `GameModeSession` for the modes,
+    `PresentationSession` for options, sound, haptics and graphics). The only place
+    layers meet.
   - `Editor`: build script and scene builders.
 - Flight is Rigidbody physics: forces and torques in `FixedUpdate` only. Never
   move the aircraft with `Transform.Translate/Rotate` or set its pose, except
@@ -54,7 +64,10 @@ game modes or tutorials.
   limited authority, never the throttle, never the aircraft's constants. Telemetry
   is built only by `TelemetryMath` (game and test lab alike).
 - Physics formulas live in pure static functions with EditMode tests.
-- Camera switching and UI never change flight controls.
+- Camera switching and UI never change flight controls. Presentation (graphics
+  presets, frame rate, sound, haptics, settings) never changes the physics step,
+  the aircraft or its controls; presets change only a runtime copy of the URP asset
+  and only settings that need no other shader variants.
 - Switch and lever positions (flaps, parking brake, lights, ignition) live only
   in `AircraftSystems`; change them only through `FlightSession.RequestSystemChange`
   / `SystemChangeGate`. Never keep a second copy of a system's state in a view.
@@ -79,7 +92,13 @@ game modes or tutorials.
 - Simulation uses SI units (m, s, m/s); convert to knots/feet only for display
   (`FlightUnits`).
 - UI: everything under a `SafeAreaFitter`, touch targets at least 96 px at
-  1080p reference height, minimal by default.
+  1080p reference height, minimal by default. Colours, sizes, radii and timing come
+  from `HudStyle` (mirrored by `TouchControlStyle`); amber and red are for alerts
+  only; warnings are never dimmed and never colour alone. Hidden elements fade
+  through `HudFade` (which culls them); touch areas draw nothing.
+- Audio: tuning in `GameAudioConfiguration`, not code. No third-party recordings
+  without a licence; generated sounds are labelled PLACEHOLDER. Haptics are short,
+  rate-limited and optional; nothing vibrates continuously.
 
 ## Working without an Editor
 - Every new file or folder under `Assets/` needs a `.meta` with a fresh GUID:
@@ -97,6 +116,7 @@ game modes or tutorials.
 | What | Where / command |
 |---|---|
 | Meta files | `python3 tools/unity_meta.py --check` (runs anywhere) |
+| Device performance | `PerformanceMonitor` in development builds; protocol in `docs/MOBILE_PERFORMANCE_REPORT.md` |
 | EditMode + PlayMode tests | `tests.yml` on every PR (checks "editmode/playmode test results") |
 | WebGL + Android builds | `build.yml` on `main` or manual dispatch; APK artifact, WebGL on Pages |
 | Local Editor (owner) | `Unity -batchmode -projectPath . -runTests -testPlatform EditMode -testResults editmode.xml` |

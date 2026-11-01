@@ -16,10 +16,10 @@ namespace OpenSkies.UI
         public const float GuidanceBottom = 12f;
         public const float GuidanceHeight = 64f;
 
-        static readonly Color CardColour = new Color(0.03f, 0.03f, 0.04f, 0.72f);
-        static readonly Color ButtonColour = new Color(1f, 1f, 1f, 0.12f);
-        static readonly Color TitleColour = new Color(1f, 1f, 1f, 0.95f);
-        static readonly Color TextColour = new Color(1f, 1f, 1f, 0.8f);
+        static readonly Color CardColour = HudStyle.PanelSurface;
+        static readonly Color ButtonColour = HudStyle.PanelControl;
+        static readonly Color TitleColour = HudStyle.TextPrimary;
+        static readonly Color TextColour = HudStyle.TextSecondary;
 
         public static FlightSettingsPanel Build(RectTransform safeArea, Font font, float joystickRegionRight, float railLeftInset)
         {
@@ -109,7 +109,7 @@ namespace OpenSkies.UI
             var button = rect.gameObject.AddComponent<HudButton>();
             button.background = image;
             button.idleColor = ButtonColour;
-            var label = Label("Label", rect, font, size, Color.white, TextAnchor.MiddleCenter);
+            var label = Label("Label", rect, font, size, HudStyle.TextPrimary, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             button.label = label;
             return button;
@@ -125,8 +125,8 @@ namespace OpenSkies.UI
             image.raycastTarget = true;
             var button = rect.gameObject.AddComponent<HudButton>();
             button.background = image;
-            button.idleColor = new Color(1f, 1f, 1f, 0.1f);
-            var label = Label("Label", rect, font, 48, Color.white, TextAnchor.MiddleCenter);
+            button.idleColor = HudStyle.PanelControl;
+            var label = Label("Label", rect, font, 48, HudStyle.TextPrimary, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             label.text = "×";
             button.label = label;

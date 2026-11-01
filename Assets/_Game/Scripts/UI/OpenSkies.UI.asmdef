@@ -5,7 +5,8 @@
         "OpenSkies.FlightState",
         "OpenSkies.Awareness",
         "UnityEngine.UI",
-        "OpenSkies.Missions"
+        "OpenSkies.Missions",
+        "OpenSkies.Options"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

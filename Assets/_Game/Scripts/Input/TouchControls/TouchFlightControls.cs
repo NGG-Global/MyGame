@@ -28,6 +28,8 @@ namespace OpenSkies.FlightInput.TouchControls
         public TouchControlsVisibility visibility = TouchControlsVisibility.Auto;
         [Tooltip("Overall opacity of the touch controls.")]
         [Range(0.2f, 1f)] public float opacity = 0.9f;
+        [Tooltip("The player's HUD opacity applied to the controls, never below this share (they must stay easy to find).")]
+        [Range(0.5f, 1f)] public float minimumOpacityShare = 0.8f;
 
         [Header("Development")]
         public Text diagnostics;
@@ -40,10 +42,24 @@ namespace OpenSkies.FlightInput.TouchControls
         Vector2 _smoothedStick;
         FlightControls _lastControls;
         float _nextDiagnostics;
+        float _opacityScale = 1f;
         bool _visible = true;
 
         public PointerOwnership Ownership => _ownership;
         public bool ControlsVisible => _visible;
+        /// <summary>Opacity actually applied: the base opacity scaled by the player's HUD opacity (with a floor).</summary>
+        public float EffectiveOpacity => opacity * _opacityScale;
+
+        /// <summary>
+        /// The player's HUD opacity (0.6-1). The controls follow it only part of the way,
+        /// so they never become hard to find; touch behaviour is unchanged.
+        /// </summary>
+        public void SetOpacityScale(float hudOpacity)
+        {
+            float share = Mathf.Clamp(minimumOpacityShare, 0.5f, 1f);
+            float t = Mathf.InverseLerp(0.6f, 1f, Mathf.Clamp01(hudOpacity));
+            _opacityScale = Mathf.Lerp(share, 1f, t);
+        }
 
         void Awake()
         {
@@ -56,7 +72,7 @@ namespace OpenSkies.FlightInput.TouchControls
         void Update()
         {
             ApplyVisibility(force: false);
-            if (controlsGroup != null) controlsGroup.alpha = _visible ? opacity : 0f;
+            if (controlsGroup != null) controlsGroup.alpha = _visible ? EffectiveOpacity : 0f;
         }
 
         void LateUpdate()
@@ -132,7 +148,7 @@ namespace OpenSkies.FlightInput.TouchControls
             {
                 controlsGroup.blocksRaycasts = visible;
                 controlsGroup.interactable = visible;
-                controlsGroup.alpha = visible ? opacity : 0f;
+                controlsGroup.alpha = visible ? EffectiveOpacity : 0f;
             }
         }
 

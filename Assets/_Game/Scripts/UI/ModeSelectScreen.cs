@@ -26,6 +26,8 @@ namespace OpenSkies.UI
         public CanvasGroup freeFlightOptions;
         public HudButton fromRunwayButton;
         public HudButton inTheAirButton;
+        [Tooltip("Opens the settings screen (display, controls, sound, graphics).")]
+        public HudButton settingsButton;
         public HudMotionSettings motion = new HudMotionSettings();
 
         HudFade _fade, _optionsFade;
@@ -33,6 +35,8 @@ namespace OpenSkies.UI
 
         /// <summary>The player chose a mode (and, for Free Flight, where to start).</summary>
         public event Action<GameMode, FreeFlightStart> Chosen;
+        /// <summary>The player asked for the settings screen.</summary>
+        public event Action SettingsRequested;
 
         public bool IsOpen => _open;
         public bool FreeFlightOptionsShown => _optionsFade != null && _optionsFade.IsShown;
@@ -53,6 +57,7 @@ namespace OpenSkies.UI
             if (landingButton != null) landingButton.Clicked += () => Choose(GameMode.LandingChallenge, FreeFlightStart.Runway);
             if (fromRunwayButton != null) fromRunwayButton.Clicked += () => Choose(GameMode.FreeFlight, FreeFlightStart.Runway);
             if (inTheAirButton != null) inTheAirButton.Clicked += () => Choose(GameMode.FreeFlight, FreeFlightStart.Airborne);
+            if (settingsButton != null) settingsButton.Clicked += () => { if (_open) SettingsRequested?.Invoke(); };
         }
 
         /// <summary>
@@ -67,7 +72,7 @@ namespace OpenSkies.UI
             if (firstFlightNote != null)
             {
                 firstFlightNote.text = firstFlightStatus ?? string.Empty;
-                firstFlightNote.color = recommendFirstFlight ? new Color(0.08f, 0.08f, 0.08f, 0.9f) : new Color(1f, 1f, 1f, 0.7f);
+                firstFlightNote.color = recommendFirstFlight ? HudStyle.TextOnAccent : HudStyle.TextSecondary;
             }
             if (landingNote != null) landingNote.text = landingStatus ?? string.Empty;
             _optionsFade?.SetTarget(0f, 0f, 0f);

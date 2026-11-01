@@ -149,6 +149,48 @@ Numbered as in the owner's brief; delivered after M3b. Detail in `docs/ONBOARDIN
 - [ ] Decide: start the First Flight automatically on the first launch, or keep the
       entry screen with a recommendation
 
+## M12: Presentation, audio, UX and performance polish
+
+Numbered as in the owner's brief; delivered after M11. Detail in
+`docs/VISUAL_STYLE_GUIDE.md` and `docs/MOBILE_PERFORMANCE_REPORT.md`.
+
+- [x] Design tokens (`HudStyle`, `TouchControlStyle`): colour roles on the glass-cockpit
+      convention (cyan selected, magenta navigation, amber caution, red warning), type
+      scale, spacing, radii, touch size, timing; every factory uses them
+- [x] HUD: flight values on small plates (large-text contrast over a white sky),
+      severity symbols on banners, magenta course and centreline cue, rounded controls,
+      CAM names the view, HUD opacity setting that never dims warnings
+- [x] Controls: instant press feedback (no delay), held joystick knob grows, held brake
+      turns cyan, throttle marks, dark edges for bright skies; touch areas draw nothing;
+      ownership and touch behaviour unchanged
+- [x] Audio: `AudioManager` on a generated Audio Mixer (Master, Aircraft, Environment,
+      Interface, Warnings) with a source-level fallback; engine RPM and load, airflow,
+      rolling, touchdown, ambience, stall horn, warning tone, caution chime, UI sounds;
+      cockpit enclosed, external open; all tuning in `GameAudioConfiguration`; generated
+      PLACEHOLDER sounds only
+- [x] Haptics: Android system haptics for switches, confirmations, touchdowns and red
+      warnings, rate-limited, off switch, follows the system setting
+- [x] Environment: haze matched to the sky, daylight ambient, sloping beach, two-scale
+      ground and sea detail, western hills, tree clusters culled by distance, runway edge
+      and aiming-point markings, apron and two hangars (placeholders until M5)
+- [x] Settings screen (pause menu and entry screen): interface scale (limited per
+      screen), HUD opacity, motion, HUD profile, assistance, stick sensitivity, haptics,
+      five volumes, graphics preset, 30/60 FPS; kept between sessions
+- [x] Graphics presets Battery Saver, Balanced, High Quality on a runtime copy of the URP
+      asset; frame rate separate; physics step unchanged
+- [x] Pause and resume: sound pauses with the menu, the entry screen and the app in the
+      background; Esc closes settings first; settings close if the flight resumes
+- [x] Performance: `PerformanceMonitor` (percentiles, CPU/GPU, GC, memory, draw calls,
+      15-minute CSV log), frame timing stats in builds, culling of hidden HUD elements
+- [x] EditMode and PlayMode tests for all of the above
+- [ ] CI green (licence secrets)
+- [ ] Owner: rebuild the scene; device checklist E and F in `docs/PROTOTYPE_TEST_PLAN.md`
+- [ ] Owner: run the measurement protocol on reference devices and fill in
+      `docs/MOBILE_PERFORMANCE_REPORT.md`; tune `GraphicsPresets`
+- [ ] Replace placeholder sounds with designed or licensed clips
+- [ ] Decide: typeface (TextMeshPro), engaged colour, a phone layout for larger
+      physical touch targets, Linear colour space
+
 ## M3: Assistance and contextual UI (layer 1)
 
 - Optional assistance: done in M3b
@@ -170,8 +212,8 @@ Numbered as in the owner's brief; delivered after M3b. Detail in `docs/ONBOARDIN
 
 ## M6: Performance and device validation
 
-- Device tiers: 30 FPS baseline, 60 FPS opt-in; graphics settings menu
-- Profiling on reference Android devices; allocation-free flight loop
+- Graphics presets, 60 FPS option and the profiling tools are in (M12)
+- Profiling on reference Android devices; allocation-free flight loop; preset tuning
 
 ## Later
 

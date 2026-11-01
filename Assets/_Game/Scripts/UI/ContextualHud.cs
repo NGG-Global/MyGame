@@ -52,6 +52,12 @@ namespace OpenSkies.UI
         public CanvasGroup[] warningSlots = new CanvasGroup[WarningSlotCount];
         public Image[] warningBackgrounds = new Image[WarningSlotCount];
         public Text[] warningLabels = new Text[WarningSlotCount];
+        [Tooltip("Severity symbol on each banner (octagon: warning, triangle: caution), so severity is never colour alone.")]
+        public Image[] warningIcons = new Image[WarningSlotCount];
+
+        [Header("Legibility")]
+        [Tooltip("Faint plates behind the flight data and guides (rounded at runtime).")]
+        public Image[] backings = new Image[0];
 
         [Header("Action rail and HUD buttons")]
         [Tooltip("Fixed slots, bottom up. Each available action keeps one slot for the whole session.")]
@@ -59,6 +65,9 @@ namespace OpenSkies.UI
         [Tooltip("Always visible: opens every available action (manual access to aircraft systems).")]
         public HudButton systemsButton;
         public HudButton profileButton;
+        [Tooltip("Opacity groups of SYSTEMS and the HUD profile button (the player's HUD opacity).")]
+        public CanvasGroup systemsGroup;
+        public CanvasGroup profileGroup;
 
         [Header("Development")]
         public DisclosureInspector inspector;
@@ -70,12 +79,12 @@ namespace OpenSkies.UI
         [Range(0.1f, 1f)] public float quietAlpha = 0.55f;
         [Tooltip("Numbers refresh at this interval, s.")]
         public float valueRefreshSeconds = 0.1f;
-        public Color valueColor = new Color(1f, 1f, 1f, 0.95f);
-        public Color alertValueColor = new Color(1f, 0.42f, 0.32f, 1f);
-        public Color warningColor = new Color(0.82f, 0.13f, 0.1f, 0.9f);
-        public Color cautionColor = new Color(0.96f, 0.68f, 0.12f, 0.92f);
-        public Color warningTextColor = new Color(1f, 1f, 1f, 1f);
-        public Color cautionTextColor = new Color(0.08f, 0.08f, 0.08f, 1f);
+        public Color valueColor = HudStyle.TextPrimary;
+        public Color alertValueColor = HudStyle.AlertValue;
+        public Color warningColor = HudStyle.Warning;
+        public Color cautionColor = HudStyle.Caution;
+        public Color warningTextColor = Color.white;
+        public Color cautionTextColor = HudStyle.TextOnAccent;
         public Color papiWhite = new Color(1f, 1f, 1f, 0.95f);
         public Color papiRed = new Color(0.92f, 0.16f, 0.12f, 0.95f);
         public Color papiOff = new Color(1f, 1f, 1f, 0.2f);
@@ -108,9 +117,12 @@ namespace OpenSkies.UI
         int _shownPapi = NoValue, _shownLateral = NoValue, _shownArrow = NoValue, _shownBearing = NoValue;
         HudProfile _shownProfile = (HudProfile)(-1);
         float _nextValueRefresh;
+        float _opacity = 1f;
         bool _initialized, _actionsConfigured, _reducedMotion;
 
         public bool ReducedMotion => _reducedMotion;
+        /// <summary>The player's HUD opacity (routine information and buttons; warnings are never dimmed).</summary>
+        public float Opacity => _opacity;
 
         /// <summary>The action shown in a rail slot, if the slot is in use.</summary>
         public bool TryGetSlotAction(int slot, out ContextAction action)
@@ -158,6 +170,22 @@ namespace OpenSkies.UI
                 slot++;
             }
             for (; slot < RailSlotCount; slot++) _slotUsed[slot] = false;
+        }
+
+        /// <summary>
+        /// Dims routine information (flight data, guides) and the HUD buttons to the
+        /// player's opacity, 0.6-1. Warning banners always stay at full strength.
+        /// </summary>
+        public void SetOpacity(float opacity)
+        {
+            EnsureInitialized();
+            _opacity = Mathf.Clamp(opacity, 0.2f, 1f);
+            for (int i = 0; i < DataItemCount; i++) _dataFades[i]?.SetOpacityScale(_opacity);
+            _approachFade?.SetOpacityScale(_opacity);
+            _navigationFade?.SetOpacityScale(_opacity);
+            for (int i = 0; i < RailSlotCount; i++) _railFades[i]?.SetOpacityScale(_opacity);
+            if (systemsGroup != null) systemsGroup.alpha = _opacity;
+            if (profileGroup != null) profileGroup.alpha = _opacity;
         }
 
         public void SetMotionPreference(MotionPreference preference)
@@ -214,9 +242,12 @@ namespace OpenSkies.UI
         void AssignSprites()
         {
             for (int k = 0; k < papiLights.Length; k++) SetSprite(papiLights[k], HudSprites.Disc, sliced: false);
-            if (lateralMarker != null) SetSprite(lateralMarker.GetComponent<Image>(), HudSprites.RoundedRect, sliced: true);
+            if (lateralMarker != null) SetSprite(lateralMarker.GetComponent<Image>(), HudSprites.Disc, sliced: false);
             if (navigationArrow != null) SetSprite(navigationArrow.GetComponent<Image>(), HudSprites.Arrow, sliced: false);
-            for (int k = 0; k < warningBackgrounds.Length; k++) SetSprite(warningBackgrounds[k], HudSprites.RoundedRect, sliced: true);
+            for (int k = 0; k < warningBackgrounds.Length; k++)
+                if (warningBackgrounds[k] != null && warningBackgrounds[k].sprite == null) HudStyle.Round(warningBackgrounds[k], HudStyle.BannerRadius);
+            for (int k = 0; k < backings.Length; k++)
+                if (backings[k] != null && backings[k].sprite == null) HudStyle.Round(backings[k], HudStyle.BannerRadius);
         }
 
         static void SetSprite(Image image, Sprite sprite, bool sliced)
@@ -426,6 +457,12 @@ namespace OpenSkies.UI
                         warningLabels[k].color = red ? warningTextColor : cautionTextColor;
                     }
                     if (warningBackgrounds[k] != null) warningBackgrounds[k].color = red ? warningColor : cautionColor;
+                    var icon = k < warningIcons.Length ? warningIcons[k] : null;
+                    if (icon != null)
+                    {
+                        icon.sprite = red ? HudSprites.WarningIcon : HudSprites.CautionIcon;
+                        icon.color = red ? warningTextColor : cautionTextColor;
+                    }
                 }
                 slotFade.SetTarget(1f, fadeIn, 0f); // appears in place, never slides
             }

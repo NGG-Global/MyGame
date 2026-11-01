@@ -204,7 +204,12 @@ urgent first; red for warnings, amber for cautions; steady, no flashing.
 These are **prototype values for the fictional trainer**, not certified limits or
 a certified terrain-warning envelope. The never-exceed speed belongs to the
 aircraft and should move into the aircraft data when there is more than one.
-There is no warning sound yet.
+
+Each banner also carries a symbol (octagon for warnings, triangle for cautions), so
+severity is never shown by colour alone. Sounds (M12, placeholder): the stall horn
+while STALL is on, a short tone repeated while another red warning is on, one chime
+when a caution appears; a haptic pulse (Android, if enabled) when a red warning
+appears. Banners are never dimmed by the HUD opacity setting.
 
 ## Layout (canvas units, 1920 × 1080 reference, inside the safe area)
 
@@ -222,6 +227,8 @@ There is no warning sound yet.
 | Flying tips (Assisted) | bottom of the free column, 12-76 units up, below the panel band; takes no touches | column width × 64 |
 | Mission coaching (`docs/ONBOARDING_DESIGN.md`) | same place, 12-108 units up (never with the tips); tap for the explanation | column width × 96 |
 | MENU / SKIP TUTORIAL | top right under CAM (x = −24, y = −128 / −240) | 128 × 96 |
+| Pause card (M12) | free column; RESUME and SETTINGS share the first row | up to 600 wide, five buttons |
+| Settings screen (M12) | centred over a dimmed, paused world | 1180 × 872 |
 
 A PlayMode test checks at 4:3, 16:9 and 20:9 that no HUD target or banner
 overlaps the joystick region, the throttle or BRAKE, and that every target is at
@@ -244,12 +251,19 @@ never pulled away while a finger is pressing it.
 | Quiet opacity | 0.55 |
 | Reduced motion | no movement; fades instant (configurable) |
 
-`ContextualHud.motionPreference`: Follow system (default), Reduced, Full.
+`ContextualHud.motionPreference`: Follow system (default), Reduced, Full, chosen in
+Settings > Display > Motion (M12) and applied to every panel at once.
 On Android, "Follow system" reads the animator duration scale ("Remove
 animations" sets it to 0) at start-up and when the app regains focus. Other
 platforms have no built-in Unity API for this, so they use full motion unless the
-preference is Reduced. The preference is stored by `HudPreferences`; a settings
-menu to change it in game does not exist yet.
+preference is Reduced. The preference is stored under the same key by the options
+store (`PlayerPrefsOptionsStore`).
+
+**HUD opacity** (Settings > Display, 60-100 %) scales routine information and the HUD
+buttons. Warnings stay at full strength; the flight controls follow only part of the
+way (at least 80 % of their normal opacity). **Interface scale** (90-110 %) changes
+the canvas reference height; `UiScaleMath` limits it per screen so nothing overlaps
+(about 101 % on 4:3 tablets).
 
 ## Development inspector
 
@@ -298,8 +312,9 @@ flight model. Those need the manual checks in `docs/PROTOTYPE_TEST_PLAN.md`.
 ## Known limitations
 
 - One home runway; approach detection and guides do not know other airfields.
-- No warning sounds; no settings menu for the motion preference.
+- Warning sounds are generated placeholders.
 - Reduced-motion detection is Android only (iOS and WebGL need native or
   JavaScript plugins).
-- Uses the built-in legacy font, like the rest of the prototype HUD.
+- Uses the built-in legacy font, like the rest of the prototype HUD (typeface is an
+  open decision, `docs/VISUAL_STYLE_GUIDE.md`).
 - All thresholds are untuned prototype values.

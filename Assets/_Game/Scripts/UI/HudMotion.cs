@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace OpenSkies.UI
 {
@@ -72,7 +73,11 @@ namespace OpenSkies.UI
     /// Fades one CanvasGroup between opacities with smoothstep easing and an
     /// optional small rise when it appears. A hidden target stops taking
     /// touches immediately, so a fading-out button can never be pressed.
-    /// Plain class, ticked by its owner; allocation-free.
+    /// Once fully hidden, its graphics are culled (CanvasRenderer.cull), so an
+    /// invisible element costs no fill rate on mobile GPUs; they are restored
+    /// before it fades back in. An opacity scale (the player's HUD opacity)
+    /// multiplies the displayed alpha without changing the logical one.
+    /// Plain class, ticked by its owner; allocation-free after construction.
     /// </summary>
     public sealed class HudFade
     {
@@ -80,8 +85,11 @@ namespace OpenSkies.UI
         readonly RectTransform _rect;
         readonly Vector2 _home;
         readonly bool _interactive;
+        readonly Graphic[] _graphics;
         float _alpha, _from, _to, _progress = 1f, _duration;
         float _slide;
+        float _opacityScale = 1f;
+        bool _culled;
 
         public HudFade(CanvasGroup group, bool interactive, float initialAlpha = 0f)
         {
@@ -89,18 +97,33 @@ namespace OpenSkies.UI
             _rect = (RectTransform)group.transform;
             _home = _rect.anchoredPosition;
             _interactive = interactive;
+            _graphics = group.GetComponentsInChildren<Graphic>(true);
             _alpha = _from = _to = Mathf.Clamp01(initialAlpha);
             ApplyRaycasts();
             Apply(1f);
+            UpdateCulling();
         }
 
         public CanvasGroup Group => _group;
+        /// <summary>Logical opacity (before the opacity scale).</summary>
         public float Alpha => _alpha;
         public float TargetAlpha => _to;
         public bool IsShown => _to > 0f;
         public bool IsAnimating => _progress < 1f;
+        /// <summary>The graphics are culled: fully hidden and not drawn.</summary>
+        public bool IsCulled => _culled;
+        public float OpacityScale => _opacityScale;
         /// <summary>Where the element rests; it never moves anywhere else.</summary>
         public Vector2 Home => _home;
+
+        /// <summary>Multiplies the displayed alpha (the player's HUD opacity). 1 = unchanged.</summary>
+        public void SetOpacityScale(float scale)
+        {
+            scale = Mathf.Clamp01(scale);
+            if (Mathf.Abs(scale - _opacityScale) < 1e-4f) return;
+            _opacityScale = scale;
+            _group.alpha = _alpha * _opacityScale;
+        }
 
         /// <summary>Starts a transition to <paramref name="alpha"/> unless it is already the target.</summary>
         public void SetTarget(float alpha, float duration, float slideDistance)
@@ -116,6 +139,7 @@ namespace OpenSkies.UI
             ApplyRaycasts();
             if (_duration <= 0f) Finish();
             else Apply(0f);
+            UpdateCulling();
         }
 
         public void Tick(float deltaTime)
@@ -125,6 +149,7 @@ namespace OpenSkies.UI
             if (_progress >= 1f)
             {
                 Finish();
+                UpdateCulling();
                 return;
             }
             Apply(Mathf.SmoothStep(0f, 1f, _progress));
@@ -140,7 +165,7 @@ namespace OpenSkies.UI
         void Apply(float eased)
         {
             _alpha = Mathf.Lerp(_from, _to, eased);
-            _group.alpha = _alpha;
+            _group.alpha = _alpha * _opacityScale;
             _rect.anchoredPosition = _slide > 0f ? _home + new Vector2(0f, -_slide * (1f - eased)) : _home;
         }
 
@@ -149,6 +174,23 @@ namespace OpenSkies.UI
             bool on = _interactive && _to > 0f;
             _group.blocksRaycasts = on;
             _group.interactable = on;
+        }
+
+        /// <summary>Culls while fully hidden and at rest; unculls before anything becomes visible.</summary>
+        void UpdateCulling()
+        {
+            bool cull = _to <= 0f && _progress >= 1f && _alpha <= 0f;
+            if (cull == _culled) return;
+            _culled = cull;
+            for (int i = 0; i < _graphics.Length; i++)
+            {
+                var graphic = _graphics[i];
+                if (graphic == null) continue;
+                var renderer = graphic.canvasRenderer;
+                if (renderer == null || renderer.cull == cull) continue;
+                renderer.cull = cull;
+                graphic.OnCullingChanged(); // rebuilds anything that changed while it was culled
+            }
         }
     }
 }

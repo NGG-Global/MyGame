@@ -8,13 +8,14 @@ namespace OpenSkies.UI
     /// A small card in the free column (where the cockpit focus panel and the
     /// flight settings card open, never at the same time) for the pause menu and
     /// mission results: a title, a few short lines, an optional footnote and up
-    /// to four large buttons. Modal cards (pause) dim the screen and take every
+    /// to five large buttons (the first two can share a row, e.g. RESUME and
+    /// SETTINGS). Modal cards (pause) dim the screen and take every
     /// touch around them, so nothing changes behind a paused game; result cards
     /// leave the flight controls usable.
     /// </summary>
     public sealed class MissionCard : MonoBehaviour
     {
-        public const int MaxButtons = 4;
+        public const int MaxButtons = 5;
 
         public RectTransform column;
         public RectTransform card;
@@ -37,7 +38,7 @@ namespace OpenSkies.UI
         public float sideBySideMinWidth = 150f;
 
         HudFade _fade;
-        bool _initialized, _open, _modal, _suppressed, _reducedMotion;
+        bool _initialized, _open, _modal, _suppressed, _reducedMotion, _pairFirstRow;
         int _count;
 
         /// <summary>A button was tapped (its index in the order given to <see cref="Show"/>).</summary>
@@ -47,6 +48,8 @@ namespace OpenSkies.UI
         public bool IsModal => _open && _modal;
         public int ButtonCount => _count;
         public bool Suppressed => _suppressed;
+        /// <summary>The first two buttons share the first row.</summary>
+        public bool FirstRowPaired => _pairFirstRow;
 
         public void SetReducedMotion(bool reduced) => _reducedMotion = reduced;
 
@@ -56,6 +59,7 @@ namespace OpenSkies.UI
         {
             if (_initialized) return;
             _initialized = true;
+            RoundCard(card);
             if (group != null) _fade = new HudFade(group, interactive: true);
             for (int i = 0; i < buttons.Length; i++)
             {
@@ -73,11 +77,19 @@ namespace OpenSkies.UI
 
         /// <summary>Opens the card (texts are built by the caller once, not per frame).</summary>
         public void Show(string heading, string text, string note, bool modal, string button0, string button1 = null, string button2 = null,
-            string button3 = null)
+            string button3 = null) => Show(heading, text, note, modal, false, button0, button1, button2, button3, null);
+
+        /// <summary>
+        /// Opens the card; with <paramref name="pairFirstRow"/> the first two buttons sit side by
+        /// side when the column is wide enough (short captions such as RESUME and SETTINGS).
+        /// </summary>
+        public void Show(string heading, string text, string note, bool modal, bool pairFirstRow, string button0, string button1,
+            string button2, string button3, string button4)
         {
             EnsureInitialized();
             _open = true;
             _modal = modal;
+            _pairFirstRow = pairFirstRow;
             SetText(title, heading);
             SetText(body, text);
             SetText(footnote, note);
@@ -86,6 +98,7 @@ namespace OpenSkies.UI
             Label(button1);
             Label(button2);
             Label(button3);
+            Label(button4);
             for (int i = 0; i < buttons.Length; i++)
                 if (buttons[i] != null) buttons[i].gameObject.SetActive(i < _count);
             if (scrim != null) scrim.enabled = modal;
@@ -159,13 +172,18 @@ namespace OpenSkies.UI
                 y -= footnoteHeight + spacing;
             }
 
-            bool sideBySide = _count == 2 && (inner - spacing) * 0.5f >= sideBySideMinWidth;
+            float half = (inner - spacing) * 0.5f;
+            bool wide = half >= sideBySideMinWidth;
+            bool sideBySide = _count == 2 && wide;
+            // A paired first row (RESUME | SETTINGS) keeps a five-button pause card within the column.
+            int paired = (_pairFirstRow && _count >= 2) ? 2 : 0;
+            if (sideBySide) paired = 2;
             for (int i = 0; i < _count; i++)
             {
-                if (sideBySide)
+                if (i < paired)
                 {
-                    float half = (inner - spacing) * 0.5f;
                     Place(buttons[i], padding + i * (half + spacing), y, half, buttonHeight);
+                    if (i == paired - 1) y -= buttonHeight + spacing;
                 }
                 else
                 {
@@ -173,7 +191,6 @@ namespace OpenSkies.UI
                     y -= buttonHeight + spacing;
                 }
             }
-            if (sideBySide) y -= buttonHeight + spacing;
             y -= padding - spacing;
             card.sizeDelta = new Vector2(width, Mathf.Min(-y, area.y));
         }
@@ -197,5 +214,12 @@ namespace OpenSkies.UI
         }
 
         void LateUpdate() => _fade?.Tick(Time.unscaledDeltaTime);
+
+        /// <summary>Runtime-generated sprites cannot be stored in a scene: the card gets its rounded shape here.</summary>
+        static void RoundCard(RectTransform rect)
+        {
+            var image = rect != null ? rect.GetComponent<Image>() : null;
+            if (image != null && image.sprite == null) HudStyle.Round(image, HudStyle.PanelRadius);
+        }
     }
 }

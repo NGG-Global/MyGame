@@ -16,7 +16,12 @@ Read with: `docs/FLIGHT_MODEL.md` (physics, tuning) and `docs/TOUCH_CONTROLS.md`
    does, stop and report them (this code has never been compiled before).
 3. Menu **Open Skies › Rebuild Flight Prototype Scene**. This creates
    `Assets/_Game/Scenes/FlightPrototype.unity`, the mobile URP asset, the
-   prototype materials and `Assets/_Game/Settings/Aircraft/TrainerConfiguration.asset`.
+   prototype materials and `Assets/_Game/Settings/Aircraft/TrainerConfiguration.asset`,
+   and (M12) the audio mixer `Assets/_Game/Audio/OpenSkiesMixer.mixer`, the audio
+   configuration `Assets/_Game/Settings/Audio/AudioConfiguration.asset`, the ground and
+   sea detail textures in `Assets/_Game/Art/Textures/Prototype/` and the tree meshes in
+   `Assets/_Game/Art/Meshes/Prototype/`. Check the Console for a warning from
+   `AudioMixerSetup`: if the mixer could not be generated, audio still works without it.
 4. Open `FlightPrototype` and press Play.
 5. Run **Window › General › Test Runner**: EditMode › Run All, then PlayMode › Run All.
 6. Commit the generated scene, materials, settings assets and their `.meta`
@@ -33,7 +38,7 @@ Read with: `docs/FLIGHT_MODEL.md` (physics, tuning) and `docs/TOUCH_CONTROLS.md`
 | Space (hold) | Wheel brakes |
 | C | Chase / cockpit camera |
 | R | Reset to the mode's start or checkpoint (runway start in Free Flight) |
-| Esc | Pause menu |
+| Esc | Pause menu; closes the settings screen first when it is open |
 | P | Parking brake (set on the ground / release) |
 | H | Next HUD profile (Smart, Detailed, Cinematic) |
 | F3 | Collapse or expand the HUD inspector (development) |
@@ -51,11 +56,12 @@ throttle, south button brakes, north button camera, select/back reset.
 | Joystick | Anywhere in the lower-left area (appears under the thumb) | Drag down = nose up; left/right = roll; release = neutral |
 | Throttle | Lower right, vertical track | Drag up/down, 0-100 %; stays where left |
 | BRAKE | Left of the throttle, only on the ground | Hold |
-| CAM | Top right | Chase / cockpit |
+| CAM | Top right | Chase / cockpit; the button names the current view (CAM CHASE, CAM COCKPIT) |
 | RESET | Top right, left of CAM | Back to the runway start, idle |
 | HUD | Top right, left of RESET | HUD profile: Smart, Detailed, Cinematic |
 | SYSTEMS | Above BRAKE | Opens every available action (parking brake, approach and navigation guides) |
-| MENU | Top right, under CAM | Pause menu: resume, restart, skip tutorial, change mode, guide destination |
+| MENU | Top right, under CAM | Pause menu: resume, settings, restart, skip tutorial, change mode, guide destination |
+| SETTINGS | Pause menu (first row, next to RESUME) and the entry screen | Display, controls, sound and graphics settings over a paused world |
 | SKIP TUTORIAL | Under MENU, First Flight only | Two taps end the tutorial; the flight carries on |
 | Coaching message | Bottom centre, between the joystick area and the rail | Tap for a short explanation ("?") |
 
@@ -86,10 +92,9 @@ Needs the `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` secrets.
 Use a **development build** for testing: it shows the telemetry line and the
 touch diagnostics. Release builds hide all development overlays.
 
-**Frame rate:** 30 FPS by default. To test the optional 60 FPS target: Create ›
-Open Skies › Game Config in a folder named `Resources` (for example
-`Assets/_Game/Settings/Resources/GameConfig.asset`), set Target Frame Rate to
-60, rebuild.
+**Frame rate:** 30 FPS by default; Settings > Graphics > Frame rate offers 60 FPS where
+the display supports it. (`GameConfig.targetFrameRate` only sets the value used before
+the settings are applied at start-up.)
 
 ## 5. Manual test checklist
 
@@ -166,15 +171,60 @@ and cockpit agreeing on flaps and parking brake, engine off confirmation).
 
 ### D. Performance (development build, then release build)
 
-1. Frame rate steady at 30 FPS on the runway and in flight (Android GPU
-   inspector or Unity Profiler connected over USB).
-2. No hitching when pressing CAM or RESET.
-3. Device temperature after 10 minutes of flight: note it.
+Follow the protocol in `docs/MOBILE_PERFORMANCE_REPORT.md` (15-minute flight with the
+CSV log, presets, Profiler and Frame Debugger captures) and fill in its results table.
+Quick checks:
+
+1. The PERF line (development builds, under the telemetry) shows 30 FPS with p95
+   under 36 ms on the runway and in flight.
+2. No hitching when pressing CAM, RESET, MENU or SETTINGS, or when changing a preset.
+3. GC count on the PERF line does not rise during steady flight.
+4. Device temperature after 15 minutes of flight: note it.
+
+### E. Presentation (M12): look, sound, haptics, settings
+
+Reference: `docs/VISUAL_STYLE_GUIDE.md`. Phone first, then a tablet. Note device,
+build and result per step.
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Launch | Entry screen over the runway: three modes and SETTINGS; hazy horizon, beach between grass and sea, hills to the west, trees around the airfield, apron with two hangars. |
+| 2 | SETTINGS on the entry screen | Settings panel over a dimmed world: DISPLAY, CONTROLS, SOUND, GRAPHICS; every button easy to hit; DONE returns to the entry screen. |
+| 3 | Free Flight, look at the HUD in Smart, Detailed, Cinematic | Flight values on small dark plates, readable against bright sky; cyan for engaged buttons; nothing amber unless it is a caution. |
+| 4 | Stall at altitude; dive below 2000 ft | STALL banner red with an octagon symbol and a horn; SINK RATE amber with a triangle and one chime; OVERSPEED repeats a short tone. Banners stay fully opaque at 60 % HUD opacity. |
+| 5 | Throttle idle to full on the runway | Engine sound rises smoothly in pitch and loudness, brighter at full power; no clicks or steps. |
+| 6 | Take-off roll, lift-off, climb to 120 kt | Rolling rumble fades at lift-off; wind noise grows with speed; more wind in a sideslip and with flaps. |
+| 7 | CAM to cockpit and back during the climb | Cockpit sounds enclosed (muffled engine and wind); chase sounds open; the change takes about 0.15 s. CAM label names the view. |
+| 8 | Landing: soft, then firm | A thump on touchdown, louder and lower when firm; a short haptic pulse (stronger when firm) if haptics are on. |
+| 9 | Cockpit: tap a switch and choose a position | A click and a short tick from the phone; HUD and cockpit agree. |
+| 10 | Settings > Controls > Haptic feedback OFF; repeat 8 and 9 | No vibration at all. With the phone's system touch feedback off, no vibration either. |
+| 11 | Settings > Sound: each slider to 0 and back | The matching sounds go and return; warnings stop at 20 %, not at 0; interface taps follow the Interface level. |
+| 12 | Settings > Display > Interface scale 90 / 110 % | The whole interface shrinks or grows; nothing overlaps; on a 4:3 tablet 110 % is limited and the panel says so. |
+| 13 | Settings > Display > HUD opacity 60 % | Data, guides and buttons fainter; flight controls only slightly fainter; warnings unchanged. |
+| 14 | Settings > Display > Motion REDUCED | No fades or rises anywhere (HUD, cards, panels); FOLLOW SYSTEM follows Android "Remove animations". |
+| 15 | Settings > Graphics: Battery Saver, Balanced, High Quality | Battery Saver: no shadows, softer image, trees end closer; High: sharper, longer shadows. Flight behaviour identical (fly the same take-off in each). |
+| 16 | Settings > Graphics > 60 FPS on a 60/90/120 Hz device | PERF line near 60 FPS; on a device that cannot, the option is disabled with a note. |
+| 17 | Esc (keyboard) with settings open over the pause menu | Settings close; the pause menu stays. |
+| 18 | Relaunch the app | Every setting kept (scale, opacity, motion, haptics, volumes, quality, frame rate, HUD profile, assistance). |
+
+### F. Pause, resume and backgrounding (phone)
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | MENU in flight | Everything freezes; aircraft sounds stop at once; menu taps still click. |
+| 2 | RESUME | Sounds continue where they were; no stick or throttle movement until a new touch. |
+| 3 | Hold the joystick and throttle, press Home, return | Pause menu shown (mobile); no sound until RESUME; no pointers in the diagnostics; throttle unchanged; stick neutral. |
+| 4 | Pull down the notification shade mid-gesture, return | Controls released and answer new touches; the flight did not pause (only focus was lost). |
+| 5 | A phone call or alarm during flight, then return | As step 3; audio resumes only after RESUME. |
+| 6 | Settings open, press Home, return | Settings still open over the paused game; DONE returns to the pause menu. |
+| 7 | Change mode from the pause menu several times | No stuck sounds from the previous flight, no duplicated loops. |
 
 ## 6. Known issues and limitations
 
-- **Unverified:** nothing has been compiled, unit-tested, played or built yet
-  (no Unity in the development environment; CI waits for licence secrets).
+- **Unverified in Unity:** nothing has been played, built or tested inside Unity yet
+  (no Unity Editor in the development environment; CI stops at licence activation).
+  Cloud sessions compile every assembly against the 6000.6.0f1 managed assemblies
+  and run the EditMode tests that need no native engine; PlayMode tests have not run.
 - **No flight instruments in release builds.** There are no cockpit
   instruments yet, and the telemetry line is development-only, so a release
   build shows no airspeed or altitude. Test with development builds.
@@ -182,7 +232,14 @@ and cockpit agreeing on flaps and parking brake, engine off confirmation).
   ground; take-offs are straight, after landing use RESET.
 - **Untuned flight model:** values are provisional (see `docs/FLIGHT_MODEL.md`).
 - **Contextual HUD thresholds untuned:** phase, warning and disclosure values are
-  provisional (`FlightAwarenessConfiguration`). No warning sounds.
+  provisional (`FlightAwarenessConfiguration`).
+- **Placeholder audio:** every sound is generated (`PlaceholderAudio`); no recorded
+  or designed sound yet. The mixer is generated by Editor code through Unity's internal
+  mixer API; if that fails the game still plays (see `docs/MOBILE_PERFORMANCE_REPORT.md`).
+- **Haptics are Android-only** and unverified on a device; iOS and WebGL have none.
+- **Environment is placeholder** (primitives, generated textures); trees have no
+  colliders; the apron and hangars are not the M5 airport.
+- **No performance measurement yet**: the presets are first estimates.
 - **Cockpit is a placeholder:** primitive shapes and flat dials (`docs/COCKPIT.md`
   lists the visual assets still to make). Flap values are untuned. On 4:3 tablets
   some cockpit controls sit under the action rail at the resting view.
@@ -195,9 +252,7 @@ and cockpit agreeing on flaps and parking brake, engine off confirmation).
 
 ## 7. Deliberately deferred
 
-Touch rudder / nosewheel steering; modelled cockpit art; trim; flight
-assistance (interface only);
-settings menu (including the 60 FPS option and control sensitivity); flaps,
-trim, propeller effects, wind, ground effect; scenery, coastline and airport
-buildings; audio; tutorials and challenges; any ads, analytics, accounts or
-online services (none are included or planned for the prototype).
+Touch rudder / nosewheel steering; modelled cockpit art; trim; propeller effects,
+wind, ground effect; the M5 airport and coastline; recorded or designed sound; a
+licensed typeface; any ads, analytics, accounts or online services (none are
+included or planned for the prototype).

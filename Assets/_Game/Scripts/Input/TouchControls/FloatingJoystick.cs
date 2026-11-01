@@ -23,6 +23,8 @@ namespace OpenSkies.FlightInput.TouchControls
         public Vector2 restingPosition = new Vector2(0.42f, 0.4f);
         [Range(0f, 1f)] public float idleAlpha = 0.16f;
         [Range(0f, 1f)] public float activeAlpha = 0.55f;
+        [Tooltip("Knob scale while the thumb holds it: the control visibly answers the touch.")]
+        [Range(1f, 1.3f)] public float activeKnobScale = 1.1f;
 
         RectTransform _region;
         Vector2 _base;
@@ -106,6 +108,8 @@ namespace OpenSkies.FlightInput.TouchControls
             SetAlpha(baseFill, alpha * 0.35f);
             SetAlpha(baseRing, alpha);
             SetAlpha(knobImage, alpha * (IsEngaged ? 1.4f : 1f));
+            float scale = IsEngaged ? activeKnobScale : 1f;
+            if (knob != null && knob.localScale.x != scale) knob.localScale = new Vector3(scale, scale, 1f);
         }
     }
 }

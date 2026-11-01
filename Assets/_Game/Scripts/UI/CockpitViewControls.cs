@@ -21,12 +21,20 @@ namespace OpenSkies.UI
         public event Action LookForwardRequested;
 
         HudFade _fade;
+        float _opacity = 1f;
         bool _initialized, _reducedMotion;
 
         /// <summary>Shown (or fading in) and taking touches.</summary>
         public bool LookForwardShown => _fade != null && _fade.IsShown;
 
         public void SetReducedMotion(bool reduced) => _reducedMotion = reduced;
+
+        /// <summary>The player's HUD opacity.</summary>
+        public void SetOpacity(float opacity)
+        {
+            _opacity = opacity;
+            _fade?.SetOpacityScale(opacity);
+        }
 
         void Awake() => EnsureInitialized();
 
@@ -35,6 +43,7 @@ namespace OpenSkies.UI
             if (_initialized) return;
             _initialized = true;
             if (lookForwardGroup != null) _fade = new HudFade(lookForwardGroup, interactive: true);
+            _fade?.SetOpacityScale(_opacity);
             if (lookForward != null) lookForward.Clicked += RaiseLookForward;
         }
 
