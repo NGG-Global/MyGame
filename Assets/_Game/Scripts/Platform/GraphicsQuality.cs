@@ -20,6 +20,12 @@ namespace OpenSkies.Platform
         public float LodBias;
         /// <summary>Camera far clip, m. Fog hides the edge.</summary>
         public float ViewDistance;
+        /// <summary>Soft (filtered) shadow edges on the main light; hard otherwise.</summary>
+        public bool SoftShadows;
+        /// <summary>HDR colour buffer: the sun, the sea glint and the lights keep values above 1 for bloom and tonemapping.</summary>
+        public bool Hdr;
+        /// <summary>The post-processing volume (tonemapping, colour, vignette, bloom) and FXAA on the view camera.</summary>
+        public bool PostProcessing;
     }
 
     /// <summary>
@@ -36,19 +42,19 @@ namespace OpenSkies.Platform
                     return new GraphicsProfile
                     {
                         RenderScale = 0.75f, Shadows = false, ShadowDistance = 0f, ShadowResolution = 512, Msaa = 1, LodBias = 0.6f,
-                        ViewDistance = 4500f,
+                        ViewDistance = 4500f, SoftShadows = false, Hdr = false, PostProcessing = false,
                     };
                 case GraphicsPreset.HighQuality:
                     return new GraphicsProfile
                     {
-                        RenderScale = 1f, Shadows = true, ShadowDistance = 120f, ShadowResolution = 2048, Msaa = 2, LodBias = 1.5f,
-                        ViewDistance = 7000f,
+                        RenderScale = 1f, Shadows = true, ShadowDistance = 150f, ShadowResolution = 2048, Msaa = 2, LodBias = 1.5f,
+                        ViewDistance = 7000f, SoftShadows = true, Hdr = true, PostProcessing = true,
                     };
                 default:
                     return new GraphicsProfile
                     {
-                        RenderScale = 0.9f, Shadows = true, ShadowDistance = 60f, ShadowResolution = 1024, Msaa = 1, LodBias = 1f,
-                        ViewDistance = 6000f,
+                        RenderScale = 0.9f, Shadows = true, ShadowDistance = 90f, ShadowResolution = 1024, Msaa = 1, LodBias = 1f,
+                        ViewDistance = 6000f, SoftShadows = true, Hdr = true, PostProcessing = true,
                     };
             }
         }
@@ -69,8 +75,9 @@ namespace OpenSkies.Platform
     /// the project's pipeline asset (assigned as the quality level's pipeline), so the
     /// asset on disk is never modified, and the previous pipeline is restored on
     /// <see cref="Dispose"/>. Features that change shader variants (cascades, soft
-    /// shadows, HDR) are left as the project asset sets them, because variants the
-    /// build stripped cannot be switched on at runtime. Without URP (some test
+    /// shadows) are compiled into the project asset and only switched on or off here,
+    /// because variants the build stripped cannot be switched on at runtime. HDR and
+    /// post-processing are format and pass choices, switched the same way. Without URP (some test
     /// set-ups) only the engine-wide settings apply.
     /// </summary>
     public sealed class GraphicsQuality : System.IDisposable
@@ -110,10 +117,24 @@ namespace OpenSkies.Platform
                 _runtimeAsset.shadowDistance = p.Shadows ? p.ShadowDistance : 0f;
                 _runtimeAsset.mainLightShadowmapResolution = p.ShadowResolution;
                 _runtimeAsset.msaaSampleCount = p.Msaa;
+                _runtimeAsset.supportsHDR = p.Hdr;
             }
             QualitySettings.lodBias = p.LodBias;
-            if (_sun != null) _sun.shadows = p.Shadows ? _sunShadows : LightShadows.None;
-            if (_camera != null) _camera.farClipPlane = p.ViewDistance;
+            if (_sun != null) _sun.shadows = p.Shadows ? (p.SoftShadows ? LightShadows.Soft : LightShadows.Hard) : LightShadows.None;
+            if (_camera != null)
+            {
+                _camera.farClipPlane = p.ViewDistance;
+                if (_runtimeAsset != null) ApplyCamera(_camera, p.PostProcessing);
+            }
+        }
+
+        /// <summary>Post-processing and FXAA on the view camera (URP only; the camera data is added when missing).</summary>
+        public static void ApplyCamera(Camera camera, bool postProcessing)
+        {
+            var data = camera.GetUniversalAdditionalCameraData();
+            if (data == null) return;
+            data.renderPostProcessing = postProcessing;
+            data.antialiasing = postProcessing ? AntialiasingMode.FastApproximateAntialiasing : AntialiasingMode.None;
         }
 
         void EnsureRuntimeAsset()

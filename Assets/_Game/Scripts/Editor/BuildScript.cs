@@ -117,6 +117,8 @@ namespace OpenSkies.Editor
         static void ConfigureCommon()
         {
             PlayerSettings.productName = ProductName;
+            // Linear lighting: physically plausible shading and the HDR/tonemapping path (owner decision with the visual upgrade).
+            PlayerSettings.colorSpace = ColorSpace.Linear;
             // CPU and GPU frame times for the performance monitor (FrameTimingManager); a very small cost.
             PlayerSettings.enableFrameTimingStats = true;
             // Landscape only, either way up.

@@ -137,16 +137,35 @@ namespace OpenSkies.Gameplay
             image.raycastTarget = false;
         }
 
-        /// <summary>Landing light (spot light and lens) and navigation lights on the airframe.</summary>
-        public static AircraftLightsView BuildExteriorLights(Transform airframe, CockpitMaterials materials = null)
+        /// <summary>Where the exterior lights sit on the airframe (aircraft frame, metres).</summary>
+        public struct ExteriorLightLayout
         {
+            public Vector3 LandingLight;
+            public Vector3 NavigationLeft;
+            public Vector3 NavigationRight;
+            public Vector3 Tail;
+
+            /// <summary>The placeholder primitive airframe's positions.</summary>
+            public static ExteriorLightLayout Default => new ExteriorLightLayout
+            {
+                LandingLight = new Vector3(-1.6f, 2.0f, 1.25f),
+                NavigationLeft = new Vector3(-5.55f, 2.1f, 0.4f),
+                NavigationRight = new Vector3(5.55f, 2.1f, 0.4f),
+                Tail = new Vector3(0f, 3.0f, -4.62f),
+            };
+        }
+
+        /// <summary>Landing light (spot light and lens) and navigation lights on the airframe.</summary>
+        public static AircraftLightsView BuildExteriorLights(Transform airframe, CockpitMaterials materials = null, ExteriorLightLayout? layout = null)
+        {
+            var at = layout ?? ExteriorLightLayout.Default;
             var go = new GameObject("ExteriorLights");
             go.transform.SetParent(airframe, false);
             var view = go.AddComponent<AircraftLightsView>();
 
             var lightGo = new GameObject("LandingLight");
             lightGo.transform.SetParent(go.transform, false);
-            lightGo.transform.localPosition = new Vector3(-1.6f, 2.0f, 1.25f);   // left wing leading edge
+            lightGo.transform.localPosition = at.LandingLight;                      // wing leading edge
             lightGo.transform.localRotation = Quaternion.Euler(6f, 0f, 0f);       // slightly down
             var spot = lightGo.AddComponent<Light>();
             spot.type = LightType.Spot;
@@ -156,13 +175,13 @@ namespace OpenSkies.Gameplay
             spot.color = new Color(1f, 0.96f, 0.88f);
             spot.shadows = LightShadows.None;
             view.landingLight = spot;
-            view.landingLightLenses = new[] { Lens("LandingLightLens", go.transform, new Vector3(-1.6f, 2.0f, 1.22f), 0.1f, materials?.LensWhite) };
+            view.landingLightLenses = new[] { Lens("LandingLightLens", go.transform, at.LandingLight + new Vector3(0f, 0f, -0.03f), 0.1f, materials?.LensWhite) };
 
             view.navigationLights = new[]
             {
-                Lens("NavLeftRed", go.transform, new Vector3(-5.55f, 2.1f, 0.4f), 0.12f, materials?.LensRed),
-                Lens("NavRightGreen", go.transform, new Vector3(5.55f, 2.1f, 0.4f), 0.12f, materials?.LensGreen),
-                Lens("NavTailWhite", go.transform, new Vector3(0f, 3.0f, -4.62f), 0.1f, materials?.LensWhite),
+                Lens("NavLeftRed", go.transform, at.NavigationLeft, 0.12f, materials?.LensRed),
+                Lens("NavRightGreen", go.transform, at.NavigationRight, 0.12f, materials?.LensGreen),
+                Lens("NavTailWhite", go.transform, at.Tail, 0.1f, materials?.LensWhite),
             };
             return view;
         }
