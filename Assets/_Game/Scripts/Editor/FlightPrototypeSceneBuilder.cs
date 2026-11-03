@@ -20,6 +20,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
 namespace OpenSkies.Editor
@@ -83,16 +84,19 @@ namespace OpenSkies.Editor
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             var sun = CreateLighting(materials.Sky);
+            CreatePostProcessing();
             CreateGround(materials);
             var beacons = CreateCoast(materials);
-            CreateRunway(materials.Asphalt, materials.Marking);
-            PrototypeEnvironment.CreateApron(materials.Asphalt, materials.HangarWalls, materials.HangarRoof, RunwayWidth);
-            PrototypeEnvironment.CreateHills(materials.Hills);
-            PrototypeEnvironment.CreateTrees(materials.Trunk, materials.Foliage);
+            CreateRunway(materials);
+            PrototypeEnvironment.CreateApron(materials.Taxiway, materials.Concrete, materials.HangarWalls, materials.HangarRoof, RunwayWidth);
+            SceneryBuilder.CreateAirfieldDressing(materials.Scenery, RunwayWidth);
+            SceneryBuilder.CreateTown(materials.Scenery);
+            SceneryBuilder.CreateClouds(materials.Cloud);
+            TerrainBuilder.CreateTrees(materials.Scenery.Palette);
             // The owner's licensed display aircraft on the apron (static scenery, not flyable).
             DisplayAircraft.Create(materials.DisplayRoles, new[] { materials.DisplayPaintF16, materials.DisplayPaintSpitfire, materials.DisplayPaintBeech });
             var configuration = LoadOrCreateAircraftConfiguration();
-            var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights);
+            var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights, out var airframe);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
             var hud = CreateHud(cameraRig.ViewCamera, out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel,
                 out var viewControls, out var flightSettings, out var guidanceLine, out var missionUi, out var interactionSurface, out var gestureHud);
@@ -115,6 +119,7 @@ namespace OpenSkies.Editor
             session.focusPanel = focusPanel;
             session.cockpitViewControls = viewControls;
             session.aircraftLights = lights;
+            session.airframeView = airframe;
             session.awarenessConfiguration = LoadOrCreateAwarenessConfiguration();
             session.assistConfiguration = LoadOrCreateAssistConfiguration();
             session.flightSettings = flightSettings;
@@ -190,20 +195,29 @@ namespace OpenSkies.Editor
             return sun;
         }
 
+        /// <summary>The global post-processing volume and the start-up environment reflections.</summary>
+        static void CreatePostProcessing()
+        {
+            var volumeGo = new GameObject("GlobalVolume");
+            var volume = volumeGo.AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.priority = 0f;
+            volume.sharedProfile = RenderPipelineSetup.EnsurePostProcessProfile();
+            volumeGo.AddComponent<EnvironmentLighting>();
+        }
+
         static void CreateGround(PrototypeMaterials m)
         {
-            // Unity's plane primitive is 10 m x 10 m at scale 1. The land sits 10 cm below the
-            // runway and ends where the beach starts; the beach slopes under the sea (no coplanar
-            // surfaces, no depth fighting).
-            float width = PrototypeEnvironment.GrassEastX - PrototypeWorld.LandWestX;
-            float length = PrototypeWorld.WorldNorthZ - PrototypeWorld.WorldSouthZ;
-            var centre = new Vector3((PrototypeEnvironment.GrassEastX + PrototypeWorld.LandWestX) * 0.5f, PrototypeWorld.LandHeight,
-                (PrototypeWorld.WorldNorthZ + PrototypeWorld.WorldSouthZ) * 0.5f);
-            var ground = Primitive(PrimitiveType.Plane, "Ground", null, centre, new Vector3(width / 10f, 1f, length / 10f), m.Grass, keepCollider: true);
-            ground.isStatic = true;
-            // Field patches every 1.6 km and grass grain every 40 m: two scales, so neither repeats visibly.
-            PrototypeEnvironment.ApplyDetail(m.Grass, "Grass", width, length, 1600f, 40f, new Color(0.86f, 0.8f, 0.58f), 0.18f, 0.35f, 11);
-            PrototypeEnvironment.ApplyDetail(m.Hills, "Hills", 1f, 1f, 0.25f, 0.02f, new Color(0.8f, 0.78f, 0.62f), 0.2f, 0.3f, 23);
+            // A height-field terrain in tiles (each with its collider) over the whole land area: flat around the
+            // airfield, rolling fields, hills in the west. Painted by the land-use albedo and relief normal map,
+            // with a fine grass grain every 35 m close up.
+            TerrainBuilder.Create(m.Land);
+            MaterialSetup.SetBaseMap(m.Land, TerrainBuilder.LoadOrCreateAlbedo(), Vector2.one);
+            MaterialSetup.SetNormalMap(m.Land, TerrainBuilder.LoadOrCreateNormal(), 1f);
+            MaterialSetup.SetDetail(m.Land, PrototypeEnvironment.GrainTexture("GrassGrain", 28, 0.35f), null,
+                new Vector2(TerrainShape.Width / 35f, TerrainShape.Length / 35f));
+            // Meadow grass for the islet and the headland: patches every 300 m of a unit texture span and grain every 30 m.
+            PrototypeEnvironment.ApplyDetail(m.Meadow, "Grass", 1f, 1f, 0.3f, 0.03f, new Color(0.86f, 0.8f, 0.58f), 0.18f, 0.35f, 11);
         }
 
         /// <summary>
@@ -219,9 +233,18 @@ namespace OpenSkies.Editor
             float length = PrototypeWorld.WorldNorthZ - PrototypeWorld.WorldSouthZ;
             var seaCentre = new Vector3((PrototypeWorld.SeaEastX + PrototypeWorld.ShorelineX) * 0.5f, PrototypeWorld.SeaHeight,
                 (PrototypeWorld.WorldNorthZ + PrototypeWorld.WorldSouthZ) * 0.5f);
-            Primitive(PrimitiveType.Plane, "Sea", coast, seaCentre, new Vector3(width / 10f, 1f, length / 10f), m.Sea, keepCollider: true);
-            // Darker swells every 900 m and fine ripples every 25 m (detail only: no water simulation).
-            PrototypeEnvironment.ApplyDetail(m.Sea, "Sea", width, length, 900f, 25f, new Color(0.7f, 0.82f, 0.9f), 0.12f, 0.25f, 31);
+            var sea = Primitive(PrimitiveType.Plane, "Sea", coast, seaCentre, new Vector3(width / 10f, 1f, length / 10f), m.Sea, keepCollider: true);
+            // Two layers of wave normals (swell every 140 m, chop every 31 m) drifting in different directions, with a fine
+            // ripple grain in the detail albedo: a moving sea with a sun glint, no water simulation.
+            var waterNormal = GeneratedAssets.LoadOrCreateTexture(SceneryBuilder.WaterNormalPath, 512, 512, () => SceneryBuilder.WaterNormalPixels(512),
+                GeneratedAssets.TextureKind.Normal, 512);
+            MaterialSetup.SetBaseMap(m.Sea, null, new Vector2(width / 140f, length / 140f));
+            MaterialSetup.SetNormalMap(m.Sea, waterNormal, 0.55f);
+            MaterialSetup.SetDetail(m.Sea, PrototypeEnvironment.GrainTexture("SeaGrain", 48, 0.2f), waterNormal, new Vector2(width / 31f, length / 31f), 1f, 0.45f);
+            MaterialSetup.SetSurface(m.Sea, 0.93f, 0f);
+            var waves = sea.AddComponent<ScrollingSurface>();
+            waves.baseSpeed = new Vector2(0.004f, 0.0025f);
+            waves.detailSpeed = new Vector2(-0.012f, 0.02f);
             PrototypeEnvironment.CreateBeach(coast, m.Sand);
 
             // Headland: a low rocky block from the shore out to sea; its top is 3 m above the sea.
@@ -231,18 +254,13 @@ namespace OpenSkies.Editor
             Primitive(PrimitiveType.Cube, "Headland", coast, new Vector3(headland.x, (size.y + bottom) * 0.5f, headland.z),
                 new Vector3(size.x, size.y - bottom, size.z), m.Rock, keepCollider: true);
 
-            // Lighthouse: white tower with red bands, lantern on top.
+            // Lighthouse: a tapered white tower with red bands, gallery and lantern; the lens flashes as a checkpoint.
             var lighthouse = new GameObject("Lighthouse").transform;
             lighthouse.SetParent(coast, false);
             lighthouse.localPosition = PrototypeWorld.LighthousePosition;
             float tower = PrototypeWorld.LighthouseHeightMetres;
-            Primitive(PrimitiveType.Cylinder, "Tower", lighthouse, new Vector3(0f, tower * 0.5f, 0f), new Vector3(7f, tower * 0.5f, 7f), m.LighthouseWhite,
-                keepCollider: true);
-            Primitive(PrimitiveType.Cylinder, "BandLow", lighthouse, new Vector3(0f, tower * 0.35f, 0f), new Vector3(7.3f, 1.6f, 7.3f), m.LighthouseRed);
-            Primitive(PrimitiveType.Cylinder, "BandHigh", lighthouse, new Vector3(0f, tower * 0.72f, 0f), new Vector3(7.3f, 1.6f, 7.3f), m.LighthouseRed);
-            Primitive(PrimitiveType.Cylinder, "Gallery", lighthouse, new Vector3(0f, tower + 0.3f, 0f), new Vector3(9f, 0.3f, 9f), m.LighthouseRed);
-            Primitive(PrimitiveType.Sphere, "Lantern", lighthouse, new Vector3(0f, tower + 2.4f, 0f), Vector3.one * 4.2f, m.Glass);
-            var lighthouseLens = Primitive(PrimitiveType.Sphere, "Light", lighthouse, new Vector3(0f, tower + 2.4f, 0f), Vector3.one * 4.6f, m.Beacon);
+            SceneryBuilder.Place("LighthouseTower", lighthouse, SceneryBuilder.Lighthouse(tower), m.Scenery.Palette, Vector3.zero, 0f, collider: true);
+            var lighthouseLens = Primitive(PrimitiveType.Sphere, "Light", lighthouse, new Vector3(0f, tower + 2.0f, 0f), Vector3.one * 3.6f, m.Beacon);
             var lighthouseBeacon = lighthouse.gameObject.AddComponent<LandmarkBeacon>();
             lighthouseBeacon.landmarkId = PrototypeWorld.LighthouseId;
             lighthouseBeacon.lens = lighthouseLens.GetComponent<Renderer>();
@@ -261,16 +279,13 @@ namespace OpenSkies.Editor
             var harbourBeacon = harbour.gameObject.AddComponent<LandmarkBeacon>();
             harbourBeacon.landmarkId = PrototypeWorld.HarbourId;
             harbourBeacon.lens = harbourLens.GetComponent<Renderer>();
-            var boats = new[] { new Vector3(1760f, 0f, -1700f), new Vector3(1840f, 0f, -1660f), new Vector3(1690f, 0f, -1630f) };
-            for (int i = 0; i < boats.Length; i++)
-                Primitive(PrimitiveType.Cube, "Boat", harbour, boats[i] + new Vector3(0f, PrototypeWorld.SeaHeight + 0.6f, 0f), new Vector3(3.5f, 1.4f, 10f),
-                    m.Airframe).transform.localRotation = Quaternion.Euler(0f, 15f * i, 0f);
+            SceneryBuilder.CreateHarbour(harbour, m.Scenery); // quay, bollards and moored boats
 
             // Islet: a low mound rising out of the sea (mesh collider for its real shape).
             float radius = PrototypeWorld.IsletRadiusMetres, height = PrototypeWorld.IsletHeightMetres;
             var islet = Primitive(PrimitiveType.Sphere, "Islet", coast,
                 new Vector3(PrototypeWorld.IsletCentre.x, PrototypeWorld.SeaHeight - height * 0.6f, PrototypeWorld.IsletCentre.z),
-                new Vector3(radius * 2f, height * 3.2f, radius * 2f), m.Grass);
+                new Vector3(radius * 2f, height * 3.2f, radius * 2f), m.Meadow);
             islet.AddComponent<MeshCollider>().sharedMesh = islet.GetComponent<MeshFilter>().sharedMesh;
 
             foreach (var renderer in coast.GetComponentsInChildren<Renderer>())
@@ -278,12 +293,13 @@ namespace OpenSkies.Editor
             return new[] { lighthouseBeacon, harbourBeacon };
         }
 
-        static void CreateRunway(Material asphalt, Material marking)
+        static void CreateRunway(PrototypeMaterials m)
         {
+            Material marking = m.Marking;
             var runway = new GameObject("Runway").transform;
             // Top surface at y = 0, where the flight model puts the wheels.
             Primitive(PrimitiveType.Cube, "Surface", runway, new Vector3(0f, -RunwayThickness / 2f, 0f),
-                new Vector3(RunwayWidth, RunwayThickness, RunwayLength), asphalt, keepCollider: true);
+                new Vector3(RunwayWidth, RunwayThickness, RunwayLength), m.Asphalt, keepCollider: true);
 
             // Centreline dashes: 30 m dash, 20 m gap.
             for (float z = -RunwayLength / 2f + 80f; z < RunwayLength / 2f - 80f; z += 50f)
@@ -299,6 +315,8 @@ namespace OpenSkies.Editor
             }
 
             PrototypeEnvironment.CreateRunwayMarkings(runway, marking, RunwayLength, RunwayWidth);
+            SceneryBuilder.CreateRunwayNumbers(runway, marking, RunwayLength);
+            SceneryBuilder.CreateRunwayLights(runway, m.Scenery, RunwayLength, RunwayWidth);
             foreach (Transform child in runway) child.gameObject.isStatic = true;
         }
 
@@ -379,13 +397,13 @@ namespace OpenSkies.Editor
         }
 
         /// <summary>
-        /// Placeholder four-seat high-wing trainer built from primitives, flown by
-        /// Rigidbody physics. The root pivot sits at wheel-contact level with the
-        /// gear fully extended; +Z is the nose. Wheel positions come from the
-        /// configuration so visuals and physics agree.
+        /// The fictional four-seat high-wing trainer, modelled by <see cref="AircraftMeshBuilder"/>
+        /// and flown by Rigidbody physics. The root pivot sits at wheel-contact level with the
+        /// gear fully extended; +Z is the nose. Wheel positions come from the configuration so
+        /// visuals and physics agree.
         /// </summary>
         static AircraftController CreateAircraft(AircraftConfiguration configuration, PrototypeMaterials materials, out Transform cockpitAnchor,
-            out CockpitRig cockpit, out AircraftLightsView lights)
+            out CockpitRig cockpit, out AircraftLightsView lights, out AirframeView airframe)
         {
             var rootGo = new GameObject("Aircraft");
             var root = rootGo.transform;
@@ -394,35 +412,14 @@ namespace OpenSkies.Editor
             var body = new GameObject("Visual").transform;
             body.SetParent(root, false);
 
-            Primitive(PrimitiveType.Cube, "Fuselage", body, new Vector3(0f, 1.35f, 0.2f), new Vector3(1.2f, 1.3f, 4.2f), materials.Airframe);
-            Primitive(PrimitiveType.Cube, "TailBoom", body, new Vector3(0f, 1.45f, -2.9f), new Vector3(0.7f, 0.8f, 2.8f), materials.Airframe);
-            Primitive(PrimitiveType.Cube, "Cowling", body, new Vector3(0f, 1.25f, 2.6f), new Vector3(1.0f, 1.0f, 0.8f), materials.Accent);
-            Primitive(PrimitiveType.Cube, "Wing", body, new Vector3(0f, 2.1f, 0.4f), new Vector3(11f, 0.15f, 1.6f), materials.Airframe);
-            Primitive(PrimitiveType.Cube, "WingStrutL", body, new Vector3(-1.6f, 1.45f, 0.4f), new Vector3(0.08f, 1.3f, 0.08f), materials.Accent)
-                .transform.localRotation = Quaternion.Euler(0f, 0f, -55f);
-            Primitive(PrimitiveType.Cube, "WingStrutR", body, new Vector3(1.6f, 1.45f, 0.4f), new Vector3(0.08f, 1.3f, 0.08f), materials.Accent)
-                .transform.localRotation = Quaternion.Euler(0f, 0f, 55f);
-            Primitive(PrimitiveType.Cube, "Stabiliser", body, new Vector3(0f, 1.55f, -4.1f), new Vector3(3.6f, 0.1f, 0.9f), materials.Airframe);
-            Primitive(PrimitiveType.Cube, "Fin", body, new Vector3(0f, 2.3f, -4.1f), new Vector3(0.1f, 1.4f, 1.1f), materials.Accent);
-            Primitive(PrimitiveType.Cube, "Propeller", body, new Vector3(0f, 1.25f, 3.05f), new Vector3(1.8f, 0.12f, 0.05f), materials.Tyre);
-
-            // Fixed tricycle gear, placed from the configuration with the strut fully extended.
-            // A cylinder primitive is 1 m wide and 2 m tall at scale 1.
-            foreach (var wheel in configuration.wheels)
-            {
-                Vector3 centre = wheel.attachPoint + Vector3.down * wheel.suspensionLength;
-                float diameter = wheel.wheelRadius * 2f;
-                Primitive(PrimitiveType.Cylinder, wheel.name, body, centre, new Vector3(diameter, 0.08f, diameter), materials.Tyre)
-                    .transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-                Primitive(PrimitiveType.Cube, wheel.name + " strut", body, wheel.attachPoint + Vector3.down * (wheel.suspensionLength / 2f),
-                    new Vector3(0.06f, wheel.suspensionLength, 0.06f), materials.Accent);
-            }
+            // The modelled trainer (fuselage, wings with flaps and ailerons, tail, propeller, gear) and the view that moves its parts.
+            airframe = AircraftMeshBuilder.Build(body, configuration, materials.Aircraft);
 
             // Collision shapes on the root (one compound collider for the Rigidbody).
             // They sit clear of the ground while on the wheels, so they only matter in a crash or tail strike.
             AddBox(rootGo, new Vector3(0f, 1.35f, 0.5f), new Vector3(1.2f, 1.3f, 4.8f));   // cabin and cowling
             AddBox(rootGo, new Vector3(0f, 1.45f, -2.9f), new Vector3(0.7f, 0.8f, 2.8f));  // tail boom
-            AddBox(rootGo, new Vector3(0f, 2.1f, 0.4f), new Vector3(11f, 0.15f, 1.6f));    // wing
+            AddBox(rootGo, new Vector3(0f, 2.2f, 0.4f), new Vector3(11f, 0.2f, 1.65f));    // wing
             AddBox(rootGo, new Vector3(0f, 1.9f, -4.1f), new Vector3(3.6f, 1.4f, 1.0f));   // tail surfaces
 
             // Left seat eye point.
@@ -436,7 +433,7 @@ namespace OpenSkies.Editor
             // Placeholder cockpit interior (instruments, switches, flap selector) and exterior lights.
             var font = Resources.GetBuiltinResource<Font>(BuiltinFont);
             cockpit = CockpitFactory.BuildInterior(cockpitAnchor, font, materials.Cockpit);
-            lights = CockpitFactory.BuildExteriorLights(body, materials.Cockpit);
+            lights = CockpitFactory.BuildExteriorLights(body, materials.Cockpit, AircraftMeshBuilder.ExteriorLights);
 
             SetLayerRecursively(rootGo, AircraftLayer);
 
@@ -469,7 +466,13 @@ namespace OpenSkies.Editor
             camera.nearClipPlane = 0.08f; // cockpit eye point is 0.1 m below the cabin roof
             camera.farClipPlane = 6000f;
             camera.fieldOfView = 60f;
+            camera.allowHDR = true;
             go.AddComponent<AudioListener>();
+            // Post-processing and FXAA on the view (the graphics presets switch them at runtime).
+            var cameraData = camera.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = true;
+            cameraData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+            cameraData.volumeLayerMask = 1; // Default: the global volume's layer
 
             var rig = go.AddComponent<CameraRig>();
             rig.target = aircraft;
@@ -677,38 +680,93 @@ namespace OpenSkies.Editor
         /// <summary>Materials are assets so the scene can reference them. Created once, then updated in place.</summary>
         sealed class PrototypeMaterials
         {
-            public readonly Material Grass = Lit("Grass", new Color(0.32f, 0.45f, 0.22f), 0.1f);
-            public readonly Material Asphalt = Lit("Asphalt", new Color(0.17f, 0.17f, 0.18f), 0.25f);
+            public readonly Material Land = Lit("Land", Color.white, 0.08f);
+            public readonly Material Meadow = Lit("Meadow", new Color(0.36f, 0.48f, 0.24f), 0.08f);
+            public readonly Material Asphalt = Lit("Asphalt", Color.white, 0.3f);
+            public readonly Material Concrete = Lit("Concrete", Color.white, 0.25f);
+            public readonly Material Taxiway = Lit("Taxiway", Color.white, 0.25f);
             public readonly Material Marking = Lit("RunwayMarking", new Color(0.92f, 0.92f, 0.9f), 0.2f);
-            public readonly Material Airframe = Lit("Airframe", new Color(0.93f, 0.93f, 0.95f), 0.55f);
             public readonly Material Accent = Lit("AirframeAccent", new Color(0.12f, 0.32f, 0.62f), 0.55f);
             public readonly Material Tyre = Lit("Tyre", new Color(0.06f, 0.06f, 0.06f), 0.15f);
-            public readonly Material Sea = Lit("Sea", new Color(0.09f, 0.29f, 0.42f), 0.85f);
+            public readonly Material Sea = Lit("Sea", new Color(0.03f, 0.19f, 0.30f), 0.93f);
             public readonly Material Rock = Lit("Rock", new Color(0.47f, 0.44f, 0.4f), 0.1f);
-            public readonly Material LighthouseWhite = Lit("LighthouseWhite", new Color(0.95f, 0.95f, 0.93f), 0.3f);
             public readonly Material LighthouseRed = Lit("LighthouseRed", new Color(0.72f, 0.12f, 0.1f), 0.3f);
-            public readonly Material Glass = Lit("LanternGlass", new Color(0.16f, 0.18f, 0.2f), 0.9f);
-            public readonly Material Beacon = Unlit("Beacon", new Color(1f, 0.93f, 0.7f));
+            public readonly Material Beacon = Unlit("Beacon", new Color(3.2f, 2.9f, 2.1f));
             public readonly Material Sand = Lit("Sand", new Color(0.8f, 0.74f, 0.6f), 0.12f);
-            public readonly Material Hills = Lit("Hills", new Color(0.36f, 0.42f, 0.26f), 0.08f);
-            public readonly Material Foliage = Lit("Foliage", new Color(0.2f, 0.32f, 0.16f), 0.05f);
-            public readonly Material Trunk = Lit("Trunk", new Color(0.3f, 0.23f, 0.16f), 0.05f);
             public readonly Material HangarWalls = Lit("HangarWalls", new Color(0.82f, 0.82f, 0.8f), 0.3f);
             public readonly Material HangarRoof = Lit("HangarRoof", new Color(0.42f, 0.47f, 0.52f), 0.35f);
+            public readonly Material Cloud = Unlit("CloudDeck", Color.white);
+            public readonly SceneryBuilder.Materials Scenery;
             // Display aircraft: flat colours in place of the textures that were not supplied.
-            public readonly Material DisplayPaintF16 = Lit("DisplayPaintF16", new Color(0.56f, 0.59f, 0.62f), 0.45f);       // light air-superiority grey
-            public readonly Material DisplayPaintSpitfire = Lit("DisplayPaintSpitfire", new Color(0.26f, 0.31f, 0.21f), 0.3f); // dark green
-            public readonly Material DisplayPaintBeech = Lit("DisplayPaintBeech", new Color(0.62f, 0.08f, 0.07f), 0.6f);     // classic red
+            public readonly Material DisplayPaintF16 = Lit("DisplayPaintF16", new Color(0.56f, 0.59f, 0.62f), 0.55f);       // light air-superiority grey
+            public readonly Material DisplayPaintSpitfire = Lit("DisplayPaintSpitfire", new Color(0.26f, 0.31f, 0.21f), 0.45f); // dark green
+            public readonly Material DisplayPaintBeech = Lit("DisplayPaintBeech", new Color(0.62f, 0.08f, 0.07f), 0.75f);     // classic red
             public readonly Material[] DisplayRoles;
+            public readonly AircraftMaterials Aircraft;
 
             public PrototypeMaterials()
             {
+                // Airfield surfaces: asphalt tiled across the runway's width, concrete panels on the apron and taxiway.
+                var asphalt = GeneratedAssets.LoadOrCreateTexture(SceneryBuilder.AsphaltPath, 512, 512, () => SceneryBuilder.AsphaltPixels(512), GeneratedAssets.TextureKind.Albedo, 512);
+                var concrete = GeneratedAssets.LoadOrCreateTexture(SceneryBuilder.ConcretePath, 512, 512, () => SceneryBuilder.ConcretePixels(512), GeneratedAssets.TextureKind.Albedo, 512);
+                MaterialSetup.SetBaseMap(Asphalt, asphalt, new Vector2(1f, PrototypeWorld.RunwayLengthMetres / PrototypeWorld.RunwayWidthMetres));
+                MaterialSetup.SetBaseMap(Concrete, concrete, new Vector2(130f / 20f, 180f / 20f));
+                MaterialSetup.SetBaseMap(Taxiway, concrete, new Vector2(30f / 20f, 18f / 20f));
+
+                // The scenery palette (one material for trees, town, harbour, tower, lighthouse), the runway lights and the clouds.
+                var palette = Lit("ScenePalette", Color.white, 0.2f);
+                MaterialSetup.SetBaseMap(palette, ScenePalette.LoadOrCreate(), Vector2.one);
+                var cloudTexture = GeneratedAssets.LoadOrCreateTexture(SceneryBuilder.CloudTexturePath, 1024, 1024, () => SceneryBuilder.CloudPixels(1024),
+                    GeneratedAssets.TextureKind.AlbedoAlpha, 1024);
+                MaterialSetup.SetBaseMap(Cloud, cloudTexture, Vector2.one * (SceneryBuilder.CloudDeckSizeMetres / 10000f));
+                MaterialSetup.MakeTransparent(Cloud, twoSided: true);
+                Scenery = new SceneryBuilder.Materials
+                {
+                    Palette = palette,
+                    Marking = Marking,
+                    LightWhite = Unlit("RunwayLightWhite", new Color(2.6f, 2.5f, 2.2f)),
+                    LightGreen = Unlit("RunwayLightGreen", new Color(0.5f, 2.6f, 0.9f)),
+                    LightRed = Unlit("RunwayLightRed", new Color(2.6f, 0.4f, 0.3f)),
+                    LightBlue = Unlit("RunwayLightBlue", new Color(0.5f, 0.9f, 2.6f)),
+                    Cloud = Cloud,
+                };
+                MaterialSetup.SetSurface(DisplayPaintF16, 0.55f, 0.2f);
+                MaterialSetup.SetSurface(DisplayPaintBeech, 0.75f, 0.1f);
+
+                // The flown aircraft: the generated livery on a glossy paint, tinted glass, a dark cabin, a polished spinner.
+                var livery = GeneratedAssets.LoadOrCreateTexture(AircraftMeshBuilder.LiveryPath, 1024, 1024, AircraftMeshBuilder.LiveryPixels,
+                    GeneratedAssets.TextureKind.AlbedoClamped, 1024);
+                var paint = Lit("AirframePaint", Color.white, 0.78f);
+                MaterialSetup.SetBaseMap(paint, livery, Vector2.one);
+                MaterialSetup.SetSurface(paint, 0.78f, 0.05f);
+                var glass = Lit("AircraftGlass", new Color(0.3f, 0.42f, 0.52f, 0.42f), 0.97f);
+                MaterialSetup.SetSurface(glass, 0.97f, 0.1f);
+                MaterialSetup.MakeTransparent(glass);
+                var spinner = Lit("AircraftSpinner", new Color(0.82f, 0.83f, 0.85f), 0.85f);
+                MaterialSetup.SetSurface(spinner, 0.85f, 0.9f);
+                var propellerDisc = Unlit("PropellerDisc", Color.white);
+                var discTexture = GeneratedAssets.LoadOrCreateTexture(AircraftMeshBuilder.PropellerDiscPath, 256, 256,
+                    () => AircraftMeshBuilder.PropellerDiscPixels(256), GeneratedAssets.TextureKind.AlbedoAlphaClamped, 256);
+                MaterialSetup.SetBaseMap(propellerDisc, discTexture, Vector2.one);
+                MaterialSetup.MakeTransparent(propellerDisc, twoSided: true);
+                Aircraft = new AircraftMaterials
+                {
+                    Paint = paint,
+                    Accent = Lit("AircraftFittings", new Color(0.2f, 0.21f, 0.23f), 0.5f),
+                    Glass = glass,
+                    Interior = Lit("AircraftInterior", new Color(0.16f, 0.15f, 0.14f), 0.15f),
+                    Metal = spinner,
+                    Tyre = Tyre,
+                    Dark = Lit("PropellerBlade", new Color(0.05f, 0.05f, 0.05f), 0.4f),
+                    PropellerDisc = propellerDisc,
+                };
+
                 // Index = DisplayAircraft.Role; Paint is replaced per aircraft.
                 DisplayRoles = new[]
                 {
                     DisplayPaintF16,
                     Lit("DisplaySecondary", new Color(0.46f, 0.48f, 0.5f), 0.35f),
-                    Lit("DisplayMetal", new Color(0.72f, 0.73f, 0.75f), 0.65f),
+                    Metal("DisplayMetal", new Color(0.72f, 0.73f, 0.75f), 0.75f),
                     Lit("DisplayGlass", new Color(0.12f, 0.15f, 0.19f), 0.92f), // opaque: no transparent overdraw
                     Tyre,
                     Lit("DisplayDark", new Color(0.09f, 0.09f, 0.1f), 0.25f),
@@ -734,6 +792,13 @@ namespace OpenSkies.Editor
                 material.SetColor("_BaseColor", color);
                 material.SetFloat("_Smoothness", smoothness);
                 EditorUtility.SetDirty(material);
+                return material;
+            }
+
+            static Material Metal(string name, Color color, float smoothness)
+            {
+                var material = Lit(name, color, smoothness);
+                MaterialSetup.SetSurface(material, smoothness, 0.9f);
                 return material;
             }
 

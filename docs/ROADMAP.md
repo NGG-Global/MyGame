@@ -289,3 +289,33 @@ Owner brief of 3 November 2026. Detail in `docs/COCKPIT_DIRECT_MANIPULATION.md`,
 
 More lessons and challenges (circuits, crosswind, engine failure), systems layer
 (engine, electrical, fuel, avionics), weather, time of day, localisation.
+
+## M15: Visual upgrade
+
+Owner brief of 3 November 2026: a drastic graphical improvement of the aircraft and the
+environment. Detail in `docs/VISUAL_STYLE_GUIDE.md` ("The world and the aircraft") and
+the M15 section of `docs/MOBILE_PERFORMANCE_REPORT.md`.
+
+- [x] Pipeline: linear colour space, HDR, soft shadows with two cascades, a global
+      post-processing volume (ACES, colour, vignette, bloom), FXAA, skybox reflections at
+      start without a bake; presets switch HDR, post-processing and soft shadows
+- [x] Light and air: warm late-morning sun, daylight ambient, haze matched to the sky
+- [x] The flown trainer modelled from code (`MeshKit`, `AircraftMeshBuilder`): lofted
+      fuselage with window openings and a cabin interior, aerofoil wing with flaps and
+      ailerons in their bays, elevator, rudder, cowling, spinner and propeller, wheel
+      fairings, struts; a generated livery atlas; `AirframeView` moves the parts
+- [x] Terrain: height field in tiles with colliders (`TerrainShape`, `TerrainBuilder`),
+      land-use albedo (fields, hedgerows, woods, airfield, hills, roads, town, beach) and a
+      relief normal map; trees planted on the woodland
+- [x] Sea with drifting wave normals; a cloud deck
+- [x] Airfield dressing (numbers, lights, tower, windsock, fuel station, hangar doors),
+      the harbour town, quay and boats, the lighthouse
+- [x] EditMode tests for the geometry, the terrain and land use, the livery, the view
+      rules, the presets; docs
+- [ ] CI green (licence secrets); the first WebGL build with the new look
+- [ ] Owner: rebuild the scene; look at the aircraft on the apron (entry stations), the
+      cockpit view through the real windows, the terrain and the town from the circuit;
+      device checklist E and the M15 cost table
+- [ ] Decide after the device test: HDR and post-processing on Balanced, the normal map
+      on the terrain, the cloud deck's height and density, the livery's colours
+- [ ] Later: cloud shadows, a modelled cockpit interior, a lower-detail F-16

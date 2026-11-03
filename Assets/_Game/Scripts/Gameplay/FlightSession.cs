@@ -64,6 +64,8 @@ namespace OpenSkies.Gameplay
         [Tooltip("LOOK FWD and other cockpit view controls in the top bar.")]
         public CockpitViewControls cockpitViewControls;
         public AircraftLightsView aircraftLights;
+        [Tooltip("The airframe's moving parts (propeller, control surfaces, flaps, nosewheel); optional.")]
+        public AirframeView airframeView;
         [Tooltip("Cockpit field of view change per second while the keyboard zoom keys are held, degrees.")]
         public float fieldOfViewKeyRate = 20f;
 
@@ -517,6 +519,7 @@ namespace OpenSkies.Gameplay
             HandleSystemKeys();
 
             var t = Telemetry;
+            if (airframeView != null && aircraft != null) airframeView.Present(t, aircraft.Controls, Time.deltaTime);
             if (hud != null)
             {
                 hud.Present(t);

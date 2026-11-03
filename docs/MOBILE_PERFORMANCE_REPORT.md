@@ -104,12 +104,14 @@ Known remaining risks (to measure, not to guess):
 | Setting | Battery Saver | Balanced (default) | High Quality |
 |---|---|---|---|
 | Render scale | 0.75 | 0.9 | 1.0 |
-| Main light shadows | off | on | on |
-| Shadow distance | - | 60 m | 120 m |
+| Main light shadows | off | soft | soft |
+| Shadow distance | - | 90 m | 150 m |
 | Shadow map | - | 1024 | 2048 |
 | MSAA | off | off | 2x |
+| HDR colour buffer | off | on | on |
+| Post-processing (ACES, colour, vignette, bloom) and FXAA | off | on | on |
 | LOD bias (vegetation and detail distance) | 0.6 | 1.0 | 1.5 |
-| View distance (far clip, hidden by haze) | 5000 m | 6000 m | 7000 m |
+| View distance (far clip, hidden by haze) | 4500 m | 6000 m | 7000 m |
 
 Frame rate is a separate choice: 30 FPS (default) or 60 FPS where the display refreshes
 at 59 Hz or more. The physics step stays at 50 Hz in every case (a PlayMode test checks
@@ -117,6 +119,28 @@ that neither the preset nor the frame rate changes `Time.fixedDeltaTime`).
 
 The presets change a runtime copy of the project's URP asset, never the asset on disk,
 and restore it when the scene ends.
+
+## Visual upgrade (M15): new costs, estimates only
+
+Nothing below is measured. The first device session should compare Battery Saver (the
+old-style frame: SDR, no post-processing, hard or no shadows) against Balanced.
+
+| Item | What was added | Estimated cost | First thing to cut if the GPU is the bottleneck |
+|---|---|---|---|
+| Linear colour space, HDR buffer | `B10G11R11` colour target on Balanced and High | more bandwidth per pixel (about 1.4x of an 8-bit target) | HDR off on Balanced (`GraphicsPresets`) |
+| Post-processing | one uber pass (tonemapping LUT, colour, vignette) plus bloom (half-resolution pyramid) and FXAA | about 1.5-3 ms at 1080p on a mid-range GPU | bloom off (remove the override), then the whole pass on Balanced |
+| Soft shadows, 2 cascades | filtered shadow sampling on every lit pixel, two cascade draws | about 0.5-1 ms over hard shadows | hard shadows on Balanced; one cascade in `RenderPipelineSetup` |
+| Terrain | 16 tiles, 40,000 triangles in total, mesh colliders; 2048 px albedo (sRGB, compressed), 1024 px normal map, a grain detail map | a few draw calls (static batching), one more texture fetch per ground pixel | drop the normal map on Battery Saver (second material) |
+| Sea | two normal layers plus a detail albedo on the largest surface on screen | three texture fetches per sea pixel | one layer |
+| Cloud deck | one 60 km two-sided transparent plane: fills the sky part of the screen once | about one screen of blended pixels at most, usually less | lower the alpha texture to 512 px; cull on Battery Saver |
+| Aircraft | about 9,000 triangles, one draw call for the airframe plus glass, interior, spinner, blades, six surfaces, gear and struts (about 25 draw calls, close to the camera only) | small | combine the surfaces into the airframe with vertex animation (later) |
+| Trees | 110 clusters of about 4,000 triangles, culled below 1.2 % of the screen height | 20-40 clusters in view in cruise, about 150,000 triangles worst case | fewer lobes per tree; a lower LOD bias |
+| Town, harbour, airfield props, lights | single meshes per group (town about 15,000 triangles) | a dozen draw calls | none needed |
+| Start-up | `DynamicGI.UpdateEnvironment()` once; mesh collider cooking for 16 tiles | tens of milliseconds at scene load | bake the cubemap in the Editor once an Editor is available |
+
+Memory (estimate): the land albedo about 4 MB compressed with mips, the normal map
+1.3 MB, the cloud texture 1 MB, the livery 1 MB, water and grain textures under 1 MB
+together; meshes about 6 MB.
 
 ## Measurement protocol (first device session)
 
