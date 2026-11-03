@@ -14,6 +14,9 @@ namespace OpenSkies.UI
         /// <summary>Corner radius of <see cref="RoundedRect"/> in texels (canvas units at pixels-per-unit multiplier 1).</summary>
         public const float RoundedRectRadius = Size * 0.3f;
         static Sprite _disc, _roundedRect, _arrow, _ring, _bezel, _roundedOutline, _diamond, _cautionIcon, _warningIcon;
+        static readonly Sprite[] _annuli = new Sprite[4];
+        static readonly float[] _annulusRatios = new float[4];
+        static int _annulusCount;
 
         /// <summary>Filled circle.</summary>
         public static Sprite Disc => _disc != null ? _disc : _disc = Create("HudDisc", false, (x, y) =>
@@ -92,6 +95,29 @@ namespace OpenSkies.UI
             float r2 = dx * dx + dy * dy;
             return r2 <= 0.25f && r2 >= 0.43f * 0.43f;
         });
+
+        /// <summary>
+        /// A thick ring (annulus) whose hole is <paramref name="innerRatio"/> of the
+        /// outer radius, for arc segments drawn with a radial fill. Cached per ratio
+        /// (a few distinct values at most).
+        /// </summary>
+        public static Sprite Annulus(float innerRatio)
+        {
+            innerRatio = Mathf.Clamp(innerRatio, 0.05f, 0.95f);
+            for (int i = 0; i < _annulusCount; i++)
+                if (_annuli[i] != null && Mathf.Abs(_annulusRatios[i] - innerRatio) < 1e-3f) return _annuli[i];
+            float outer = 0.485f, inner = outer * innerRatio;
+            var sprite = Create("HudAnnulus" + Mathf.RoundToInt(innerRatio * 100f), false, (x, y) =>
+            {
+                float dx = x - 0.5f, dy = y - 0.5f;
+                float r2 = dx * dx + dy * dy;
+                return r2 <= outer * outer && r2 >= inner * inner;
+            });
+            int slot = _annulusCount < _annuli.Length ? _annulusCount++ : _annuli.Length - 1;
+            _annuli[slot] = sprite;
+            _annulusRatios[slot] = innerRatio;
+            return sprite;
+        }
 
         /// <summary>Opaque square with a round hole: turns a square window into a round instrument face.</summary>
         public static Sprite Bezel => _bezel != null ? _bezel : _bezel = Create("HudBezel", false, (x, y) =>

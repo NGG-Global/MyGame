@@ -45,9 +45,11 @@ Read with: `docs/FLIGHT_MODEL.md` (physics, tuning) and `docs/TOUCH_CONTROLS.md`
 | P | Parking brake (set on the ground / release) |
 | H | Next HUD profile (Smart, Detailed, Cinematic) |
 | F3 | Collapse or expand the HUD inspector (development) |
+| F4 | Switch between the gesture-first and the legacy interface (development; `docs/GESTURE_INTERACTION.md`) |
 | [ / ] | Flaps up / down one detent |
 | L / N | Landing light / navigation lights |
 | V, - / = | Cockpit view: look forward; wider / narrower field of view (hold) |
+| ← / →, Enter or Space | Entry stations: previous / next station; start the centred one (gesture-first; d-pad on a gamepad) |
 
 Gamepad: left stick pitch/roll (up = nose down), right stick X rudder, triggers
 throttle, south button brakes, north button camera, select/back reset.
@@ -222,6 +224,7 @@ build and result per step.
 | 5 | A phone call or alarm during flight, then return | As step 3; audio resumes only after RESUME. |
 | 6 | Settings open, press Home, return | Settings still open over the paused game; DONE returns to the pause menu. |
 | 7 | Change mode from the pause menu several times | No stuck sounds from the previous flight, no duplicated loops. |
+| 8 | Gesture-first: two-finger tap the sky, pull the sheet up and down, press Home at each stop, return | The sheet is where it was; RESUME and the scrim resume; nothing stuck (`docs/GESTURE_TEST_PLAN.md`, E). |
 
 ## 6. Known issues and limitations
 

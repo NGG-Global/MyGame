@@ -5,9 +5,10 @@ Differentiator: touch-first UX with progressive disclosure. Detail lives in
 `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/FLIGHT_MODEL.md`,
 `docs/TOUCH_CONTROLS.md`, `docs/CONTEXTUAL_UI.md`, `docs/COCKPIT.md`,
 `docs/FLIGHT_ASSISTANCE.md`, `docs/ONBOARDING_DESIGN.md`, `docs/VISUAL_STYLE_GUIDE.md`,
-`docs/MOBILE_PERFORMANCE_REPORT.md` and `docs/ROADMAP.md`. Read them before changing
-design, architecture, physics, input, assistance, the HUD, the cockpit, game modes,
-tutorials, visuals, audio, settings or performance.
+`docs/GESTURE_INTERACTION.md`, `docs/COCKPIT_DIRECT_MANIPULATION.md`,
+`docs/GESTURE_NAVIGATION.md`, `docs/MOBILE_PERFORMANCE_REPORT.md` and `docs/ROADMAP.md`.
+Read them before changing design, architecture, physics, input, assistance, the HUD,
+the cockpit, gestures, game modes, tutorials, visuals, audio, settings or performance.
 
 ## Essentials
 - Unity **6000.6.0f1** (`ProjectSettings/ProjectVersion.txt`), URP 17.6.0,
@@ -42,6 +43,9 @@ tutorials, visuals, audio, settings or performance.
     See `docs/ONBOARDING_DESIGN.md`.
   - `Cockpit`: cockpit touch routing, picking, layout, switch and light views
     (references FlightState, FlightInput, CameraSystems). See `docs/COCKPIT.md`.
+  - `Gestures`: the gesture recognizer (pure state machine), the routing policy and
+    the `InteractionSurface` that receives every touch no control took (references
+    FlightInput). Never produces flight input. See `docs/GESTURE_INTERACTION.md`.
   - `Options`: the player's presentation and comfort options (`GameOptions`) and
     their rules. No dependencies. Assistance, sensitivity and HUD profile keep their
     own stores; never duplicate them here.
@@ -50,8 +54,10 @@ tutorials, visuals, audio, settings or performance.
     Reads telemetry values only.
   - `Platform`: graphics presets, frame rate, haptics, performance monitor
     (references Options, URP).
-  - `Input`, `Camera`, `UI`, `Cockpit`: never reference `Simulation`. Input produces
+  - `Input`, `Camera`, `UI`, `Cockpit`, `Gestures`: never reference `Simulation`. Input produces
     `FlightControls`; presentation reads `FlightTelemetry`, awareness state or transforms.
+    `UI` references `Gestures` for the pure gesture maths and types only; it never touches
+    the surface.
   - `Gameplay`: composition root (`FlightSession`, `GameModeSession` for the modes,
     `PresentationSession` for options, sound, haptics and graphics). The only place
     layers meet.
@@ -71,6 +77,9 @@ tutorials, visuals, audio, settings or performance.
 - Switch and lever positions (flaps, parking brake, lights, ignition) live only
   in `AircraftSystems`; change them only through `FlightSession.RequestSystemChange`
   / `SystemChangeGate`. Never keep a second copy of a system's state in a view.
+  Instrument settings (heading bug, altimeter subscale) live only in
+  `InstrumentSettings`; change them only through `FlightSession.RequestInstrumentSetting`.
+  The flight model never reads them.
 - Cockpit objects never get colliders; picking uses `CockpitPicking`.
 - Flight controls (joystick, throttle, brakes, CAM, RESET) are outside HUD
   disclosure: no disclosure rule may hide or move them. Missions ask for guides and
@@ -81,6 +90,22 @@ tutorials, visuals, audio, settings or performance.
 - All flight input goes through `FlightInputRouter` providers. Any new code that
   reacts to touches (camera look, cockpit, menus) must ignore pointers owned in
   `TouchFlightControls.Ownership`. New Input System only; no `UnityEngine.Input`.
+- Touches nothing else took go through `InteractionSurface` and `InteractionRouter`
+  (`OpenSkies.Gestures`); never add another full-screen raycast target. A gesture is
+  recognised by `GestureRecognizer` (explicit states; Armed is never Applied) and acts
+  only on a Completed event, through `FlightSession` requests (`RequestSystemChange`,
+  `PerformContextAction`, `SetHudProfile`, `ToggleCamera`, `RequestInstrumentSetting`)
+  or `CameraRig`. Previews (lever detent, HUD density, dial value, switch tilt, sheet
+  depth) never change committed state. Gesture thresholds and geometry live in the
+  serialised settings classes (`InteractionConfiguration` asset for the scene), not in
+  code; motion times are `HudStyle` tokens. Every gesture keeps a tappable fallback,
+  a keyboard twin where one exists, and works with reduced motion. New gesture
+  surfaces (sheets, screens, panels) are `GestureHotspot`s with their own
+  `InteractionRoute`, never raycast targets of their own. The one flap lever is
+  `FlapsLeverInteraction`. Gesture cues go through `GestureHints` and are remembered
+  in `PlayerProgress`; the interaction diary is local, development-only, and never
+  sends anything anywhere. See `docs/COCKPIT_DIRECT_MANIPULATION.md` and
+  `docs/GESTURE_NAVIGATION.md`.
 - Prefer free, built-in Unity features. No new dependencies without approval.
 
 ## Conventions

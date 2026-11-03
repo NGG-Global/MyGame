@@ -29,6 +29,8 @@ namespace OpenSkies.Gameplay
         public GameModeSession modes;
         public AudioManager audioManager;
         public SettingsScreen settings;
+        [Tooltip("The settings embedded in the pause sheet's second stop (gesture-first); presented while the sheet shows them.")]
+        public SettingsScreen settingsInSheet;
         [Tooltip("The HUD canvas scaler: the interface scale is applied here.")]
         public CanvasScaler canvasScaler;
         [Tooltip("The scene's sun: its shadows follow the graphics preset.")]
@@ -153,6 +155,11 @@ namespace OpenSkies.Gameplay
                 settings.Stepped += OnStepped;
                 settings.CloseRequested += CloseSettings;
             }
+            if (settingsInSheet != null)
+            {
+                settingsInSheet.OptionChosen += OnOptionChosen;
+                settingsInSheet.Stepped += OnStepped;
+            }
         }
 
         void Unsubscribe()
@@ -175,6 +182,11 @@ namespace OpenSkies.Gameplay
                 settings.Stepped -= OnStepped;
                 settings.CloseRequested -= CloseSettings;
             }
+            if (settingsInSheet != null)
+            {
+                settingsInSheet.OptionChosen -= OnOptionChosen;
+                settingsInSheet.Stepped -= OnStepped;
+            }
         }
 
         // ---- Options ------------------------------------------------------------------------------
@@ -184,6 +196,7 @@ namespace OpenSkies.Gameplay
         {
             ApplyMotion();
             ApplyOpacity();
+            ApplyGestures();
             ApplyUiScale(force: true);
             if (audioManager != null) audioManager.SetVolumes(_options);
             _haptics.Enabled = _options.Haptics;
@@ -220,6 +233,12 @@ namespace OpenSkies.Gameplay
             else reduced = SystemMotion.Resolve(preference, preference == MotionPreference.FollowSystem && SystemMotion.PrefersReducedMotion());
             if (modes != null) modes.SetReducedMotion(reduced);
             if (settings != null) settings.SetReducedMotion(reduced);
+            if (settingsInSheet != null) settingsInSheet.SetReducedMotion(reduced);
+        }
+
+        void ApplyGestures()
+        {
+            if (flight != null) flight.ApplyGestureOptions(_options.GestureSpeed, _options.CameraGesture, _options.GestureHints);
         }
 
         void ApplyOpacity()
@@ -308,6 +327,18 @@ namespace OpenSkies.Gameplay
                     _options.FrameRate = index == 1 ? FrameRatePreference.Fps60 : FrameRatePreference.Fps30;
                     if (applyFrameRate) FrameRatePolicy.Apply(_options.FrameRate);
                     break;
+                case SettingId.GestureSpeed:
+                    _options.GestureSpeed = (GestureSpeed)Mathf.Clamp(index, 0, 2);
+                    ApplyGestures();
+                    break;
+                case SettingId.CameraGesture:
+                    _options.CameraGesture = (CameraGestureSensitivity)Mathf.Clamp(index, 0, 2);
+                    ApplyGestures();
+                    break;
+                case SettingId.GestureHints:
+                    _options.GestureHints = index == 0;
+                    ApplyGestures();
+                    break;
                 default:
                     return;
             }
@@ -363,6 +394,8 @@ namespace OpenSkies.Gameplay
                 if (modes != null && !modes.IsPaused && !modes.ModeSelectOpen) CloseSettings();
                 else settings.Present(View());
             }
+            // The sheet's settings are opened and closed by the sheet; they show the same view.
+            if (settingsInSheet != null && settingsInSheet.IsOpen) settingsInSheet.Present(View());
             if (flight == null) return;
 
             bool paused = _appPaused || (modes != null && (modes.IsPaused || modes.ModeSelectOpen));
@@ -414,6 +447,11 @@ namespace OpenSkies.Gameplay
             {
                 if (audioManager != null) audioManager.PlayUi(UiSound.Confirm);
                 _haptics.Play(HapticEvent.Confirm);
+            }
+            else if (feedback == UiFeedback.Tick)
+            {
+                if (audioManager != null) audioManager.PlayUi(UiSound.Tap);
+                _haptics.Play(HapticEvent.Selection); // the policy keeps ticks at least 80 ms apart
             }
             else if (feedback == UiFeedback.Tap && audioManager != null) audioManager.PlayUi(UiSound.Tap);
         }

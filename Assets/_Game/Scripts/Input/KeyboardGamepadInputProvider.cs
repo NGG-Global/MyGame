@@ -106,6 +106,41 @@ namespace OpenSkies.FlightInput
             return keyboard != null && keyboard.f3Key.wasPressedThisFrame;
         }
 
+        /// <summary>Entry screen: -1 the previous station, +1 the next (arrow keys, d-pad), 0 none.</summary>
+        public int MenuStepPressedThisFrame()
+        {
+            int step = 0;
+            var keyboard = Keyboard.current;
+            if (keyboard != null)
+            {
+                if (keyboard.rightArrowKey.wasPressedThisFrame) step++;
+                if (keyboard.leftArrowKey.wasPressedThisFrame) step--;
+            }
+            var gamepad = Gamepad.current;
+            if (gamepad != null)
+            {
+                if (gamepad.dpad.right.wasPressedThisFrame) step++;
+                if (gamepad.dpad.left.wasPressedThisFrame) step--;
+            }
+            return step;
+        }
+
+        /// <summary>Entry screen: start the selected experience (Enter, Space, gamepad south).</summary>
+        public bool MenuConfirmPressedThisFrame()
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame)) return true;
+            var gamepad = Gamepad.current;
+            return gamepad != null && gamepad.buttonSouth.wasPressedThisFrame;
+        }
+
+        /// <summary>Development command: switch between the gesture-first and the legacy interface.</summary>
+        public bool InteractionModeTogglePressedThisFrame()
+        {
+            var keyboard = Keyboard.current;
+            return keyboard != null && keyboard.f4Key.wasPressedThisFrame;
+        }
+
         /// <summary>Session command: -1 flaps up one detent, +1 down one detent, 0 none.</summary>
         public int FlapStepPressedThisFrame()
         {

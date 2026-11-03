@@ -1,4 +1,6 @@
 using OpenSkies.Awareness;
+using OpenSkies.CameraSystems;
+using OpenSkies.Gestures;
 using OpenSkies.Missions;
 using OpenSkies.Simulation;
 using OpenSkies.UI;
@@ -28,7 +30,11 @@ namespace OpenSkies.Gameplay
 
         [Header("UI")]
         public ModeSelectScreen modeSelect;
+        [Tooltip("The spatial entry experience (gesture-first); the mode select screen is the legacy one.")]
+        public EntryStationsScreen entryScreen;
         public MissionCard card;
+        [Tooltip("The pull-up pause sheet (gesture-first); the card is the legacy pause menu and still shows results.")]
+        public PauseSheet pauseSheet;
         public CoachingPanel coach;
         public ControlHighlights highlights;
         public CheckpointMarker marker;
@@ -88,6 +94,13 @@ namespace OpenSkies.Gameplay
         readonly CardAction[] _cardActions = new CardAction[MissionCard.MaxButtons];
         HudFade _skipFade;
         CanvasGroup _menuGroup;
+        EntryShowcase _showcase;
+        CameraMode _cameraBeforeEntry = CameraMode.Chase;
+        bool _entryOpen, _sheetUsed;
+        GestureHints _hints;
+        int _entryStationAtOpen = -1;
+
+        public GestureHints Hints => _hints;
         float _hudOpacity = 1f;
         string[] _destinationLabels;
         string _airfieldDestinationLabel;
@@ -107,7 +120,10 @@ namespace OpenSkies.Gameplay
         public event System.Action BackRequested;
         /// <summary>An overlay above the pause menu or entry screen is open (set by the presentation session).</summary>
         public bool OverlayOpen { get; set; }
-        public bool ModeSelectOpen => modeSelect != null && modeSelect.IsOpen;
+        public bool ModeSelectOpen => (modeSelect != null && modeSelect.IsOpen) || (entryScreen != null && entryScreen.IsOpen);
+        /// <summary>The gesture-first entry and pause experiences are used (the surface and the interface mode allow it).</summary>
+        bool GestureFirst => flight != null && flight.CurrentInteractionMode == InteractionMode.GestureFirst;
+        public bool PauseSheetOpen => pauseSheet != null && pauseSheet.IsOpen;
         /// <summary>Free Flight destination: a landmark index, or -1 for the airfield (guide on request).</summary>
         public int Destination => _destination;
 
@@ -155,6 +171,20 @@ namespace OpenSkies.Gameplay
                 modeSelect.Chosen += OnModeChosen;
                 modeSelect.SettingsRequested += RaiseSettingsRequested;
             }
+            if (entryScreen != null)
+            {
+                entryScreen.SetReducedMotion(reduced);
+                entryScreen.Chosen += OnModeChosen;
+                entryScreen.SettingsRequested += RaiseSettingsRequested;
+                if (flight.cameraRig != null && flight.aircraft != null) _showcase = new EntryShowcase(flight.cameraRig, flight.aircraft.transform);
+            }
+            if (pauseSheet != null)
+            {
+                pauseSheet.SetReducedMotion(reduced);
+                pauseSheet.ButtonClicked += OnCardButton; // the same actions as the card's
+                pauseSheet.DismissRequested += ResumeFromMenu;
+            }
+            if (flight.interactionSurface != null) flight.interactionSurface.GestureRaised += OnSurfaceGesture;
             if (highlights != null) highlights.SetReducedMotion(reduced);
             if (menuButton != null)
             {
@@ -170,7 +200,11 @@ namespace OpenSkies.Gameplay
             }
             SetHudOpacity(_hudOpacity);
             flight.ResetPerformed += OnFlightReset;
+            flight.PauseRequested += OnPauseRequested;
             ResolveHighlightTargets();
+            RegisterDestinations();
+            _hints = new GestureHints(_progress, flight.gestureHud != null ? flight.gestureHud.hint : null);
+            flight.SetGestureHints(_hints);
 
             if (showModeSelectOnStart) OpenModeSelect();
             else
@@ -198,8 +232,12 @@ namespace OpenSkies.Gameplay
                 if (hud.cameraButton != null) highlights.SetTarget(CoachHighlight.Camera, (RectTransform)hud.cameraButton.transform);
                 if (hud.resetButton != null) highlights.SetTarget(CoachHighlight.Reset, (RectTransform)hud.resetButton.transform);
             }
+            // FLAPS: the systems handle in the gesture-first interface (pull it, slide to FLAPS), the rail slot in the legacy one.
+            var gestureHud = flight.gestureHud;
             var contextual = flight.contextualHud;
-            if (contextual != null)
+            if (flight.CurrentInteractionMode == InteractionMode.GestureFirst && gestureHud != null && gestureHud.handleHotspot != null)
+                highlights.SetTarget(CoachHighlight.Flaps, (RectTransform)gestureHud.handleHotspot.transform);
+            else if (contextual != null)
             {
                 int slot = contextual.SlotOf(ContextAction.Flaps);
                 if (slot >= 0 && contextual.railSlots[slot] != null) highlights.SetTarget(CoachHighlight.Flaps, (RectTransform)contextual.railSlots[slot].transform);
@@ -214,7 +252,26 @@ namespace OpenSkies.Gameplay
             if (coach != null) coach.SetReducedMotion(reduced);
             if (card != null) card.SetReducedMotion(reduced);
             if (modeSelect != null) modeSelect.SetReducedMotion(reduced);
+            if (entryScreen != null) entryScreen.SetReducedMotion(reduced);
+            if (pauseSheet != null) pauseSheet.SetReducedMotion(reduced);
             if (highlights != null) highlights.SetReducedMotion(reduced);
+        }
+
+        /// <summary>The sheet's grip and the entry scene are hotspots on the interaction surface: their gestures come here.</summary>
+        void OnSurfaceGesture(InteractionRoute route, GestureEvent e, int target)
+        {
+            if (route == InteractionRoute.Sheet && pauseSheet != null)
+            {
+                pauseSheet.OnGesture(e);
+                if (e.Kind == GestureKind.Drag && e.Type == GestureEventType.Completed && pauseSheet.Stop == SheetModel.SecondStop)
+                    _hints?.Learned(GestureId.PullSheet, Time.unscaledTime);
+            }
+            else if (route == InteractionRoute.Entry && entryScreen != null)
+            {
+                entryScreen.OnGesture(e);
+                if (e.Kind == GestureKind.Drag && e.Type == GestureEventType.Completed && entryScreen.Station != _entryStationAtOpen)
+                    _hints?.Learned(GestureId.SwipeStations, Time.unscaledTime);
+            }
         }
 
         /// <summary>The player's HUD opacity for MENU and SKIP TUTORIAL.</summary>
@@ -234,7 +291,47 @@ namespace OpenSkies.Gameplay
 
         void OnDestroy()
         {
-            if (flight != null) flight.ResetPerformed -= OnFlightReset;
+            if (flight != null)
+            {
+                flight.ResetPerformed -= OnFlightReset;
+                flight.PauseRequested -= OnPauseRequested;
+                if (flight.interactionSurface != null) flight.interactionSurface.GestureRaised -= OnSurfaceGesture;
+            }
+        }
+
+        /// <summary>A deliberate two-finger tap while flying: the pause menu (never during the entry screen or a result).</summary>
+        void OnPauseRequested()
+        {
+            if (!_modeActive || _paused || ModeSelectOpen) return;
+            OpenMenu();
+        }
+
+        /// <summary>Resting on NAV in the arc fans out the Free Flight destinations: the airfield and the landmarks.</summary>
+        void RegisterDestinations()
+        {
+            if (flight.Gestures == null) return;
+            var labels = new System.Collections.Generic.List<string> { "AIRFIELD" };
+            var indices = new System.Collections.Generic.List<int> { -1 };
+            for (int i = 0; i < _world.Count; i++)
+            {
+                if (_world[i].kind == LandmarkKind.Airfield) continue;
+                labels.Add(_world[i].displayName);
+                indices.Add(i);
+            }
+            var options = indices.ToArray();
+            flight.Gestures.RegisterSubOptions(ContextAction.Navigation, labels.ToArray(),
+                () => _mode == GameMode.FreeFlight ? System.Array.IndexOf(options, _destination) : -1,
+                choice => { if (choice >= 0 && choice < options.Length) SetDestination(options[choice]); });
+        }
+
+        /// <summary>Free Flight: point the guide at a landmark (index into the world), or -1 for the airfield on request.</summary>
+        public void SetDestination(int landmarkIndex)
+        {
+            if (_mode != GameMode.FreeFlight || !_modeActive) return;
+            _destination = landmarkIndex >= 0 && landmarkIndex < _world.Count && _world[landmarkIndex].kind != LandmarkKind.Airfield ? landmarkIndex : -1;
+            SyncGuidance(); // a landmark destination asks the HUD for the navigation guide
+            if (_sheetUsed && pauseSheet != null && pauseSheet.IsOpen) pauseSheet.SetButtonLabel(2, DestinationLabel());
+            else if (card != null && card.IsOpen) card.SetButtonLabel(2, DestinationLabel());
         }
 
         void OnApplicationPause(bool paused)
@@ -252,27 +349,59 @@ namespace OpenSkies.Gameplay
             StopMissions();
             _modeActive = false;
             Freeze();
-            if (modeSelect == null) return;
             string firstFlight = _progress.Tutorial == TutorialStatus.Completed ? "Completed. Fly it again any time"
                 : _progress.RecommendFirstFlight ? "Recommended: take-off, a short coastal flight, landing"
                 : "Take-off, a short coastal flight and a landing";
             string landing = _progress.HasBestLanding ? "Best score " + _progress.BestLandingScore + " of 100"
                 : "Start on final approach and land";
+            if (entryScreen != null && (GestureFirst || modeSelect == null))
+            {
+                // The spatial entry: the camera leaves the flight view for the showcase and comes back when a mode starts.
+                if (!_entryOpen && flight.cameraRig != null)
+                {
+                    _entryOpen = true;
+                    _cameraBeforeEntry = flight.cameraRig.mode == CameraMode.Showcase ? CameraMode.Chase : flight.cameraRig.mode;
+                    flight.cameraRig.mode = CameraMode.Showcase;
+                }
+                entryScreen.Open(_progress.RecommendFirstFlight ? 0 : 1, _progress.Tutorial == TutorialStatus.Completed ? "Completed" : null,
+                    null, _progress.HasBestLanding ? "Best score " + _progress.BestLandingScore + " of 100" : null);
+                _entryStationAtOpen = entryScreen.Station;
+                if (_showcase != null) _showcase.Present(entryScreen.Model.Position);
+                if (modeSelect != null) modeSelect.Close();
+                if (_hints != null && flight.gestureHud != null)
+                {
+                    var b = flight.gestureHud.Bounds;
+                    _hints.Offer(GestureId.SwipeStations, new Vector2(b.center.x + 160f, b.center.y + 40f), Vector2.left, 320f, "Swipe to explore", b, Time.unscaledTime);
+                }
+                return;
+            }
+            if (modeSelect == null) return;
             modeSelect.Open(_progress.RecommendFirstFlight, firstFlight, landing);
         }
 
         void OnModeChosen(GameMode mode, FreeFlightStart start)
         {
             if (modeSelect != null) modeSelect.Close();
+            CloseEntry();
             Unfreeze();
             StartMode(mode, start);
+        }
+
+        void CloseEntry()
+        {
+            if (entryScreen != null) entryScreen.Close();
+            if (_hints != null && _hints.IsShowing && _hints.Showing == GestureId.SwipeStations) _hints.Hide();
+            if (!_entryOpen) return;
+            _entryOpen = false;
+            if (flight.cameraRig != null) flight.cameraRig.SetMode(_cameraBeforeEntry);
         }
 
         /// <summary>Starts a mode from its beginning (also used by tests and the menu).</summary>
         public void StartMode(GameMode mode, FreeFlightStart start = FreeFlightStart.Runway)
         {
             EnsureInitialized();
-            if (ModeSelectOpen) modeSelect.Close();
+            if (modeSelect != null && modeSelect.IsOpen) modeSelect.Close();
+            CloseEntry();
             if (_paused) Unfreeze();
             StopMissions();
             _mode = mode;
@@ -445,7 +574,18 @@ namespace OpenSkies.Gameplay
             if (flight.Devices != null && flight.Devices.MenuPressedThisFrame())
             {
                 if (OverlayOpen) BackRequested?.Invoke();
+                else if (PauseSheetOpen && pauseSheet.Stop == SheetModel.SecondStop) pauseSheet.GoTo(SheetModel.FirstStop); // back from the settings first
                 else ToggleMenu();
+            }
+            if (entryScreen != null && entryScreen.IsOpen)
+            {
+                if (flight.Devices != null)
+                {
+                    int step = flight.Devices.MenuStepPressedThisFrame();
+                    if (step != 0) entryScreen.Step(step);
+                    if (flight.Devices.MenuConfirmPressedThisFrame()) entryScreen.Start();
+                }
+                if (_showcase != null && _entryOpen) _showcase.Present(entryScreen.Model.Position);
             }
 
             if (_modeActive && _mode == GameMode.FirstFlight && _tutorial.State == FirstFlightTutorial.Status.Completed && !_resultShown)
@@ -580,11 +720,26 @@ namespace OpenSkies.Gameplay
             else OpenMenu();
         }
 
-        /// <summary>Pauses the flight and shows the menu for the current mode.</summary>
+        /// <summary>Pauses the flight and shows the menu for the current mode: the pull-up sheet, or the card in the legacy interface.</summary>
         public void OpenMenu()
         {
             EnsureInitialized();
-            if (ModeSelectOpen || card == null) return;
+            if (ModeSelectOpen) return;
+            if (pauseSheet != null && (GestureFirst || card == null))
+            {
+                Freeze();
+                _sheetUsed = true;
+                OpenSheet();
+                if (_hints != null && flight.gestureHud != null && pauseSheet.grip != null)
+                {
+                    var b = flight.gestureHud.Bounds;
+                    float gripY = pauseSheet.Model.StopHeight(SheetModel.FirstStop);
+                    _hints.Offer(GestureId.PullSheet, new Vector2(b.center.x, gripY), Vector2.up, 160f, "Pull up for settings", b, Time.unscaledTime);
+                }
+                return;
+            }
+            if (card == null) return;
+            _sheetUsed = false;
             Freeze();
             switch (_mode)
             {
@@ -608,9 +763,33 @@ namespace OpenSkies.Gameplay
             }
         }
 
+        /// <summary>The sheet's first stop: the flight's choices; settings are one pull higher.</summary>
+        void OpenSheet()
+        {
+            switch (_mode)
+            {
+                case GameMode.FirstFlight when _tutorial.IsActive:
+                    SetActions(CardAction.Resume, CardAction.Restart, CardAction.SkipTutorial, CardAction.ChangeMode);
+                    pauseSheet.Open("Paused", "First Flight, step " + (_tutorial.StepIndex + 1) + " of " + _tutorial.StepCount,
+                        "RESUME", "RESTART", "SKIP TUTORIAL", "CHANGE MODE");
+                    break;
+                case GameMode.LandingChallenge:
+                    SetActions(CardAction.Resume, CardAction.Restart, CardAction.ChangeMode);
+                    pauseSheet.Open("Paused", "Landing Challenge", "RESUME", "RETRY", "CHANGE MODE");
+                    break;
+                default:
+                    SetActions(CardAction.Resume, CardAction.Restart, CardAction.CycleDestination, CardAction.ChangeMode);
+                    pauseSheet.Open("Paused", "Free Flight", "RESUME", _freeStart == FreeFlightStart.Airborne ? "RESTART IN THE AIR" : "RESTART ON THE RUNWAY",
+                        DestinationLabel(), "CHANGE MODE");
+                    break;
+            }
+        }
+
         public void ResumeFromMenu()
         {
             if (card != null && card.IsModal) card.Close();
+            if (pauseSheet != null && pauseSheet.IsOpen) pauseSheet.Close();
+            if (_hints != null && _hints.IsShowing && (_hints.Showing == GestureId.PullSheet)) _hints.Hide();
             Unfreeze();
             // A mission result that was waiting comes back (it is not scored again).
             if (_openResult != OpenResult.None) ShowResultCard();
@@ -638,6 +817,7 @@ namespace OpenSkies.Gameplay
                     break;
                 case CardAction.Restart:
                     if (card != null) card.Close();
+                    if (pauseSheet != null) pauseSheet.Close();
                     if (_mode == GameMode.LandingChallenge)
                     {
                         Unfreeze();
@@ -648,15 +828,18 @@ namespace OpenSkies.Gameplay
                     break;
                 case CardAction.SkipTutorial:
                     if (card != null) card.Close();
+                    if (pauseSheet != null) pauseSheet.Close();
                     SkipTutorial();
                     break;
                 case CardAction.ChangeMode:
                     if (card != null) card.Close();
+                    if (pauseSheet != null) pauseSheet.Close();
                     OpenModeSelect();
                     break;
                 case CardAction.CycleDestination:
                     CycleDestination();
-                    if (card != null) card.SetButtonLabel(index, DestinationLabel());
+                    if (_sheetUsed && pauseSheet != null) pauseSheet.SetButtonLabel(index, DestinationLabel());
+                    else if (card != null) card.SetButtonLabel(index, DestinationLabel());
                     break;
                 case CardAction.FreeFlightHere:
                     if (card != null) card.Close();

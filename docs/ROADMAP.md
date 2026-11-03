@@ -202,6 +202,65 @@ Numbered as in the owner's brief; delivered after M11. Detail in
 - [ ] A lower-detail F-16 for mobile (about 148,000 polygons now)
 - [ ] Owner: trademark clearance before a commercial release (real names kept)
 
+## M13: Gesture-first interaction, first vertical slice
+
+Owner brief of 3 November 2026 (`docs/INTERACTION_DESIGN_PROPOSAL.md`, approved).
+Detail in `docs/GESTURE_INTERACTION.md`, `docs/GESTURE_EXPERIMENTS.md`,
+`docs/GESTURE_TEST_PLAN.md`.
+
+- [x] `OpenSkies.Gestures`: `GestureRecognizer` (tap, double tap, long press, swipe, pull,
+      drag, dwell, pinch, two-finger tap; Candidate, Peek, ActiveManipulation, Armed,
+      Completed, Cancelled), `InteractionRouter`, `InteractionSurface` sharing
+      `PointerOwnership` and forwarding the cockpit route, `GestureHotspot`
+- [x] Systems handle and arc (fixed slots, contextual emphasis from the disclosure
+      controller, dwell for the outer ring of lights, tap hint, long-press explanation)
+- [x] Continuous flap lever from the FLAPS segment (detents from the aircraft data,
+      hysteresis, sideways cancel, commit only on release through the gate)
+- [x] Long-press explanations for flight values, guides, warnings and the handle, with the
+      hold ring; texts from the aircraft's envelope
+- [x] HUD density pull with a continuous ladder and a true preview (disclosure input)
+- [x] Chase free look with spring-back, pinch distance, double tap to switch view
+- [x] One motion language (`HudEasing`), `UiFeedback.Tick` (sound and the lightest haptic)
+- [x] Legacy rail behind `InteractionMode` (F4, inspector tap, remembered); gesture inspector
+- [x] EditMode tests (recognizer, router, models, orbit maths); PlayMode tests with the
+      Rigidbody session (ownership, arc, lever, density, camera, explanations, layout)
+- [x] Compiled offline against stand-ins for the Unity API (not a substitute for CI)
+- [ ] CI green (licence secrets)
+- [ ] Owner: rebuild the scene; Editor run with the gesture inspector; device plan
+      (`docs/GESTURE_TEST_PLAN.md`) on a 20:9 phone and a tablet; tune the settings
+- [ ] Decide after the device test: lever handover variant, release-on-FLAPS behaviour,
+      slot angles on tablets
+- [x] Next wave: M14
+
+## M14: Gesture-First 2.0
+
+Owner brief of 3 November 2026. Detail in `docs/COCKPIT_DIRECT_MANIPULATION.md`,
+`docs/GESTURE_NAVIGATION.md` and the M14 sections of `docs/GESTURE_INTERACTION.md`,
+`docs/GESTURE_EXPERIMENTS.md`, `docs/GESTURE_TEST_PLAN.md`.
+
+- [x] A: cockpit direct manipulation: heading bug and altimeter subscale by sweeping
+      the dial (`RotaryModel`, `InstrumentSettings`, `RequestInstrumentSetting`), map
+      pan, pinch and recentre, switch flicks with preview, the cockpit flap lever sharing
+      the arc's lever (`FlapsLeverInteraction`), the instrument emerging from the panel
+- [x] B: dwell-driven sub-arcs (lights, destinations, assistance profiles), shared
+      feedback, motion tokens in `HudStyle`, `InteractionConfiguration` asset
+- [x] C: two-finger tap to pause, the pull-up pause sheet with two stops and the
+      embedded settings, swipeable entry stations with the showcase camera, keyboard
+      and gamepad twins (arrows, Enter), legacy card and mode select kept
+- [x] D: contextual gesture cues remembered in `PlayerProgress`, gesture reference
+      page, gesture speed, camera sensitivity and hints in the options, interaction
+      diary (local, development only)
+- [x] EditMode tests (instruments, navigation models, discovery) and PlayMode tests
+      (cockpit manipulation, pause sheet, entry stations); compiled offline against
+      stand-ins for the Unity API (not a substitute for CI)
+- [ ] CI green (licence secrets)
+- [ ] Owner: rebuild the scene (the builder creates the interaction configuration
+      asset); Editor run; device plan sections D, E, F; tune the settings
+- [ ] Decide after the device test: dial cancel radius, sheet stop heights, station
+      width on tablets, cue timing
+- [ ] Deferred: "show hints again" action, a cue for the two-finger pause, autopilot
+      rotaries, trim and mixture levers, left-handed layout
+
 ## M3: Assistance and contextual UI (layer 1)
 
 - Optional assistance: done in M3b

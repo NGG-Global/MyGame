@@ -4,6 +4,13 @@ using UnityEngine.UI;
 
 namespace OpenSkies.UI
 {
+    /// <summary>The subscale's range, mirrored from <see cref="OpenSkies.FlightState.InstrumentSettings"/> for the cached strings.</summary>
+    static class InstrumentSettingsRange
+    {
+        public const int MinBaro = OpenSkies.FlightState.InstrumentSettings.MinBaroHectopascals;
+        public const int MaxBaro = OpenSkies.FlightState.InstrumentSettings.MaxBaroHectopascals;
+    }
+
     /// <summary>
     /// One flight instrument face (built by <see cref="InstrumentFaceFactory"/> at
     /// 400 × 400 units). The same design is used on the cockpit panel (world
@@ -31,6 +38,16 @@ namespace OpenSkies.UI
         public float pitchLimitDegrees = 35f;
         [Tooltip("Digital readout window: easier to read on a phone than a needle alone.")]
         public Text digital;
+
+        [Header("Pilot-set values")]
+        [Tooltip("Heading indicator: the bug on the card, at the heading the pilot chose.")]
+        public RectTransform headingBug;
+        public Image headingBugImage;
+        public float headingBugRadius = 176f;
+        [Tooltip("Altimeter: the subscale (QNH) window.")]
+        public Text baroWindow;
+        public Color setValueColour = new Color(1f, 1f, 1f, 0.95f);
+        public Color previewColour = HudStyle.Selected;
 
         [Header("Airspeed markings")]
         public Image whiteArc;
@@ -70,11 +87,59 @@ namespace OpenSkies.UI
 
         int _shownDigital = NoValue, _shownDistance = NoValue, _shownBearing = NoValue, _shownGroundspeed = NoValue;
         int _shownTrack = NoValue, _shownRunway = NoValue, _shownRange = NoValue, _shownRunwayLength = NoValue, _shownInRange = NoValue;
+        int _shownBug = NoValue, _shownBaro = NoValue, _shownBugPreview = -1, _shownBaroPreview = -1;
         float _rangeNm;
         bool _spritesAssigned;
+        Vector2 _mapPan;
+        float _mapRangeOverride;
+        static readonly NumberStrings Pressures = new NumberStrings(InstrumentSettingsRange.MinBaro, InstrumentSettingsRange.MaxBaro, v => v.ToString());
 
         /// <summary>Times this face has been rendered (tests use it to prove a hidden face is no longer drawn).</summary>
         public int RenderCount { get; private set; }
+        /// <summary>The range the map is drawing, NM (automatic or chosen).</summary>
+        public float MapRangeNm => _rangeNm;
+
+        /// <summary>Places the heading bug; in preview (cyan) while a gesture is choosing, white once set.</summary>
+        public void SetHeadingBug(int degrees, bool preview)
+        {
+            if (headingBug == null) return;
+            if (degrees != _shownBug)
+            {
+                _shownBug = degrees;
+                headingBug.anchoredPosition = InstrumentMath.HeadingBugPosition(degrees, headingBugRadius);
+                headingBug.localRotation = Quaternion.Euler(0f, 0f, InstrumentMath.HeadingBugRotation(degrees));
+            }
+            int p = preview ? 1 : 0;
+            if (p != _shownBugPreview && headingBugImage != null)
+            {
+                _shownBugPreview = p;
+                headingBugImage.color = preview ? previewColour : setValueColour;
+            }
+        }
+
+        /// <summary>Shows the altimeter subscale; cyan while a gesture is choosing it.</summary>
+        public void SetBaro(int hectopascals, bool preview)
+        {
+            if (baroWindow == null) return;
+            if (hectopascals != _shownBaro)
+            {
+                _shownBaro = hectopascals;
+                baroWindow.text = Pressures.Get(Mathf.Clamp(hectopascals, InstrumentSettingsRange.MinBaro, InstrumentSettingsRange.MaxBaro));
+            }
+            int p = preview ? 1 : 0;
+            if (p != _shownBaroPreview)
+            {
+                _shownBaroPreview = p;
+                baroWindow.color = preview ? previewColour : setValueColour;
+            }
+        }
+
+        /// <summary>The map drawn panned by the player and at a chosen range (0 = automatic).</summary>
+        public void SetMapView(Vector2 pan, float rangeNmOverride)
+        {
+            _mapPan = pan;
+            _mapRangeOverride = rangeNmOverride;
+        }
 
         void Awake() => AssignSprites();
 
@@ -193,12 +258,12 @@ namespace OpenSkies.UI
             if (mapRunway != null && !mapRunway.gameObject.activeSelf) mapRunway.gameObject.SetActive(true);
 
             float distanceNm = r.RunwayDistanceMetres / 1852f;
-            _rangeNm = InstrumentMath.MapRangeNm(distanceNm, _rangeNm);
+            _rangeNm = _mapRangeOverride > 0f ? _mapRangeOverride : InstrumentMath.MapRangeNm(distanceNm, _rangeNm);
             float rangeMetres = _rangeNm * 1852f;
 
             if (mapRunway != null)
             {
-                mapRunway.anchoredPosition = mapOwnship + InstrumentMath.MapPosition(r.RunwayBearingDegrees, r.HeadingDegrees,
+                mapRunway.anchoredPosition = mapOwnship + _mapPan + InstrumentMath.MapPosition(r.RunwayBearingDegrees, r.HeadingDegrees,
                     r.RunwayDistanceMetres, rangeMetres, mapRadius, out bool inRange);
                 mapRunway.localRotation = Quaternion.Euler(0f, 0f, -Mathf.DeltaAngle(r.HeadingDegrees, r.RunwayHeadingDegrees));
                 int length = Mathf.RoundToInt(Mathf.Clamp(r.RunwayLengthMetres / rangeMetres * mapRadius, 10f, 120f));

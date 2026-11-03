@@ -98,6 +98,11 @@ namespace OpenSkies.UI
             Caption(root, p, "ALT", new Vector2(0f, 70f), 22);
             Caption(root, p, "FEET", new Vector2(0f, 44f), 18);
             face.digital = DigitalWindow(root, p, new Vector2(0f, -66f), 140f);
+            // The subscale (QNH) window on the right, as on a real altimeter: the pilot sets it, the needles follow.
+            face.baroWindow = DigitalWindow(root, p, new Vector2(104f, 8f), 92f);
+            face.baroWindow.fontSize = 26;
+            face.baroWindow.text = "1013";
+            Caption(root, p, "HPA", new Vector2(104f, -26f), 14);
             face.shortNeedle = NeedleShape("Thousands", root, 105f, 18f, 0.12f, Needle);
             face.needle = NeedleShape("Hundreds", root, 172f, 9f, 0.14f, Needle);
             Cap(root, p);
@@ -137,6 +142,13 @@ namespace OpenSkies.UI
                 Tick(card, degrees, 192f, thirty ? 26f : (ten ? 18f : 10f), ten ? 4f : 2.5f, Marking);
                 if (thirty) Label(card, p, degrees, 145f, names[degrees / 30], degrees % 90 == 0 ? 44 : 34, rotateWithDial: true);
             }
+            // The heading bug rides on the card, so it stays at its own heading as the card turns.
+            var bug = Plain("HeadingBug", card, new Vector2(26f, 22f), new Color(1f, 1f, 1f, 0.95f));
+            bug.anchoredPosition = InstrumentMath.HeadingBugPosition(360, face.headingBugRadius);
+            bug.localRotation = Quaternion.Euler(0f, 0f, 180f); // the arrowhead points in at the centre
+            face.headingBug = bug;
+            face.headingBugImage = bug.GetComponent<Image>();
+            p.Arrows.Add(face.headingBugImage);
             Plain("LubberLine", root, new Vector2(6f, 32f), Pointer).anchoredPosition = new Vector2(0f, 172f);
             AircraftSymbol(root);
             face.digital = DigitalWindow(root, p, new Vector2(0f, -100f), 110f);

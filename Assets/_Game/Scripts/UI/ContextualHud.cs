@@ -119,8 +119,30 @@ namespace OpenSkies.UI
         float _nextValueRefresh;
         float _opacity = 1f;
         bool _initialized, _actionsConfigured, _reducedMotion;
+        bool _legacyRail = true;
 
         public bool ReducedMotion => _reducedMotion;
+        /// <summary>SYSTEMS and the action rail are shown (legacy interface). Off: the gesture-first handle and arc replace them.</summary>
+        public bool LegacyRailEnabled => _legacyRail;
+
+        /// <summary>The warning shown in a banner slot (a <see cref="FlightWarning"/> value), or -1.</summary>
+        public int WarningInSlot(int slot) => slot >= 0 && slot < WarningSlotCount && _slotWarning[slot] != NoValue ? _slotWarning[slot] : -1;
+
+        /// <summary>
+        /// Shows or hides SYSTEMS and the rail. The HUD profile button, the flight data, the
+        /// guides and the warnings are unaffected: they belong to both interfaces.
+        /// </summary>
+        public void SetLegacyRailEnabled(bool enabled)
+        {
+            EnsureInitialized();
+            _legacyRail = enabled;
+            if (systemsGroup != null)
+            {
+                systemsGroup.alpha = enabled ? _opacity : 0f;
+                systemsGroup.blocksRaycasts = enabled;
+                systemsGroup.interactable = enabled;
+            }
+        }
         /// <summary>The player's HUD opacity (routine information and buttons; warnings are never dimmed).</summary>
         public float Opacity => _opacity;
 
@@ -184,7 +206,7 @@ namespace OpenSkies.UI
             _approachFade?.SetOpacityScale(_opacity);
             _navigationFade?.SetOpacityScale(_opacity);
             for (int i = 0; i < RailSlotCount; i++) _railFades[i]?.SetOpacityScale(_opacity);
-            if (systemsGroup != null) systemsGroup.alpha = _opacity;
+            if (systemsGroup != null) systemsGroup.alpha = _legacyRail ? _opacity : 0f;
             if (profileGroup != null) profileGroup.alpha = _opacity;
         }
 
@@ -477,9 +499,9 @@ namespace OpenSkies.UI
                 var slotFade = _railFades[s];
                 var button = railSlots[s];
                 if (slotFade == null || button == null) continue;
-                if (!_slotUsed[s])
+                if (!_slotUsed[s] || (!_legacyRail && !button.IsPressed))
                 {
-                    slotFade.SetTarget(0f, 0f, 0f);
+                    slotFade.SetTarget(0f, _slotUsed[s] ? fade : 0f, 0f);
                     continue;
                 }
 

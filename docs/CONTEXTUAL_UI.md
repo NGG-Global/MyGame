@@ -18,8 +18,10 @@ short, restrained transitions. It never takes control away from the pilot.
    Banners never take touches and are never modal.
 4. **Engaged systems stay reachable.** An action whose system is on (parking
    brake set, a guide shown) stays visible in every profile so it can be undone.
-5. **Manual access.** SYSTEMS (always visible) opens every available action, and
-   the player can show or hide any guide. The player's choice wins.
+5. **Manual access.** Every available action is always reachable: in the gesture-first
+   interface by pulling the systems handle (the arc shows every action, the relevant
+   ones emphasised; `docs/GESTURE_INTERACTION.md`), in the legacy interface by SYSTEMS
+   (always visible). The player can show or hide any guide. The player's choice wins.
 6. **No flicker.** The phase estimator has hysteresis, confirmation times and a
    minimum phase duration; the HUD shows things at once but hides them only after
    a delay and a minimum visible time.
@@ -116,7 +118,10 @@ against recorded flights in the Editor with the inspector open.
 
 ## HUD profiles
 
-The profile button (top right, or **H**) cycles Smart → Detailed → Cinematic. The
+The profile button (top right, or **H**) cycles Smart → Detailed → Cinematic; in
+the gesture-first interface a pull on the HUD band previews and commits a profile
+(`docs/GESTURE_INTERACTION.md`): while the band is pulled, the disclosure controller
+runs with the previewed profile and the committed one is untouched until release. The
 choice is remembered (PlayerPrefs). Changing profile never affects flight input.
 
 | | Cinematic | Smart (default) | Detailed |
@@ -155,6 +160,11 @@ brings the information back at once. If the phase confidence is below 0.35, Smar
 shows a safe set instead (airborne: IAS, ALT, VS; on the ground: IAS).
 
 ### Smart: contextual actions
+
+The table drives both interfaces: in the gesture-first arc an action that this table
+offers is drawn in full, the others quietly (still selectable); the legacy rail shows
+only the offered ones. The SYSTEMS button and the rail exist only in the legacy
+interface (`FlightSession.interactionMode`).
 
 | Action | Offered in | Notes |
 |---|---|---|
@@ -227,8 +237,11 @@ appears. Banners are never dimmed by the HUD opacity setting.
 | Flying tips (Assisted) | bottom of the free column, 12-76 units up, below the panel band; takes no touches | column width × 64 |
 | Mission coaching (`docs/ONBOARDING_DESIGN.md`) | same place, 12-108 units up (never with the tips); tap for the explanation | column width × 96 |
 | MENU / SKIP TUTORIAL | top right under CAM (x = −24, y = −128 / −240) | 128 × 96 |
-| Pause card (M12) | free column; RESUME and SETTINGS share the first row | up to 600 wide, five buttons |
+| Pause card (M12, legacy interface) | free column; RESUME and SETTINGS share the first row | up to 600 wide, five buttons |
 | Settings screen (M12) | centred over a dimmed, paused world | 1180 × 872 |
+| Pause sheet (M14, gesture-first) | from the bottom edge, full width; stops at 300 and 860 units, the settings embedded at the second | `docs/GESTURE_NAVIGATION.md` |
+| Entry stations (M14, gesture-first) | full screen over the showcase camera; stations 900 units wide | `docs/GESTURE_NAVIGATION.md` |
+| Gesture cue (M14) | a dot and a 420-unit caption at the control, kept inside the safe area; takes no touches | `docs/GESTURE_INTERACTION.md` |
 
 A PlayMode test checks at 4:3, 16:9 and 20:9 that no HUD target or banner
 overlaps the joystick region, the throttle or BRAKE, and that every target is at

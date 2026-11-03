@@ -7,6 +7,7 @@ using OpenSkies.Awareness;
 using OpenSkies.CameraSystems;
 using OpenSkies.Cockpit;
 using OpenSkies.FlightInput.TouchControls;
+using OpenSkies.Gestures;
 using OpenSkies.Gameplay;
 using OpenSkies.Missions;
 using OpenSkies.Platform;
@@ -94,7 +95,7 @@ namespace OpenSkies.Editor
             var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
             var hud = CreateHud(cameraRig.ViewCamera, out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel,
-                out var viewControls, out var flightSettings, out var guidanceLine, out var missionUi);
+                out var viewControls, out var flightSettings, out var guidanceLine, out var missionUi, out var interactionSurface, out var gestureHud);
             var audioManager = CreateAudio();
             cockpitInteraction.cameraRig = cameraRig;
             CreateEventSystem();
@@ -118,6 +119,9 @@ namespace OpenSkies.Editor
             session.assistConfiguration = LoadOrCreateAssistConfiguration();
             session.flightSettings = flightSettings;
             session.guidanceLine = guidanceLine;
+            session.interactionSurface = interactionSurface;
+            session.gestureHud = gestureHud;
+            session.interactionConfiguration = LoadOrCreateInteractionConfiguration();
             // Runway 36/18: surface centred on the origin, primary landing direction north (+Z).
             session.homeRunway = new RunwayInfo(PrototypeWorld.RunwayCentre, PrototypeWorld.RunwayHeadingDegrees, RunwayLength, RunwayWidth);
             session.rememberCameraMode = true;
@@ -130,7 +134,9 @@ namespace OpenSkies.Editor
             modes.flight = session;
             modes.configuration = LoadOrCreateMissionConfiguration();
             modes.modeSelect = missionUi.ModeSelect;
+            modes.entryScreen = missionUi.Entry;
             modes.card = missionUi.Card;
+            modes.pauseSheet = missionUi.PauseSheet;
             modes.coach = missionUi.Coach;
             modes.highlights = missionUi.Highlights;
             modes.marker = missionUi.Marker;
@@ -147,6 +153,7 @@ namespace OpenSkies.Editor
             presentation.modes = modes;
             presentation.audioManager = audioManager;
             presentation.settings = missionUi.Settings;
+            presentation.settingsInSheet = missionUi.PauseSheet != null ? missionUi.PauseSheet.settings : null;
             presentation.canvasScaler = missionUi.Scaler;
             presentation.sun = sun;
             presentationGo.SetActive(true);
@@ -333,6 +340,19 @@ namespace OpenSkies.Editor
         }
 
         /// <summary>Tutorial, landing challenge and scoring tuning: created once, then left alone like the other configurations.</summary>
+        /// <summary>The gesture language's feel, created once at Assets/_Game/Settings/HUD and never overwritten.</summary>
+        static InteractionConfiguration LoadOrCreateInteractionConfiguration()
+        {
+            const string path = "Assets/_Game/Settings/HUD/InteractionConfiguration.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<InteractionConfiguration>(path);
+            if (existing != null) return existing;
+            EditorFolders.Ensure("Assets/_Game/Settings/HUD");
+            var asset = ScriptableObject.CreateInstance<InteractionConfiguration>();
+            AssetDatabase.CreateAsset(asset, path);
+            AssetDatabase.SaveAssets();
+            return asset;
+        }
+
         static MissionConfiguration LoadOrCreateMissionConfiguration()
         {
             var configuration = AssetDatabase.LoadAssetAtPath<MissionConfiguration>(MissionConfigurationPath);
@@ -471,13 +491,16 @@ namespace OpenSkies.Editor
             public HudButton Menu;
             public HudButton Skip;
             public SettingsScreen Settings;
+            public PauseSheet PauseSheet;
+            public EntryStationsScreen Entry;
             public CanvasScaler Scaler;
             public Text PerformanceText;
         }
 
         static HudPresenter CreateHud(Camera viewCamera, out TouchFlightControls touchControls, out ContextualHud contextualHud,
             out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel, out CockpitViewControls viewControls,
-            out FlightSettingsPanel flightSettings, out GuidanceLine guidanceLine, out MissionUi missionUi)
+            out FlightSettingsPanel flightSettings, out GuidanceLine guidanceLine, out MissionUi missionUi,
+            out InteractionSurface interactionSurface, out GestureHud gestureHud)
         {
             missionUi = new MissionUi();
             var canvasGo = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -494,16 +517,22 @@ namespace OpenSkies.Editor
 
             var font = Resources.GetBuiltinResource<Font>(BuiltinFont);
 
-            // Cockpit touch surface: first child, so it is behind every control and only receives
-            // the touches nothing else took. It draws nothing.
-            var surfaceGo = new GameObject("CockpitTouchSurface", typeof(RectTransform), typeof(TouchSurfaceGraphic));
+            // Interaction surface: first child, so it is behind every control and receives only the
+            // touches nothing else took; it routes them to gestures or, in cockpit view, to the cockpit
+            // interaction (which lives on its own object without a graphic). It draws nothing.
+            var surfaceGo = new GameObject("InteractionSurface", typeof(RectTransform), typeof(RaycastOnlyGraphic));
             var surfaceRect = (RectTransform)surfaceGo.transform;
             surfaceRect.SetParent(safeArea, false);
             Stretch(surfaceRect);
-            var surface = surfaceGo.GetComponent<TouchSurfaceGraphic>();
-            surface.raycastTarget = true;
-            cockpitInteraction = surfaceGo.AddComponent<CockpitInteractionManager>();
-            cockpitInteraction.surface = surface;
+            var surfaceGraphic = surfaceGo.GetComponent<RaycastOnlyGraphic>();
+            surfaceGraphic.raycastTarget = true;
+            interactionSurface = surfaceGo.AddComponent<InteractionSurface>();
+            interactionSurface.surface = surfaceGraphic;
+
+            var cockpitGo = new GameObject("CockpitInteraction", typeof(RectTransform));
+            ((RectTransform)cockpitGo.transform).SetParent(safeArea, false);
+            cockpitInteraction = cockpitGo.AddComponent<CockpitInteractionManager>();
+            cockpitInteraction.surface = null; // routed by the interaction surface, not by its own raycast target
 
             // Developer telemetry line, top-left below the player flight data and guides. Temporary (see HudPresenter).
             var readout = NewText("DeveloperReadout", safeArea, font, 26, TextAnchor.UpperLeft);
@@ -538,7 +567,7 @@ namespace OpenSkies.Editor
 
             // Cockpit focus panel (enlarged instruments, system selectors) in the free column between
             // the joystick region and the action rail; before the contextual HUD so warnings draw over it.
-            focusPanel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
+            focusPanel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset, interactionSurface);
 
             // Flight assistance settings (same free column, never open with the focus panel) and the flying-tip
             // line along the bottom of that column; also before the contextual HUD, so warnings draw over them.
@@ -558,6 +587,11 @@ namespace OpenSkies.Editor
             // in cockpit view while the view is turned away from rest.
             viewControls = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
 
+            // Gesture-first HUD: the systems handle (where SYSTEMS was), the HUD band, the arc, the flap
+            // lever, the density ladder and the explanation plate, over the contextual HUD and under
+            // the mission UI (a modal card still dims and blocks everything).
+            gestureHud = GestureHudFactory.Build(safeArea, font, interactionSurface);
+
             // Session buttons under CAM, the control highlights over the controls (no touches), the
             // mission card (a modal pause card dims and blocks everything else), and the entry screen on top.
             missionUi.Menu = MissionUiFactory.BuildMenuButton(safeArea, font);
@@ -565,7 +599,11 @@ namespace OpenSkies.Editor
             missionUi.Highlights = MissionUiFactory.BuildHighlights(safeArea);
             missionUi.Card = MissionUiFactory.BuildMissionCard(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset,
                 CockpitFocusPanelFactory.ColumnBottom, CockpitFocusPanelFactory.ColumnTop);
+            // The pull-up pause sheet (gesture-first) over the HUD and the card; then the two entry
+            // screens: the legacy mode select and the spatial stations (the session shows one).
+            missionUi.PauseSheet = PauseSheetFactory.Build(safeArea, font, interactionSurface);
             missionUi.ModeSelect = MissionUiFactory.BuildModeSelect(safeArea, font);
+            missionUi.Entry = EntryStationsFactory.Build(safeArea, font, interactionSurface);
             // Settings on top of everything: opened over the pause card or the entry screen.
             missionUi.Settings = SettingsScreenFactory.Build(safeArea, font);
 

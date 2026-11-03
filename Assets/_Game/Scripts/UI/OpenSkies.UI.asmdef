@@ -6,7 +6,8 @@
         "OpenSkies.Awareness",
         "UnityEngine.UI",
         "OpenSkies.Missions",
-        "OpenSkies.Options"
+        "OpenSkies.Options",
+        "OpenSkies.Gestures"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

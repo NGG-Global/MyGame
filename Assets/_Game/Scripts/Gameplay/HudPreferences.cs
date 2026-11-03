@@ -17,6 +17,20 @@ namespace OpenSkies.Gameplay
         const string MotionKey = "OpenSkies.Hud.Motion";
         const string CockpitFieldOfViewKey = "OpenSkies.View.CockpitFieldOfView";
         const string CameraModeKey = "OpenSkies.View.CameraMode";
+        const string InteractionModeKey = "OpenSkies.Dev.InteractionMode";
+
+        /// <summary>Development: gesture-first (default) or the legacy rail, for comparison on a device.</summary>
+        public static InteractionMode LoadInteractionMode(InteractionMode fallback)
+        {
+            int value = PlayerPrefs.GetInt(InteractionModeKey, (int)fallback);
+            return value == (int)InteractionMode.GestureFirst || value == (int)InteractionMode.Legacy ? (InteractionMode)value : fallback;
+        }
+
+        public static void SaveInteractionMode(InteractionMode mode)
+        {
+            PlayerPrefs.SetInt(InteractionModeKey, (int)mode);
+            PlayerPrefs.Save();
+        }
 
         public static CameraMode LoadCameraMode(CameraMode fallback)
         {

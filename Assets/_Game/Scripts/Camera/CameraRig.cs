@@ -28,6 +28,17 @@ namespace OpenSkies.CameraSystems
         public float followSharpness = 6f;
         public float chaseFieldOfView = 60f;
 
+        [Header("Chase free look (temporary, springs back)")]
+        [Tooltip("Free-look limits about the chase position, degrees (left/right).")]
+        public Vector2 chaseYawLimits = new Vector2(-150f, 150f);
+        [Tooltip("Free-look limits, degrees (down/up).")]
+        public Vector2 chasePitchLimits = new Vector2(-20f, 60f);
+        [Tooltip("Duration of the return to the chase position after the finger lifts, s.")]
+        public float chaseReturnSeconds = 0.45f;
+        [Tooltip("Pinch zoom limits for the chase distance, m.")]
+        public float minChaseDistance = 8f;
+        public float maxChaseDistance = 30f;
+
         [Header("Cockpit view")]
         [Tooltip("Vertical field of view, degrees. Players adjust it within the limits below.")]
         public float cockpitFieldOfView = 62f;
@@ -49,9 +60,20 @@ namespace OpenSkies.CameraSystems
         Vector2 _recentreFrom;
         float _recentreProgress = 1f;
         float _idleSeconds;
+        Vector3 _showcasePosition, _showcaseLookAt;
+        float _showcaseFieldOfView = 55f;
+        Vector2 _chaseLook;          // x = yaw, y = pitch, degrees about the chase position
+        Vector2 _chaseReturnFrom;
+        float _chaseReturnProgress = 1f;
+        bool _chaseHeld;
 
         /// <summary>Current cockpit look offset (x yaw right, y pitch up), degrees.</summary>
         public Vector2 CockpitLook => _look;
+        /// <summary>Current chase free-look offset (x yaw, y pitch), degrees; zero at the chase position.</summary>
+        public Vector2 ChaseLook => _chaseLook;
+        /// <summary>A finger is holding the chase view away from its position.</summary>
+        public bool IsChaseLookHeld => _chaseHeld;
+        public bool IsChaseReturning => _chaseReturnProgress < 1f;
         public bool IsRecentring => _recentreProgress < 1f;
         /// <summary>Cockpit view turned away from rest (beyond <see cref="lookAwayDegrees"/>) and not already returning.</summary>
         public bool IsLookingAway => !IsRecentring && CockpitLookMath.IsLookingAway(_look, lookAwayDegrees);
@@ -84,6 +106,33 @@ namespace OpenSkies.CameraSystems
         public void SetCockpitFieldOfView(float degrees) =>
             cockpitFieldOfView = CockpitLookMath.ClampFieldOfView(degrees, minCockpitFieldOfView, maxCockpitFieldOfView);
 
+        /// <summary>Turns the chase view about the aircraft while a finger drags; it springs back on <see cref="ReleaseChaseLook"/>.</summary>
+        public void AddChaseLook(float yawDegrees, float pitchDegrees)
+        {
+            _chaseLook = CockpitLookMath.Clamp(_chaseLook + new Vector2(yawDegrees, pitchDegrees), chaseYawLimits, chasePitchLimits);
+            _chaseReturnProgress = 1f;
+            _chaseHeld = true;
+        }
+
+        /// <summary>The finger lifted: back to the chase position, smoothly or at once (reduced motion).</summary>
+        public void ReleaseChaseLook(bool instant = false)
+        {
+            _chaseHeld = false;
+            if (_chaseLook.sqrMagnitude < 1e-6f) return;
+            if (instant || chaseReturnSeconds <= 0f)
+            {
+                _chaseLook = Vector2.zero;
+                _chaseReturnProgress = 1f;
+                return;
+            }
+            _chaseReturnFrom = _chaseLook;
+            _chaseReturnProgress = 0f;
+        }
+
+        /// <summary>Pinch zoom in the chase view, within limits. Presentation only.</summary>
+        public void SetChaseDistance(float metres) =>
+            chaseDistance = Mathf.Clamp(float.IsNaN(metres) ? chaseDistance : metres, minChaseDistance, maxChaseDistance);
+
         public void SetMode(CameraMode newMode)
         {
             mode = newMode;
@@ -91,6 +140,23 @@ namespace OpenSkies.CameraSystems
         }
 
         public void ToggleMode() => SetMode(mode == CameraMode.Chase ? CameraMode.Cockpit : CameraMode.Chase);
+
+        /// <summary>The entry screen's framing: where the camera is and what it looks at, applied while the mode is Showcase.</summary>
+        public void SetShowcase(Vector3 position, Vector3 lookAt, float fieldOfView)
+        {
+            _showcasePosition = position;
+            _showcaseLookAt = lookAt;
+            _showcaseFieldOfView = Mathf.Clamp(fieldOfView, 20f, 100f);
+            if (mode == CameraMode.Showcase) PlaceShowcase();
+        }
+
+        void PlaceShowcase()
+        {
+            Vector3 to = _showcaseLookAt - _showcasePosition;
+            Quaternion rotation = to.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(to, Vector3.up) : transform.rotation;
+            transform.SetPositionAndRotation(_showcasePosition, rotation);
+            SetFieldOfView(_showcaseFieldOfView);
+        }
 
         void Awake() => _camera = GetComponent<Camera>();
 
@@ -102,6 +168,11 @@ namespace OpenSkies.CameraSystems
 
         void Place(float deltaTime, bool snap)
         {
+            if (mode == CameraMode.Showcase)
+            {
+                PlaceShowcase();
+                return;
+            }
             if (target == null) return;
 
             if (mode == CameraMode.Cockpit && cockpitAnchor != null)
@@ -114,12 +185,20 @@ namespace OpenSkies.CameraSystems
             }
             SetFieldOfView(chaseFieldOfView);
 
-            Vector3 desired = ChaseCameraMath.DesiredPosition(target.position, target.rotation, chaseDistance, chaseHeight);
+            AdvanceChaseLook(deltaTime);
+            Vector3 desired = ChaseCameraMath.OrbitPosition(target.position, target.rotation, chaseDistance, chaseHeight, _chaseLook.x, _chaseLook.y);
             float t = snap ? 1f : ChaseCameraMath.SmoothingFactor(followSharpness, deltaTime);
             Vector3 position = Vector3.Lerp(transform.position, desired, t);
             Vector3 toTarget = target.position + Vector3.up * lookAheadHeight - position;
             Quaternion rotation = toTarget.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(toTarget, Vector3.up) : transform.rotation;
             transform.SetPositionAndRotation(position, rotation);
+        }
+
+        void AdvanceChaseLook(float deltaTime)
+        {
+            if (_chaseReturnProgress >= 1f) return;
+            _chaseReturnProgress = Mathf.Min(1f, _chaseReturnProgress + deltaTime / Mathf.Max(chaseReturnSeconds, 1e-3f));
+            _chaseLook = CockpitLookMath.Recentre(_chaseReturnFrom, _chaseReturnProgress);
         }
 
         void AdvanceCockpitLook(float deltaTime)

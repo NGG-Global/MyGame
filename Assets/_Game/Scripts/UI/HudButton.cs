@@ -13,6 +13,8 @@ namespace OpenSkies.UI
         Tap = 1,
         /// <summary>An important choice: a confirming sound and, where enabled, a light haptic pulse.</summary>
         Confirm = 2,
+        /// <summary>A detent or a segment crossed under the finger: the quiet tick and, where enabled, the lightest pulse (rate-limited).</summary>
+        Tick = 3,
     }
 
     /// <summary>
@@ -51,6 +53,12 @@ namespace OpenSkies.UI
 
         /// <summary>Any HUD button was clicked (sound and haptics listen here; never flight input).</summary>
         public static event Action<UiFeedback> AnyClicked;
+
+        /// <summary>Gesture-driven controls report their ticks and confirmations here, so sound and haptics are one system.</summary>
+        public static void Report(UiFeedback feedback)
+        {
+            if (feedback != UiFeedback.None) AnyClicked?.Invoke(feedback);
+        }
 
         public bool IsPressed => _pressedPointer != NoPointer;
         public bool Interactable => _interactable;

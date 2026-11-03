@@ -18,7 +18,8 @@
         "OpenSkies.Options",
         "OpenSkies.Audio",
         "OpenSkies.Platform",
-        "OpenSkies.Editor"
+        "OpenSkies.Editor",
+        "OpenSkies.Gestures"
     ],
     "includePlatforms": [
         "Editor"

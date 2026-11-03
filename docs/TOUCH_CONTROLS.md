@@ -14,7 +14,10 @@ nothing over the centre of the screen.
 | RESET | Top right, left of CAM | Either | Back to the runway start at rest, throttle idle. |
 | HUD profile | Top right, left of RESET | Either | Cycles Smart, Detailed, Cinematic. Never changes flight input. |
 | LOOK FWD | Top right, left of the HUD profile button | Either | Cockpit view only, while the view is turned more than 10° away: returns it forward smoothly. Never changes flight input. |
-| SYSTEMS and action rail | Left of the throttle: SYSTEMS directly above BRAKE, contextual actions stacked above it | Right | SYSTEMS (always visible) opens every available action; actions appear by phase of flight. ASSIST opens the flight assistance and stick sensitivity settings. See `docs/CONTEXTUAL_UI.md`, `docs/FLIGHT_ASSISTANCE.md`. |
+| Systems handle (gesture-first) | Left of the throttle, directly above BRAKE (168 × 96) | Right | Pull up: the arc of aircraft actions unfolds with the thumb; slide onto one and release. Rest on FLAPS: the flap lever. Tap: a hint. Hold: an explanation. See `docs/GESTURE_INTERACTION.md`. |
+| HUD band (gesture-first) | Over the flight data strip, top left | Either | Pull down for more HUD, up for less, with a preview; hold a value to explain it. |
+| SYSTEMS and action rail (legacy interface only) | Left of the throttle: SYSTEMS directly above BRAKE, contextual actions stacked above it | Right | SYSTEMS (always visible) opens every available action; actions appear by phase of flight. ASSIST opens the flight assistance and stick sensitivity settings. See `docs/CONTEXTUAL_UI.md`, `docs/FLIGHT_ASSISTANCE.md`. |
+| Sky (gesture-first, chase view) | Any touch none of the above took | Either | Drag to look around (springs back), pinch to zoom, double tap for the cockpit. |
 | Cockpit (cockpit view) | Any touch none of the above took | Either | Tap an instrument or switch, drag to look, pinch for field of view, double tap to look forward. See `docs/COCKPIT.md`. |
 
 Sizes are canvas units at the 1920 × 1080 reference; the canvas scales by
@@ -75,6 +78,10 @@ TouchFlightControls ◀── FlightSession (telemetry: weight on wheels; comman
      even if its release event never arrived.
 4. Anything added later that reacts to pointers (camera look, cockpit
    instruments, menus) **must ignore pointers that are owned** in this table.
+   Touches that no control took reach the `InteractionSurface` (`OpenSkies.Gestures`),
+   which routes them (gesture channels, or the cockpit by explicit forwarding) and
+   claims the ones it recognises with the owner name "Gestures", so the liveness
+   check and every revocation below cover gestures as well.
    The contextual HUD buttons (`HudButton`) act only on a press and release on
    the same button, so a pointer owned by a flight control (pressed elsewhere)
    can never trigger them; hidden HUD actions take no touches. The cockpit

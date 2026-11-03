@@ -25,6 +25,24 @@ namespace OpenSkies.Options
         Full = 2,
     }
 
+    /// <summary>How quickly gestures respond: holds, rests and pulls (presets over the tuning asset).</summary>
+    public enum GestureSpeed
+    {
+        /// <summary>Longer holds and rests, shorter pulls: forgiving.</summary>
+        Relaxed = 0,
+        Standard = 1,
+        /// <summary>Shorter holds and rests, longer pulls: for a practised thumb.</summary>
+        Quick = 2,
+    }
+
+    /// <summary>How far a drag on the sky turns the chase view.</summary>
+    public enum CameraGestureSensitivity
+    {
+        Low = 0,
+        Medium = 1,
+        High = 2,
+    }
+
     /// <summary>Volume channels: one per mixer group under Master.</summary>
     public enum VolumeChannel
     {
@@ -57,6 +75,10 @@ namespace OpenSkies.Options
         public float EnvironmentVolume;
         public float InterfaceVolume;
         public float WarningVolume;
+        public GestureSpeed GestureSpeed;
+        public CameraGestureSensitivity CameraGesture;
+        /// <summary>Contextual cues that show a gesture when it first becomes relevant.</summary>
+        public bool GestureHints;
 
         public float Volume(VolumeChannel channel)
         {
@@ -112,6 +134,9 @@ namespace OpenSkies.Options
             EnvironmentVolume = 0.7f,
             InterfaceVolume = 0.6f,
             WarningVolume = 0.9f,
+            GestureSpeed = GestureSpeed.Standard,
+            CameraGesture = CameraGestureSensitivity.Medium,
+            GestureHints = true,
         };
 
         /// <summary>Clamps every value to its range and step, replaces bad numbers and unknown enum values with the defaults.</summary>
@@ -123,6 +148,8 @@ namespace OpenSkies.Options
             if (!IsDefined(options.Motion)) options.Motion = d.Motion;
             if (!IsDefined(options.Graphics)) options.Graphics = d.Graphics;
             if (!IsDefined(options.FrameRate)) options.FrameRate = d.FrameRate;
+            if (options.GestureSpeed < GestureSpeed.Relaxed || options.GestureSpeed > GestureSpeed.Quick) options.GestureSpeed = d.GestureSpeed;
+            if (options.CameraGesture < CameraGestureSensitivity.Low || options.CameraGesture > CameraGestureSensitivity.High) options.CameraGesture = d.CameraGesture;
             for (int c = 0; c < VolumeChannelCount; c++)
             {
                 var channel = (VolumeChannel)c;
@@ -137,9 +164,20 @@ namespace OpenSkies.Options
             a.UiScale == b.UiScale && a.HudOpacity == b.HudOpacity && a.Motion == b.Motion && a.Haptics == b.Haptics
             && a.Graphics == b.Graphics && a.FrameRate == b.FrameRate && a.MasterVolume == b.MasterVolume
             && a.AircraftVolume == b.AircraftVolume && a.EnvironmentVolume == b.EnvironmentVolume
-            && a.InterfaceVolume == b.InterfaceVolume && a.WarningVolume == b.WarningVolume;
+            && a.InterfaceVolume == b.InterfaceVolume && a.WarningVolume == b.WarningVolume
+            && a.GestureSpeed == b.GestureSpeed && a.CameraGesture == b.CameraGesture && a.GestureHints == b.GestureHints;
 
         public static float MinimumVolume(VolumeChannel channel) => channel == VolumeChannel.Warnings ? MinWarningVolume : 0f;
+
+        /// <summary>Time scale for holds, rests and long presses: relaxed waits longer, quick waits less.</summary>
+        public static float GestureTimeScale(GestureSpeed speed) => speed == GestureSpeed.Relaxed ? 1.35f : (speed == GestureSpeed.Quick ? 0.75f : 1f);
+
+        /// <summary>Distance scale for pulls: relaxed reveals sooner, quick asks for a more deliberate pull.</summary>
+        public static float GestureDistanceScale(GestureSpeed speed) => speed == GestureSpeed.Relaxed ? 0.8f : (speed == GestureSpeed.Quick ? 1.2f : 1f);
+
+        /// <summary>How much more or less a drag on the sky turns the chase view.</summary>
+        public static float CameraGestureScale(CameraGestureSensitivity sensitivity) =>
+            sensitivity == CameraGestureSensitivity.Low ? 0.65f : (sensitivity == CameraGestureSensitivity.High ? 1.5f : 1f);
 
         /// <summary>One step up or down for a stepper control, within the channel's range.</summary>
         public static float StepVolume(VolumeChannel channel, float current, int direction) =>

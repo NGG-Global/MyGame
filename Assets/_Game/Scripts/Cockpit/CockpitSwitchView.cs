@@ -31,12 +31,25 @@ namespace OpenSkies.Cockpit
         AircraftSystems _systems;
         MaterialPropertyBlock _block;
         int _seenVersion = int.MinValue;
-        float _target, _current;
+        float _target, _current, _preview;
+        bool _previewing;
 
         /// <summary>Position 0-1 the part is moving to (flap detent as a fraction).</summary>
         public float TargetPosition => _target;
         public float CurrentPosition => _current;
         public bool IndicatorLit { get; private set; }
+        /// <summary>A finger is moving the part ahead of any committed change.</summary>
+        public bool IsPreviewing => _previewing;
+
+        /// <summary>
+        /// The part follows the finger (0-1 along its travel) while a flick or drag is in
+        /// progress; the committed position is unchanged and the indicator still shows it.
+        /// </summary>
+        public void SetPreview(float position01, bool previewing)
+        {
+            _previewing = previewing;
+            _preview = Mathf.Clamp01(position01);
+        }
 
         public void Bind(AircraftSystems systems)
         {
@@ -58,9 +71,10 @@ namespace OpenSkies.Cockpit
                 _target = positions > 1 ? (float)value / (positions - 1) : 0f;
                 SetIndicator(value > 0);
             }
-            if (snap) _current = _target;
-            else if (!Mathf.Approximately(_current, _target))
-                _current = Mathf.MoveTowards(_current, _target, travelSeconds > 0f ? Time.deltaTime / travelSeconds : 1f);
+            float goal = _previewing ? _preview : _target;
+            if (snap) _current = goal;
+            else if (!Mathf.Approximately(_current, goal))
+                _current = Mathf.MoveTowards(_current, goal, travelSeconds > 0f ? Time.unscaledDeltaTime / travelSeconds : 1f);
             else return;
 
             if (moving == null) return;

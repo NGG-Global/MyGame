@@ -17,6 +17,9 @@ namespace OpenSkies.Gameplay
         const string HapticsKey = Prefix + "Haptics";
         const string GraphicsKey = Prefix + "Graphics";
         const string FrameRateKey = Prefix + "FrameRate";
+        const string GestureSpeedKey = Prefix + "GestureSpeed";
+        const string CameraGestureKey = Prefix + "CameraGesture";
+        const string GestureHintsKey = Prefix + "GestureHints";
         static readonly string[] VolumeKeys =
         {
             Prefix + "Volume.Master", Prefix + "Volume.Aircraft", Prefix + "Volume.Environment", Prefix + "Volume.Interface",
@@ -32,6 +35,9 @@ namespace OpenSkies.Gameplay
             o.Haptics = PlayerPrefs.GetInt(HapticsKey, defaults.Haptics ? 1 : 0) != 0;
             o.Graphics = (GraphicsPreset)PlayerPrefs.GetInt(GraphicsKey, (int)defaults.Graphics);
             o.FrameRate = (FrameRatePreference)PlayerPrefs.GetInt(FrameRateKey, (int)defaults.FrameRate);
+            o.GestureSpeed = (GestureSpeed)PlayerPrefs.GetInt(GestureSpeedKey, (int)defaults.GestureSpeed);
+            o.CameraGesture = (CameraGestureSensitivity)PlayerPrefs.GetInt(CameraGestureKey, (int)defaults.CameraGesture);
+            o.GestureHints = PlayerPrefs.GetInt(GestureHintsKey, defaults.GestureHints ? 1 : 0) != 0;
             for (int c = 0; c < GameOptionsRules.VolumeChannelCount; c++)
             {
                 var channel = (VolumeChannel)c;
@@ -48,6 +54,9 @@ namespace OpenSkies.Gameplay
             PlayerPrefs.SetInt(HapticsKey, options.Haptics ? 1 : 0);
             PlayerPrefs.SetInt(GraphicsKey, (int)options.Graphics);
             PlayerPrefs.SetInt(FrameRateKey, (int)options.FrameRate);
+            PlayerPrefs.SetInt(GestureSpeedKey, (int)options.GestureSpeed);
+            PlayerPrefs.SetInt(CameraGestureKey, (int)options.CameraGesture);
+            PlayerPrefs.SetInt(GestureHintsKey, options.GestureHints ? 1 : 0);
             for (int c = 0; c < GameOptionsRules.VolumeChannelCount; c++)
                 PlayerPrefs.SetInt(VolumeKeys[c], GameOptionsRules.Percent(options.Volume((VolumeChannel)c)));
             PlayerPrefs.Save(); // mobile apps can be killed without a clean quit

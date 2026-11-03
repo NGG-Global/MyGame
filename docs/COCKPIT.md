@@ -52,11 +52,15 @@ mass properties or landing-gear raycasts.
 
 ## Touch routing and gestures
 
-The touch surface is the first child of the safe area, so uGUI gives every
-control drawn after it first claim on a touch. In addition the manager checks the
-shared ownership table: a pointer someone else owns is ignored, and the manager
-claims the pointers it uses (owner name "Cockpit"), so the touch controls'
-liveness checks and focus-loss revocation also cancel cockpit gestures.
+In the prototype scene the manager no longer has a full-screen graphic of its
+own: the `InteractionSurface` (`OpenSkies.Gestures`, first child of the safe area)
+receives every touch no control took and, in cockpit view, forwards the press,
+drags and release to the manager event by event (`docs/GESTURE_INTERACTION.md`).
+The manager's behaviour is unchanged: it checks the shared ownership table (a
+pointer someone else owns is ignored) and claims the pointers it uses (owner name
+"Cockpit"), so the touch controls' liveness checks and focus-loss revocation also
+cancel cockpit gestures. Standalone (tests), it can still sit on its own
+`TouchSurfaceGraphic`.
 
 | Gesture (unclaimed touches, cockpit view only) | Result |
 |---|---|
@@ -67,6 +71,10 @@ liveness checks and focus-loss revocation also cancel cockpit gestures.
 | Two fingers | Pinch to change the field of view (40° per screen height). Never a tap or a look. |
 | Third finger | Ignored. |
 | App loses focus, pause, release lost | Gesture cancelled without a tap. |
+| Press a switch and flick up or down (5 % of the screen height) | The switch previews and, on release, requests the change through the gate; hazardous systems open the selector with the confirmation. M14, `docs/COCKPIT_DIRECT_MANIPULATION.md`. |
+| Press the flap lever and drag | The shared flap lever: detents preview, release sets through the gate. |
+| Drag around the enlarged heading indicator or altimeter; drag, pinch or double tap the enlarged map | Heading bug, subscale (`InstrumentSettings`), map pan, zoom and recentre. |
+| Two-finger tap | Pause (`docs/GESTURE_NAVIGATION.md`). |
 
 Keyboard (Editor, WebGL): **V** look forward, **-** / **=** wider / narrower
 field of view (held), **[** / **]** flaps up / down a detent, **L** landing
@@ -142,7 +150,10 @@ flight control; warnings draw over it.
 Dismissal: the close button, tapping the enlarged instrument, tapping nothing in
 the cockpit, tapping the same cockpit item again, or any camera change. A
 dismissed instrument fades out and its face is deactivated, so only the cockpit
-copy is drawn.
+copy is drawn. Since M14 the instrument emerges from its place on the panel
+(`CockpitFocusPanel.ShowInstrument` with the origin's screen point and scale,
+`HudStyle.EmergeSeconds`), and the enlarged heading indicator, altimeter and map
+take direct manipulation (`docs/COCKPIT_DIRECT_MANIPULATION.md`).
 
 **Selection frame.** While a focus view or selector is open, a steady amber frame
 (`CockpitSelectionView`, the same amber as engaged HUD actions) outlines the item it

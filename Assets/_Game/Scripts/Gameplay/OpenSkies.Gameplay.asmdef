@@ -15,7 +15,8 @@
         "OpenSkies.World",
         "OpenSkies.Options",
         "OpenSkies.Audio",
-        "OpenSkies.Platform"
+        "OpenSkies.Platform",
+        "OpenSkies.Gestures"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

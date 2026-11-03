@@ -1,6 +1,10 @@
 # Open Skies: gesture-first interaction design (proposal)
 
-Status: proposal for owner review, 3 November 2026. Nothing here is built. It
+Status: approved by the owner on 3 November 2026; the first vertical slice (Phase 1
+plus the camera gestures of Phase 2) is implemented, see `docs/GESTURE_INTERACTION.md`,
+`docs/GESTURE_EXPERIMENTS.md` and `docs/GESTURE_TEST_PLAN.md`. The text below is the
+original proposal; where the implementation differs, those documents are authoritative.
+Original status line: proposal for owner review, 3 November 2026. Nothing here is built. It
 responds to the brief that the interface is too basic and that the differentiator
 must be a modern, gesture-driven use of progressive disclosure that keeps cognitive
 load low on a phone. It is written against the current code and the design rules in

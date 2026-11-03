@@ -23,7 +23,10 @@ played on a device yet; see **Verification status** at the end.
 
 The scene opens on a minimal entry screen over a dimmed, paused view of the
 aircraft on the runway. MENU (top right, or **Esc**) pauses any flight and leads
-back here.
+back here. In the gesture-first interface (M14, `docs/GESTURE_NAVIGATION.md`) the
+entry is three swipeable stations with a showcase camera and the pause is a
+pull-up sheet, also reached by a two-finger tap; the legacy interface keeps the
+mode select and the pause card described here.
 
 | Mode | Starts | RESET returns to | Navigation guide |
 |---|---|---|---|
@@ -131,7 +134,7 @@ and "FLAPS" suggestions) and no message twice in a row.
 | Coaching message | Bottom of the free column (between the joystick region and the action rail), 12-108 units up | 96 units tall. Small step label ("3/8  ROTATION"), the message, a thin accent (white instruction, amber hint, green success, red safety) and "?" when an explanation is available. Tap: show or hide the explanation. Fades in place; replaces the Assisted flying tips while a mission speaks. |
 | Control highlights | On the control itself | A soft amber outline that breathes slowly (steady with reduced motion). Stick, throttle, brake, FLAPS, CAM, RESET. Takes no touches; shown only while the control is visible. |
 | SKIP TUTORIAL | Top right, under MENU, First Flight only | A first tap arms it ("TAP AGAIN TO SKIP", amber, 3 s); the second ends the tutorial. The flight carries on in Free Flight. |
-| MENU | Top right, under CAM | Pauses the flight and opens a small card. |
+| MENU | Top right, under CAM | Pauses the flight and opens a small card (legacy) or the pause sheet (gesture-first). |
 | Cards (pause, results) | The free column's panel band, one panel at a time with the cockpit focus panel and the flight settings | Pause is modal: it dims the screen and takes every touch around it. Result cards leave the flight controls usable. |
 
 Keyboard and gamepad players get keyboard texts ("Hold Left Shift for full power").

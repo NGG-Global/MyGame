@@ -144,6 +144,9 @@ Text labels stay on every control; there are no icon-only buttons.
 | Warning fade-in | 0.12 s, in place |
 | Tab change on the settings screen | instant |
 | Button press | instant 4 % shrink (`PressScale`) and pressed colour; no animation delays the action |
+| Arc unfold / fold | 0.22 s / 0.16 s, ease-out with one soft overshoot of at most 4 % (`HudEasing.SoftSpring`); hover lift 0.08 s |
+| Lever knob settle, ladder marker | 0.06 s / 0.04 s approach; chase free look returns in 0.45 s, eased |
+| Gesture tick | the quiet tap sound and the lightest haptic pulse (`UiFeedback.Tick`), at most every 80 ms |
 | Joystick knob held | 10 % larger, brighter |
 | Brake held | cyan fill with dark text |
 | Reduced motion | no movement, instant fades (system setting, or the player's choice in Settings > Display > Motion) |
@@ -164,6 +167,8 @@ when a cockpit switch moves. Nothing vibrates continuously.
 | Touch controls | White strokes with a dark edge for bright skies; idle 16-30 % opacity, held 55-80 %; throttle marks at 25, 50, 75 %. Their touch areas draw nothing. |
 | Cards (pause, results, assistance, cockpit) | Free column only; `PanelSurface`; title, short lines, large buttons; RESUME and SETTINGS share the first row of the pause card. |
 | Settings screen | Centred panel over a dimmed, paused world; tabs DISPLAY, CONTROLS, SOUND, GRAPHICS; label left, segments or stepper right; a footnote explains each page's limits. |
+| Systems handle and arc (gesture-first) | A slim `ControlSurface` pill with SYSTEMS and a quiet chevron where SYSTEMS was; segments are radial fills of a generated annulus, `ControlSurface` at rest, lifted 4 % under the thumb, `Selected` with dark text when armed, translucent cyan with a dot when engaged, 55 % quiet, 35 % disabled; one quiet caption line. Unfolds with a single soft overshoot (4 %); folds in 0.16 s. |
+| Flap lever, density ladder, explanation plate (gesture-first) | `PanelSurface` plates that appear under or next to the finger; preview in `Selected`, committed in white; hairline track or rail; captions say what releasing does. They fade like other panels and never cover the joystick region. See `docs/GESTURE_INTERACTION.md`. |
 
 ## Phones, tablets and high-density screens
 

@@ -47,11 +47,33 @@ namespace OpenSkies.Cockpit
         [Tooltip("Field of view change for a pinch across the full screen height, degrees.")]
         public float pinchDegreesPerScreenHeight = 40f;
         public float doubleTapSeconds = 0.3f;
+        [Tooltip("A press on a control (switch, lever) that moves mostly vertically (this much more than sideways) drags the control instead of looking.")]
+        public float controlDragVerticalRatio = 1.2f;
+        [Tooltip("Both fingers down and up again within this time, without moving, is a two-finger tap (pause), s.")]
+        public float twoFingerTapSeconds = 0.3f;
+        [Tooltip("The second finger must land within this time of the first for a two-finger tap, s.")]
+        public float secondFingerWindowSeconds = 0.15f;
 
         /// <summary>A tap on an instrument or control.</summary>
         public event Action<CockpitInteractable> InteractableTapped;
         /// <summary>A tap on nothing (used to dismiss a focus panel).</summary>
         public event Action EmptyTapped;
+        /// <summary>A finger pressed on a control started moving it (flick a switch, drag the flap lever): the control, the pointer and where it is.</summary>
+        public event Action<CockpitInteractable, int, Vector2> ControlDragBegan;
+        public event Action<int, Vector2> ControlDragMoved;
+        /// <summary>The control drag ended: released (false) or revoked (true).</summary>
+        public event Action<int, Vector2, bool> ControlDragEnded;
+        /// <summary>Two fingers tapped together on the cockpit (a deliberate pause gesture).</summary>
+        public event Action TwoFingerTapped;
+
+        enum Mode
+        {
+            Undecided = 0,
+            /// <summary>Past the tap slop, or part of a pinch: never a tap.</summary>
+            Look = 1,
+            /// <summary>Moving a control; the drag is reported to the session, not the camera.</summary>
+            ControlDrag = 2,
+        }
 
         struct Gesture
         {
@@ -59,7 +81,7 @@ namespace OpenSkies.Cockpit
             public Vector2 Start;
             public Vector2 Last;
             public float StartTime;
-            public bool Looking;      // past the tap slop, or part of a pinch: never a tap
+            public Mode Mode;
             public int PressedOn;     // interactable index under the press, or -1
         }
 
@@ -68,6 +90,8 @@ namespace OpenSkies.Cockpit
         PointerOwnership _ownership;
         bool _active = true;
         float _pinchDistance;
+        bool _twoFingerCandidate;
+        float _secondPressTime;
         float _lastEmptyTapTime = float.NegativeInfinity;
         PickBox[] _boxes = new PickBox[0];
         Vector3[] _screenPoints = new Vector3[0];
@@ -76,6 +100,8 @@ namespace OpenSkies.Cockpit
         public bool IsActive => _active;
         /// <summary>Pointers this manager currently owns.</summary>
         public int ActivePointers => _count;
+        /// <summary>A control is being dragged (flicked switch, flap lever).</summary>
+        public bool IsDraggingControl => _count > 0 && _gestures[0].Mode == Mode.ControlDrag;
         public PointerOwnership Ownership => _ownership;
 
         /// <summary>Share the touch controls' ownership table (one table for every touch consumer).</summary>
@@ -132,9 +158,12 @@ namespace OpenSkies.Cockpit
             };
             if (_count == 2)
             {
-                // Two fingers: a pinch, never a tap or a look.
-                _gestures[0].Looking = true;
-                _gestures[1].Looking = true;
+                // Two fingers: a pinch (or a two-finger tap if neither moves), never a single tap or a look.
+                _twoFingerCandidate = _gestures[0].Mode == Mode.Undecided
+                                      && Time.unscaledTime - _gestures[0].StartTime <= secondFingerWindowSeconds;
+                _secondPressTime = Time.unscaledTime;
+                _gestures[0].Mode = Mode.Look;
+                _gestures[1].Mode = Mode.Look;
                 _pinchDistance = Vector2.Distance(_gestures[0].Last, _gestures[1].Last);
             }
         }
@@ -151,6 +180,12 @@ namespace OpenSkies.Cockpit
 
             if (_count == 2)
             {
+                if (_twoFingerCandidate)
+                {
+                    float slop = tapSlop * height;
+                    if ((_gestures[0].Last - _gestures[0].Start).sqrMagnitude > slop * slop
+                        || (_gestures[1].Last - _gestures[1].Start).sqrMagnitude > slop * slop) _twoFingerCandidate = false;
+                }
                 float distance = Vector2.Distance(_gestures[0].Last, _gestures[1].Last);
                 float spread = distance - _pinchDistance;
                 _pinchDistance = distance;
@@ -159,13 +194,29 @@ namespace OpenSkies.Cockpit
                 return;
             }
 
-            Vector2 delta = eventData.position - previous;
-            if (!_gestures[i].Looking)
+            if (_gestures[i].Mode == Mode.ControlDrag)
             {
-                float slop = (_gestures[i].PressedOn >= 0 ? tapSlopOnControl : tapSlop) * height;
+                ControlDragMoved?.Invoke(eventData.pointerId, eventData.position);
+                return;
+            }
+
+            Vector2 delta = eventData.position - previous;
+            if (_gestures[i].Mode == Mode.Undecided)
+            {
+                int pressedOn = _gestures[i].PressedOn;
+                float slop = (pressedOn >= 0 ? tapSlopOnControl : tapSlop) * height;
                 Vector2 moved = eventData.position - _gestures[i].Start;
                 if (moved.sqrMagnitude <= slop * slop) return;
-                _gestures[i].Looking = true;
+                // A mostly vertical movement that started on a control moves the control; anything else looks around.
+                bool control = pressedOn >= 0 && interactables[pressedOn] != null && !interactables[pressedOn].IsInstrument;
+                if (control && Mathf.Abs(moved.y) >= Mathf.Abs(moved.x) * controlDragVerticalRatio)
+                {
+                    _gestures[i].Mode = Mode.ControlDrag;
+                    ControlDragBegan?.Invoke(interactables[pressedOn], eventData.pointerId, _gestures[i].Start);
+                    ControlDragMoved?.Invoke(eventData.pointerId, eventData.position);
+                    return;
+                }
+                _gestures[i].Mode = Mode.Look;
                 delta = moved; // the whole movement so far turns the view: no dead jump
             }
             if (cameraRig == null) return;
@@ -178,10 +229,22 @@ namespace OpenSkies.Cockpit
             int i = IndexOf(eventData.pointerId);
             if (i < 0) return;
             var gesture = _gestures[i];
+            bool twoFingerTap = _count == 2 && _twoFingerCandidate && Time.unscaledTime - _secondPressTime <= twoFingerTapSeconds;
             RemoveAt(i);
             _ownership.Release(eventData.pointerId, this);
-            if (_count == 1) _gestures[0].Looking = true; // the finger left from a pinch does not tap
-            if (gesture.Looking || Time.unscaledTime - gesture.StartTime > tapMaxSeconds) return;
+            if (_count == 1) _gestures[0].Mode = Mode.Look; // the finger left from a pinch does not tap
+            _twoFingerCandidate = false;
+            if (gesture.Mode == Mode.ControlDrag)
+            {
+                ControlDragEnded?.Invoke(eventData.pointerId, eventData.position, false);
+                return;
+            }
+            if (twoFingerTap)
+            {
+                TwoFingerTapped?.Invoke();
+                return;
+            }
+            if (gesture.Mode != Mode.Undecided || Time.unscaledTime - gesture.StartTime > tapMaxSeconds) return;
 
             int target = Pick(eventData.position);
             if (target < 0) target = gesture.PressedOn; // released just off the control it was pressed on
@@ -209,8 +272,15 @@ namespace OpenSkies.Cockpit
         public void OnPointerRevoked(int pointerId)
         {
             int i = IndexOf(pointerId);
-            if (i >= 0) RemoveAt(i);
-            if (_count == 1) _gestures[0].Looking = true;
+            if (i >= 0)
+            {
+                bool dragging = _gestures[i].Mode == Mode.ControlDrag;
+                Vector2 last = _gestures[i].Last;
+                RemoveAt(i);
+                if (dragging) ControlDragEnded?.Invoke(pointerId, last, true);
+            }
+            _twoFingerCandidate = false;
+            if (_count == 1) _gestures[0].Mode = Mode.Look;
         }
 
         // ---- Picking --------------------------------------------------------------------------

@@ -24,6 +24,9 @@ namespace OpenSkies.UI
         WarningVolume,
         Graphics,
         FrameRate,
+        GestureSpeed,
+        CameraGesture,
+        GestureHints,
     }
 
     /// <summary>The settings screen's tabs.</summary>
@@ -33,6 +36,7 @@ namespace OpenSkies.UI
         Controls = 1,
         Sound = 2,
         Graphics = 3,
+        Gestures = 4,
     }
 
     /// <summary>What the settings screen shows: the current value of every setting and what the device supports.</summary>
@@ -73,7 +77,7 @@ namespace OpenSkies.UI
     /// </summary>
     public sealed class SettingsScreen : MonoBehaviour
     {
-        public const int PageCount = 4;
+        public const int PageCount = 5;
 
         public CanvasGroup group;
         public RectTransform panel;
@@ -85,6 +89,8 @@ namespace OpenSkies.UI
         public CanvasGroup[] pages = new CanvasGroup[PageCount];
         public SettingsRow[] rows = new SettingsRow[0];
         public Text footnote;
+        [Tooltip("The gesture reference on the GESTURES page: the vocabulary in a few lines.")]
+        public Text gestureReference;
         public HudMotionSettings motion = new HudMotionSettings();
 
         /// <summary>A segment was chosen (index from the left).</summary>
@@ -100,7 +106,14 @@ namespace OpenSkies.UI
             "Haptics follow your device's touch feedback setting too. Every cue also has a sound or a visual.",
             "Warning sounds can be turned down, not off: the banners carry the words, the sound makes you look.",
             "Graphics settings change how the world is drawn, never how the aircraft flies.",
+            "Gesture speed changes how long a hold or a rest takes and how far a pull reaches. Every gesture has a button or a key as well.",
         };
+
+        public const string GestureReferenceText =
+            "PULL the systems handle: the arc unfolds · slide onto an action, RELEASE to choose · REST on FLAPS for the lever, on NAV or ASSIST for their options\n"
+            + "HOLD a value, a banner or an instrument: what it means · DRAG around the heading indicator or altimeter: set the bug or the subscale (centre cancels)\n"
+            + "PULL the HUD band down or up: more or less HUD · DRAG the sky: look around · PINCH: zoom · DOUBLE TAP: switch view · TWO FINGERS: pause\n"
+            + "FLICK a cockpit switch up or down · DRAG the cockpit flap lever · PULL the pause sheet up for settings · SWIPE the entry screen between experiences";
 
         HudFade _fade;
         HudFade[] _pageFades;
@@ -206,6 +219,9 @@ namespace OpenSkies.UI
                         SetNote(row, view.HapticsSupported ? string.Empty : "Not available on this device");
                         break;
                     case SettingId.Graphics: Select(row, (int)o.Graphics); break;
+                    case SettingId.GestureSpeed: Select(row, (int)o.GestureSpeed); break;
+                    case SettingId.CameraGesture: Select(row, (int)o.CameraGesture); break;
+                    case SettingId.GestureHints: Select(row, o.GestureHints ? 0 : 1); break;
                     case SettingId.FrameRate:
                         Select(row, o.FrameRate == FrameRatePreference.Fps60 && view.Fps60Supported ? 1 : 0);
                         if (row.segments.Length > 1 && row.segments[1] != null) row.segments[1].SetInteractable(view.Fps60Supported);

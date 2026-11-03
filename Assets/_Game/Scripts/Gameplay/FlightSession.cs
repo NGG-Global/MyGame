@@ -6,6 +6,7 @@ using OpenSkies.Cockpit;
 using OpenSkies.FlightInput;
 using OpenSkies.FlightInput.TouchControls;
 using OpenSkies.FlightState;
+using OpenSkies.Gestures;
 using OpenSkies.Simulation;
 using OpenSkies.UI;
 using UnityEngine;
@@ -66,10 +67,30 @@ namespace OpenSkies.Gameplay
         [Tooltip("Cockpit field of view change per second while the keyboard zoom keys are held, degrees.")]
         public float fieldOfViewKeyRate = 20f;
 
+        [Header("Gesture-first interface")]
+        [Tooltip("The single entry point for touches no control took: routes them to gestures or the cockpit.")]
+        public InteractionSurface interactionSurface;
+        [Tooltip("The systems handle and arc, the flap lever, the HUD band, the explanation plate.")]
+        public GestureHud gestureHud;
+        [Tooltip("The feel of the gesture language (thresholds, arc, lever, sheet, stations). The defaults in code are used when empty.")]
+        public InteractionConfiguration interactionConfiguration;
+        [Tooltip("Development: the interface at start. F4 or a tap on the gesture inspector switches; remembered with the HUD preferences.")]
+        public InteractionMode interactionMode = InteractionMode.GestureFirst;
+        [Tooltip("Development: append each completed or cancelled gesture to interaction-diary.csv in the app's data folder (development builds only).")]
+        public bool recordInteractionDiary;
+        public GestureSession.Settings gestureSettings = new GestureSession.Settings();
+
         const float TrackFromVelocityMinSpeed = 2.5f; // m/s; slower than this, the heading stands in for the track
         const float MetresPerNauticalMile = 1852f;
 
         IFlightControlSource _controls;
+        GestureSession _gestures;
+        GestureHints _hints;
+        bool _hintsEnabled = true;
+        InteractionDiary _diary;
+        InstrumentManipulation _manipulation;
+        FlapsLeverInteraction _leverInteraction;
+        readonly InstrumentSettings _instruments = new InstrumentSettings();
         IFlightAssist _assist = NoFlightAssist.Instance;
         bool _assistOverridden;
         FlightAssistController _assistance;
@@ -152,6 +173,47 @@ namespace OpenSkies.Gameplay
         /// <summary>The authoritative switch and lever positions of the aircraft.</summary>
         public AircraftSystems Systems => _systems;
         public CockpitSession Cockpit => _cockpit;
+        /// <summary>The gesture-first interaction (null without an interaction surface).</summary>
+        public GestureSession Gestures => _gestures;
+        /// <summary>Direct manipulation of the enlarged cockpit instrument (null without a surface and a focus panel).</summary>
+        public InstrumentManipulation Manipulation => _manipulation;
+        /// <summary>The one flap lever interaction shared by the arc and the cockpit lever.</summary>
+        public FlapsLeverInteraction LeverInteraction => _leverInteraction;
+        /// <summary>Contextual gesture cues (set by the game modes, which own the player's progress).</summary>
+        public GestureHints Hints => _hints;
+        /// <summary>Development counts of gestures for comparing interaction models (null without a surface).</summary>
+        public InteractionDiary Diary => _diary;
+
+        /// <summary>The game modes give the session the hint policy (it needs the player's progress); the sessions offer cues through it.</summary>
+        public void SetGestureHints(GestureHints hints)
+        {
+            _hints = hints;
+            _hints?.SetEnabled(_hintsEnabled); // the options may have been applied before the modes handed the policy over
+            _gestures?.SetHints(hints);
+            _cockpit?.SetHints(hints);
+            _manipulation?.SetHints(hints);
+        }
+        /// <summary>The pilot's instrument settings (heading bug, altimeter subscale): one source of truth, never flight input.</summary>
+        public InstrumentSettings Instruments => _instruments;
+        /// <summary>Altitude as the altimeter shows it with its subscale, ft (the HUD shows the same, so the two never disagree).</summary>
+        public float IndicatedAltitudeFeet => Telemetry.AltitudeFeet + InstrumentSettings.BaroCorrectionFeet(_instruments.BaroHectopascals);
+
+        /// <summary>A deliberate two-finger tap on the world or the cockpit: the player wants the pause menu.</summary>
+        public event Action PauseRequested;
+        /// <summary>An instrument setting changed (heading bug, subscale).</summary>
+        public event Action<InstrumentSetting> InstrumentSettingChanged;
+
+        /// <summary>The one way to change an instrument setting, whatever asked for it. Returns whether it changed.</summary>
+        public bool RequestInstrumentSetting(InstrumentSetting setting, int value)
+        {
+            bool changed = _instruments.Set(setting, value);
+            if (changed) InstrumentSettingChanged?.Invoke(setting);
+            return changed;
+        }
+
+        void RaisePauseRequested() => PauseRequested?.Invoke();
+        public InteractionMode CurrentInteractionMode =>
+            _gestures == null ? InteractionMode.Legacy : (_gestures.GestureFirst ? InteractionMode.GestureFirst : InteractionMode.Legacy);
         public FlightPhaseEstimator PhaseEstimator => _phase;
         public FlightWarningMonitor Warnings => _warnings;
         public DisclosureController Disclosure => _disclosure;
@@ -200,11 +262,15 @@ namespace OpenSkies.Gameplay
             if (cameraRig != null && rememberCameraMode) cameraRig.SetMode(HudPreferences.LoadCameraMode(cameraRig.mode));
             _savedFieldOfView = cameraRig != null ? cameraRig.cockpitFieldOfView : 0f;
 
+            // The flap lever interaction is shared by the systems arc and the cockpit's lever: one model, one view, one commit path.
+            _leverInteraction = new FlapsLeverInteraction(this, gestureHud != null ? gestureHud.lever : null, gestureHud);
             if (cockpit != null || cockpitInteraction != null || focusPanel != null || cockpitViewControls != null || aircraftLights != null)
             {
                 _cockpit = new CockpitSession(_systems, _gate, cockpit, cockpitInteraction, focusPanel, cockpitViewControls, aircraftLights, cameraRig,
-                    touchControls != null ? touchControls.Ownership : null, AirspeedMarkingsFor(aircraftConfiguration, config.warnings));
+                    touchControls != null ? touchControls.Ownership : null, AirspeedMarkingsFor(aircraftConfiguration, config.warnings), _instruments, _leverInteraction);
                 _cockpit.PanelOpened += CloseFlightSettings; // one panel at a time in the free column
+                _cockpit.PauseRequested += RaisePauseRequested;
+                _cockpit.SystemChanged += OnCockpitSystemChanged;
             }
 
             // Flight assistance: the same aircraft data as the simulation, the player's saved choices.
@@ -230,6 +296,97 @@ namespace OpenSkies.Gameplay
             bool reduced = contextualHud != null && contextualHud.ReducedMotion;
             if (flightSettings != null) flightSettings.SetReducedMotion(reduced);
             if (guidanceLine != null) guidanceLine.SetReducedMotion(reduced);
+
+            ApplyInteractionConfiguration();
+
+            // Gesture-first interaction: one surface for every touch nothing else took, the cockpit routed through it.
+            if (interactionSurface != null)
+            {
+                var ownership = touchControls != null ? touchControls.Ownership : new PointerOwnership();
+                interactionSurface.Initialize(ownership);
+                if (cockpitInteraction != null) interactionSurface.SetCockpitTarget(cockpitInteraction);
+                var explanations = new HudExplanations(envelope, config.warnings.flapExtendedSpeedKnots, _systems.MaxFlapDegrees);
+                _gestures = new GestureSession(this, interactionSurface, gestureHud, contextualHud, cameraRig, ownership, explanations, _systems, gestureSettings,
+                    _leverInteraction);
+                _gestures.SetReducedMotion(reduced);
+                if (rememberHudPreferences) interactionMode = HudPreferences.LoadInteractionMode(interactionMode);
+                _gestures.SetGestureFirst(interactionMode == InteractionMode.GestureFirst);
+                _gestures.ModeChanged += OnInteractionModeChanged;
+                _gestures.PauseRequested += RaisePauseRequested;
+                _diary = new InteractionDiary { RecordToFile = recordInteractionDiary };
+                interactionSurface.GestureRaised += OnDiaryGesture;
+                _gestures.SetDiary(_diary);
+                if (flightSettings != null)
+                {
+                    var profileLabels = new string[FlightAssistProfiles.Count];
+                    for (int i = 0; i < profileLabels.Length; i++) profileLabels[i] = FlightAssistProfiles.Label((FlightAssistProfile)i);
+                    _gestures.RegisterSubOptions(ContextAction.Assistance, profileLabels, () => (int)_flight.Profile,
+                        i => { if (FlightAssistProfiles.IsValid(i)) SetAssistProfile((FlightAssistProfile)i); });
+                }
+                if (focusPanel != null)
+                {
+                    _manipulation = new InstrumentManipulation(this, interactionSurface, _cockpit, focusPanel, _instruments, gestureHud, explanations);
+                    _manipulation.SetReducedMotion(reduced);
+                }
+            }
+            else if (contextualHud != null) contextualHud.SetLegacyRailEnabled(true);
+        }
+
+        /// <summary>A flick in the cockpit applied a change through the shared gate: tell the listeners as for any other change.</summary>
+        void OnCockpitSystemChanged(SystemChange change) => SystemChanged?.Invoke(change);
+
+        void OnDiaryGesture(InteractionRoute route, GestureEvent e, int target) => _diary?.Record(route, e);
+
+        /// <summary>The asset's settings onto the surface and the views (before the sessions read them). Views keep their own values without an asset.</summary>
+        void ApplyInteractionConfiguration()
+        {
+            var c = interactionConfiguration;
+            if (c == null) return;
+            if (interactionSurface != null) interactionSurface.settings = c.gestures;
+            if (gestureHud != null)
+            {
+                if (gestureHud.arc != null) gestureHud.arc.settings = c.arc;
+                if (gestureHud.lever != null) gestureHud.lever.settings = c.lever;
+                if (gestureHud.ladder != null) gestureHud.ladder.settings = c.density;
+            }
+            if (focusPanel != null)
+            {
+                focusPanel.rotary = c.rotary;
+                focusPanel.mapView = c.mapView;
+            }
+        }
+
+        void OnInteractionModeChanged(InteractionMode mode)
+        {
+            interactionMode = mode;
+            if (rememberHudPreferences) HudPreferences.SaveInteractionMode(mode);
+        }
+
+        /// <summary>Development: the gesture-first interface or the legacy rail. Presentation only; flight input is unaffected.</summary>
+        public void SetInteractionMode(InteractionMode mode) => _gestures?.SetGestureFirst(mode == InteractionMode.GestureFirst);
+
+        /// <summary>
+        /// The player's gesture options: speed scales the holds, rests and pulls of the
+        /// tuning asset (never the asset itself), the look-around sensitivity scales the
+        /// chase free look, and the hints switch the contextual cues. Presentation only.
+        /// </summary>
+        public void ApplyGestureOptions(OpenSkies.Options.GestureSpeed speed, OpenSkies.Options.CameraGestureSensitivity camera, bool hints)
+        {
+            if (interactionSurface != null)
+            {
+                var baseSettings = interactionConfiguration != null ? interactionConfiguration.gestures : interactionSurface.settings;
+                var tuned = (baseSettings ?? new GestureSettings()).Sanitized();
+                float time = OpenSkies.Options.GameOptionsRules.GestureTimeScale(speed);
+                float distance = OpenSkies.Options.GameOptionsRules.GestureDistanceScale(speed);
+                tuned.longPressSeconds *= time;
+                tuned.dwellSeconds *= time;
+                tuned.pullPeekDistance *= distance;
+                tuned.pullRevealDistance *= distance;
+                interactionSurface.ApplySettings(tuned.Sanitized());
+            }
+            _gestures?.SetLookScale(OpenSkies.Options.GameOptionsRules.CameraGestureScale(camera));
+            _hintsEnabled = hints;
+            _hints?.SetEnabled(hints);
         }
 
         /// <summary>Airspeed indicator markings from the aircraft (stall speeds from the flight model) and the warning limits.</summary>
@@ -252,13 +409,28 @@ namespace OpenSkies.Gameplay
 
         void OnDestroy()
         {
-            _cockpit?.Dispose();
+            if (_cockpit != null)
+            {
+                _cockpit.PauseRequested -= RaisePauseRequested;
+                _cockpit.SystemChanged -= OnCockpitSystemChanged;
+                _cockpit.Dispose();
+            }
+            _manipulation?.Dispose();
+            if (interactionSurface != null) interactionSurface.GestureRaised -= OnDiaryGesture;
+            _diary?.Flush();
+            if (_gestures != null)
+            {
+                _gestures.ModeChanged -= OnInteractionModeChanged;
+                _gestures.PauseRequested -= RaisePauseRequested;
+                _gestures.Dispose();
+            }
             SaveViewPreferences();
         }
 
         void OnApplicationPause(bool paused)
         {
             if (paused) SaveViewPreferences();
+            if (paused) _diary?.Flush();
         }
 
         void SaveViewPreferences()
@@ -341,6 +513,7 @@ namespace OpenSkies.Gameplay
             if (_devices.AssistProfileCyclePressedThisFrame()) SetAssistProfile(FlightAssistProfiles.Next(_flight.Profile));
             if (_devices.InspectorTogglePressedThisFrame() && contextualHud != null && contextualHud.inspector != null)
                 contextualHud.inspector.Toggle();
+            if (_devices.InteractionModeTogglePressedThisFrame()) _gestures?.ToggleMode();
             HandleSystemKeys();
 
             var t = Telemetry;
@@ -355,8 +528,12 @@ namespace OpenSkies.Gameplay
                 // Brakes follow weight on wheels (a physical fact), never the estimated phase.
                 touchControls.SetOnGround(DisclosurePolicy.ShowBrakeControl(t));
             }
+            // Gestures first: they may preview a HUD profile for this frame's disclosure.
+            _gestures?.Update(CurrentView, Time.timeScale <= 0f, _hudProfile, _disclosure, _systems);
+            _hints?.Tick(Time.unscaledTime);
             UpdateDisclosure(t, Time.deltaTime);
             _cockpit?.Update(t, _runway, CurrentView);
+            _manipulation?.Update(); // after the cockpit drew the committed values: the preview goes over them
             UpdateGuidance(t, Time.deltaTime);
             if (flightSettings != null && flightSettings.IsOpen) flightSettings.Present(CurrentFlightSettings);
         }
@@ -473,12 +650,15 @@ namespace OpenSkies.Gameplay
             if (cockpitViewControls != null) cockpitViewControls.SetReducedMotion(reduced);
             if (flightSettings != null) flightSettings.SetReducedMotion(reduced);
             if (guidanceLine != null) guidanceLine.SetReducedMotion(reduced);
+            _gestures?.SetReducedMotion(reduced);
+            _manipulation?.SetReducedMotion(reduced);
         }
 
         /// <summary>The player's HUD opacity on the HUD this session owns. Flight controls stay findable (see TouchFlightControls).</summary>
         public void ApplyHudOpacity(float opacity)
         {
             if (contextualHud != null) contextualHud.SetOpacity(opacity);
+            if (gestureHud != null) gestureHud.SetOpacity(opacity);
             if (hud != null) hud.SetOpacity(opacity);
             if (touchControls != null) touchControls.SetOpacityScale(opacity);
             if (cockpitViewControls != null) cockpitViewControls.SetOpacity(opacity);
@@ -490,9 +670,11 @@ namespace OpenSkies.Gameplay
             // than flash the low-confidence fallback for a frame.
             if (_phase.TransitionTotal == 0) return;
             var view = CurrentView;
+            // While the HUD band is pulled, disclosure shows the previewed profile; the committed one is untouched.
+            var profile = _gestures != null && _gestures.HasPreviewProfile ? _gestures.PreviewProfile : _hudProfile;
             var input = new DisclosureInput
             {
-                Profile = _hudProfile,
+                Profile = profile,
                 View = view,
                 Phase = _phase.Current,
                 WarningMask = _warnings.ActiveMask,
@@ -515,7 +697,10 @@ namespace OpenSkies.Gameplay
             _disclosure.Update(input, deltaTime);
 
             if (contextualHud == null) return;
-            contextualHud.Present(t, _runway, _navigation, _disclosure, _warnings, _hudProfile);
+            // The HUD shows the altitude the altimeter shows (subscale applied): one reading everywhere.
+            var shown = t;
+            shown.AltitudeFeet = SoftLogic.Finite(t.AltitudeFeet, 0f) + InstrumentSettings.BaroCorrectionFeet(_instruments.BaroHectopascals);
+            contextualHud.Present(shown, _runway, _navigation, _disclosure, _warnings, _hudProfile);
             if (contextualHud.inspector != null) contextualHud.inspector.Present(_phase, _warnings, _disclosure, _hudProfile, view);
         }
 
@@ -616,6 +801,9 @@ namespace OpenSkies.Gameplay
             _disclosure.Reset();
             _runway = default;
             _navigation = default;
+            _gestures?.OnReset();
+            _manipulation?.OnReset();
+            _leverInteraction?.Cancel();
             if (cameraRig != null) cameraRig.SnapToTarget();
             FlightRestarted?.Invoke();
         }
@@ -640,7 +828,10 @@ namespace OpenSkies.Gameplay
 
         public void ToggleSystemsRail() => _disclosure.ToggleRailExpanded();
 
-        void OnContextAction(ContextAction action)
+        void OnContextAction(ContextAction action) => PerformContextAction(action);
+
+        /// <summary>A contextual action, from the rail or the arc: a system change through the gate, a guide, or the settings.</summary>
+        public void PerformContextAction(ContextAction action)
         {
             switch (action)
             {

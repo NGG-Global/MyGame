@@ -1,3 +1,4 @@
+using OpenSkies.Gestures;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -21,7 +22,11 @@ namespace OpenSkies.UI
 
         /// <param name="joystickRegionRight">Right edge of the joystick touch region, fraction of the safe-area width.</param>
         /// <param name="railLeftInset">Distance from the right safe-area edge to the left edge of the action rail, canvas units.</param>
-        public static CockpitFocusPanel Build(RectTransform safeArea, Font font, float joystickRegionRight, float railLeftInset)
+        public static CockpitFocusPanel Build(RectTransform safeArea, Font font, float joystickRegionRight, float railLeftInset) =>
+            Build(safeArea, font, joystickRegionRight, railLeftInset, null);
+
+        /// <param name="surface">The interaction surface the enlarged face's gestures go to (null: the face only closes on tap).</param>
+        public static CockpitFocusPanel Build(RectTransform safeArea, Font font, float joystickRegionRight, float railLeftInset, InteractionSurface surface)
         {
             var root = NewRect("CockpitFocusPanel", safeArea);
             root.gameObject.SetActive(false); // wire everything before Awake
@@ -37,6 +42,7 @@ namespace OpenSkies.UI
 
             BuildInstrumentCard(panel, column, font);
             BuildSystemCard(panel, column, font);
+            if (panel.faceHotspot != null) panel.faceHotspot.surface = surface;
 
             root.gameObject.SetActive(true);
             return panel;
@@ -97,6 +103,30 @@ namespace OpenSkies.UI
             panel.faceHost = host;
             for (int i = 0; i < CockpitFocusPanel.InstrumentCount; i++)
                 panel.faces[i] = InstrumentFaceFactory.Build((InstrumentKind)i, host, font);
+
+            // A thin ring at the rim that lights while the instrument is being adjusted (over the faces, no touches).
+            var ring = NewRect("ManipulationRing", host);
+            Stretch(ring);
+            ring.offsetMin = new Vector2(-6f, -6f);
+            ring.offsetMax = new Vector2(6f, 6f);
+            var ringImage = ring.gameObject.AddComponent<Image>();
+            ringImage.sprite = null; // assigned at runtime (HudSprites.Ring) by the panel
+            ringImage.color = new Color(1f, 1f, 1f, 0f);
+            ringImage.raycastTarget = false;
+            panel.manipulationRing = ringImage;
+
+            // The hotspot last, so it is on top of the faces and the ring: drags on the face reach the surface.
+            var hot = NewRect("FaceHotspot", host);
+            Stretch(hot);
+            var graphic = hot.gameObject.AddComponent<RaycastOnlyHudGraphic>();
+            graphic.raycastTarget = true;
+            var hotspot = hot.gameObject.AddComponent<GestureHotspot>();
+            hotspot.route = InteractionRoute.Instrument;
+            panel.faceHotspot = hotspot;
+
+            panel.manipulationNote = TopText("Note", card, font, 18, HintColour, 0f, 30f);
+            panel.manipulationNote.alignment = TextAnchor.MiddleCenter;
+            panel.manipulationNote.text = string.Empty;
         }
 
         static void BuildSystemCard(CockpitFocusPanel panel, RectTransform column, Font font)

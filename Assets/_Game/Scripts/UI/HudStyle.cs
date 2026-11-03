@@ -76,6 +76,24 @@ namespace OpenSkies.UI
         /// <summary>A pressed button shrinks this much at once (no animation: feedback never delays the action).</summary>
         public const float PressScale = 0.96f;
 
+        // ---- Motion tokens of the gesture language (docs/GESTURE_INTERACTION.md) ---------------------
+        /// <summary>A control unfolding under the finger (the arc).</summary>
+        public const float UnfoldSeconds = 0.22f;
+        /// <summary>A control folding away after release.</summary>
+        public const float FoldSeconds = 0.16f;
+        /// <summary>A segment or target lifting under the finger.</summary>
+        public const float HoverSeconds = 0.08f;
+        /// <summary>A knob or marker settling on a detent.</summary>
+        public const float SettleSeconds = 0.06f;
+        /// <summary>A spring-loaded view returning (chase free look).</summary>
+        public const float ReturnSeconds = 0.45f;
+        /// <summary>An enlarged instrument growing out of the cockpit and back.</summary>
+        public const float EmergeSeconds = 0.22f;
+        /// <summary>A sheet or a station settling on its stop after release.</summary>
+        public const float SheetSettleSeconds = 0.28f;
+        /// <summary>The single soft overshoot allowed on unfolds and settles, as a fraction.</summary>
+        public const float Overshoot = 0.04f;
+
         /// <summary>Gives an image the rounded 9-sliced shape with the given corner radius (canvas units).</summary>
         public static void Round(Image image, float radius)
         {

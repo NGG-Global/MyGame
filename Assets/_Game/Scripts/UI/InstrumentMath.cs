@@ -37,13 +37,16 @@ namespace OpenSkies.UI
         public float RunwayHeadingDegrees;
         public float RunwayLengthMetres;
 
-        public static InstrumentReadings From(in FlightTelemetry t, in RunwayRelation runway)
+        public static InstrumentReadings From(in FlightTelemetry t, in RunwayRelation runway) => From(t, runway, 0f);
+
+        /// <summary>Readings with the altimeter's subscale applied: <paramref name="baroCorrectionFeet"/> is added to the altitude shown.</summary>
+        public static InstrumentReadings From(in FlightTelemetry t, in RunwayRelation runway, float baroCorrectionFeet)
         {
             float heading = SoftLogic.Finite(t.HeadingDegrees, 0f);
             return new InstrumentReadings
             {
                 AirspeedKnots = SoftLogic.Finite(t.IndicatedAirspeedKnots, 0f),
-                AltitudeFeet = SoftLogic.Finite(t.AltitudeFeet, 0f),
+                AltitudeFeet = SoftLogic.Finite(t.AltitudeFeet, 0f) + SoftLogic.Finite(baroCorrectionFeet, 0f),
                 VerticalSpeedFeetPerMinute = SoftLogic.Finite(t.VerticalSpeedFeetPerMinute, 0f),
                 HeadingDegrees = heading,
                 PitchDegrees = SoftLogic.Finite(t.PitchDegrees, 0f),
@@ -138,7 +141,13 @@ namespace OpenSkies.UI
             return DialPoint(relative, Mathf.Min(fraction, 1f) * radius);
         }
 
-        static readonly float[] MapRanges = { 2f, 5f, 10f, 20f, 50f };
+        public static readonly float[] MapRanges = { 2f, 5f, 10f, 20f, 50f };
+
+        /// <summary>Where a heading bug sits on the heading card (the card turns with the heading, so the bug stays at its own heading).</summary>
+        public static Vector2 HeadingBugPosition(int bugDegrees, float radius) => DialPoint(bugDegrees, radius);
+
+        /// <summary>The bug's rotation on the card (UI, counter-clockwise): an arrowhead that points at the centre.</summary>
+        public static float HeadingBugRotation(int bugDegrees) => 180f - bugDegrees;
 
         /// <summary>
         /// Map range (NM) for a distance, with hysteresis so the scale does not jump

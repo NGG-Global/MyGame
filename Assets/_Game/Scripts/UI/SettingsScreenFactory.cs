@@ -25,12 +25,40 @@ namespace OpenSkies.UI
         const float RowStep = 112f;
         const float Row = HudStyle.MinTouchTarget;
 
-        static readonly string[] PageLabels = { "DISPLAY", "CONTROLS", "SOUND", "GRAPHICS" };
+        static readonly string[] PageLabels = { "DISPLAY", "CONTROLS", "SOUND", "GRAPHICS", "GESTURES" };
+        static readonly string[] GestureSpeedLabels = { "RELAXED", "STANDARD", "QUICK" };
+        static readonly string[] CameraGestureLabels = { "LOW", "MEDIUM", "HIGH" };
         static readonly string[] HudProfileLabels = { "SMART", "DETAILED", "CINEMATIC" };
         static readonly string[] MotionLabels = { "FOLLOW SYSTEM", "REDUCED", "FULL" };
         static readonly string[] OnOffLabels = { "ON", "OFF" };
         static readonly string[] GraphicsLabels = { "BATTERY SAVER", "BALANCED", "HIGH QUALITY" };
         static readonly string[] FrameRateLabels = { "30 FPS", "60 FPS" };
+
+        /// <summary>
+        /// The settings content (tabs, pages, rows, footnote) inside any parent: the pause
+        /// sheet's second stop. No scrim, title or DONE; the host opens, closes and
+        /// dismisses it. Rows are laid out for <paramref name="width"/>.
+        /// </summary>
+        public static SettingsScreen BuildEmbedded(RectTransform parent, Font font, float width, float rowStep = 104f)
+        {
+            var root = NewRect("SettingsEmbedded", parent);
+            root.gameObject.SetActive(false);
+            root.anchorMin = new Vector2(0.5f, 1f);
+            root.anchorMax = new Vector2(0.5f, 1f);
+            root.pivot = new Vector2(0.5f, 1f);
+            root.anchoredPosition = Vector2.zero;
+            root.sizeDelta = new Vector2(width, 96f + 16f + 5f * rowStep + 48f);
+            var screen = root.gameObject.AddComponent<SettingsScreen>();
+            var group = root.gameObject.AddComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.blocksRaycasts = false;
+            group.interactable = false;
+            screen.group = group;
+            screen.panel = root;
+            BuildContent(screen, root, font, width, tabsY: -8f, rowTop: -8f - Row - 16f, rowStep: rowStep, footnoteY: 8f);
+            root.gameObject.SetActive(true);
+            return screen;
+        }
 
         public static SettingsScreen Build(RectTransform safeArea, Font font)
         {
@@ -69,48 +97,63 @@ namespace OpenSkies.UI
             done.sizeDelta = new Vector2(180f, Row);
             screen.doneButton.feedback = UiFeedback.Confirm;
 
-            float tabWidth = 240f;
+            BuildContent(screen, panel, font, PanelWidth, tabsY: -128f, rowTop: RowTop, rowStep: RowStep, footnoteY: 20f);
+
+            root.gameObject.SetActive(true);
+            return screen;
+        }
+
+        /// <summary>Tabs, pages, rows and the footnote, laid out for a panel of the given width.</summary>
+        static void BuildContent(SettingsScreen screen, RectTransform panel, Font font, float width, float tabsY, float rowTop, float rowStep, float footnoteY)
+        {
+            float tabWidth = Mathf.Min(240f, (width - 2f * Pad - (SettingsScreen.PageCount - 1) * 16f) / SettingsScreen.PageCount);
             for (int i = 0; i < SettingsScreen.PageCount; i++)
             {
                 var tab = Button("Tab" + PageLabels[i], panel, font, HudStyle.ButtonSize, PageLabels[i]);
-                TopLeft((RectTransform)tab.transform, Pad + i * (tabWidth + 16f), -128f, tabWidth, Row);
+                TopLeft((RectTransform)tab.transform, Pad + i * (tabWidth + 16f), tabsY, tabWidth, Row);
                 screen.tabs[i] = tab;
             }
 
             var rows = new List<SettingsRow>();
             var display = Page(panel, SettingsPage.Display, screen);
-            rows.Add(Segments(display, font, 0, SettingId.HudProfile, "HUD", HudProfileLabels));
-            rows.Add(Stepper(display, font, 1, SettingId.UiScale, "Interface scale"));
-            rows.Add(Stepper(display, font, 2, SettingId.HudOpacity, "HUD opacity"));
-            rows.Add(Segments(display, font, 3, SettingId.Motion, "Motion", MotionLabels));
+            rows.Add(Segments(display, font, 0, SettingId.HudProfile, "HUD", HudProfileLabels, width, rowTop, rowStep));
+            rows.Add(Stepper(display, font, 1, SettingId.UiScale, "Interface scale", width, rowTop, rowStep));
+            rows.Add(Stepper(display, font, 2, SettingId.HudOpacity, "HUD opacity", width, rowTop, rowStep));
+            rows.Add(Segments(display, font, 3, SettingId.Motion, "Motion", MotionLabels, width, rowTop, rowStep));
 
             var controls = Page(panel, SettingsPage.Controls, screen);
             rows.Add(Segments(controls, font, 0, SettingId.AssistProfile, "Flight assistance", Labels(FlightAssistProfiles.Count, i =>
-                FlightAssistProfiles.Label((FlightAssistProfile)i))));
+                FlightAssistProfiles.Label((FlightAssistProfile)i)), width, rowTop, rowStep));
             rows.Add(Segments(controls, font, 1, SettingId.Sensitivity, "Stick sensitivity", Labels(3, i =>
-                FlightAssistProfiles.SensitivityLabel((ControlSensitivity)i))));
-            rows.Add(Segments(controls, font, 2, SettingId.Haptics, "Haptic feedback", OnOffLabels));
+                FlightAssistProfiles.SensitivityLabel((ControlSensitivity)i)), width, rowTop, rowStep));
+            rows.Add(Segments(controls, font, 2, SettingId.Haptics, "Haptic feedback", OnOffLabels, width, rowTop, rowStep));
 
             var sound = Page(panel, SettingsPage.Sound, screen);
-            rows.Add(Stepper(sound, font, 0, SettingId.MasterVolume, "Master volume"));
-            rows.Add(Stepper(sound, font, 1, SettingId.AircraftVolume, "Aircraft"));
-            rows.Add(Stepper(sound, font, 2, SettingId.EnvironmentVolume, "Wind and surroundings"));
-            rows.Add(Stepper(sound, font, 3, SettingId.InterfaceVolume, "Interface"));
-            rows.Add(Stepper(sound, font, 4, SettingId.WarningVolume, "Warnings"));
+            rows.Add(Stepper(sound, font, 0, SettingId.MasterVolume, "Master volume", width, rowTop, rowStep));
+            rows.Add(Stepper(sound, font, 1, SettingId.AircraftVolume, "Aircraft", width, rowTop, rowStep));
+            rows.Add(Stepper(sound, font, 2, SettingId.EnvironmentVolume, "Wind and surroundings", width, rowTop, rowStep));
+            rows.Add(Stepper(sound, font, 3, SettingId.InterfaceVolume, "Interface", width, rowTop, rowStep));
+            rows.Add(Stepper(sound, font, 4, SettingId.WarningVolume, "Warnings", width, rowTop, rowStep));
 
             var graphics = Page(panel, SettingsPage.Graphics, screen);
-            rows.Add(Segments(graphics, font, 0, SettingId.Graphics, "Graphics quality", GraphicsLabels));
-            rows.Add(Segments(graphics, font, 1, SettingId.FrameRate, "Frame rate", FrameRateLabels));
+            rows.Add(Segments(graphics, font, 0, SettingId.Graphics, "Graphics quality", GraphicsLabels, width, rowTop, rowStep));
+            rows.Add(Segments(graphics, font, 1, SettingId.FrameRate, "Frame rate", FrameRateLabels, width, rowTop, rowStep));
+
+            var gestures = Page(panel, SettingsPage.Gestures, screen);
+            rows.Add(Segments(gestures, font, 0, SettingId.GestureSpeed, "Gesture speed", GestureSpeedLabels, width, rowTop, rowStep));
+            rows.Add(Segments(gestures, font, 1, SettingId.CameraGesture, "Look-around sensitivity", CameraGestureLabels, width, rowTop, rowStep));
+            rows.Add(Segments(gestures, font, 2, SettingId.GestureHints, "Gesture hints", OnOffLabels, width, rowTop, rowStep));
+            screen.gestureReference = NewText("GestureReference", gestures, font, HudStyle.CaptionSize, TextAnchor.UpperLeft, HudStyle.TextSecondary);
+            TopLeft(screen.gestureReference.rectTransform, Pad, rowTop - 3f * rowStep + 12f, width - 2f * Pad, 2f * rowStep);
+            screen.gestureReference.horizontalOverflow = HorizontalWrapMode.Wrap;
+            screen.gestureReference.text = SettingsScreen.GestureReferenceText;
             screen.rows = rows.ToArray();
 
             screen.footnote = NewText("Footnote", panel, font, HudStyle.CaptionSize, TextAnchor.MiddleLeft, HudStyle.TextQuiet);
             var foot = screen.footnote.rectTransform;
             foot.anchorMin = foot.anchorMax = foot.pivot = new Vector2(0f, 0f);
-            foot.anchoredPosition = new Vector2(Pad, 20f);
-            foot.sizeDelta = new Vector2(PanelWidth - 2f * Pad, 40f);
-
-            root.gameObject.SetActive(true);
-            return screen;
+            foot.anchoredPosition = new Vector2(Pad, footnoteY);
+            foot.sizeDelta = new Vector2(width - 2f * Pad, 40f);
         }
 
         static RectTransform Page(RectTransform panel, SettingsPage page, SettingsScreen screen)
@@ -126,10 +169,10 @@ namespace OpenSkies.UI
             return rect;
         }
 
-        static SettingsRow Segments(RectTransform page, Font font, int index, SettingId id, string label, string[] options)
+        static SettingsRow Segments(RectTransform page, Font font, int index, SettingId id, string label, string[] options, float panelWidth, float rowTop, float rowStep)
         {
-            var row = RowBase(page, font, index, id, label);
-            float width = PanelWidth - ControlLeft - Pad;
+            var row = RowBase(page, font, index, id, label, panelWidth, rowTop, rowStep);
+            float width = panelWidth - ControlLeft - Pad;
             float segment = (width - (options.Length - 1) * SegmentGap) / options.Length;
             row.segments = new HudButton[options.Length];
             for (int i = 0; i < options.Length; i++)
@@ -141,9 +184,9 @@ namespace OpenSkies.UI
             return row;
         }
 
-        static SettingsRow Stepper(RectTransform page, Font font, int index, SettingId id, string label)
+        static SettingsRow Stepper(RectTransform page, Font font, int index, SettingId id, string label, float panelWidth, float rowTop, float rowStep)
         {
-            var row = RowBase(page, font, index, id, label);
+            var row = RowBase(page, font, index, id, label, panelWidth, rowTop, rowStep);
             row.minus = Button(id + "Minus", row.root, font, HudStyle.TitleSize, "–");
             TopLeft((RectTransform)row.minus.transform, ControlLeft, 0f, Row, Row);
             row.value = NewText(id + "Value", row.root, font, 30, TextAnchor.MiddleCenter, HudStyle.TextPrimary);
@@ -153,12 +196,12 @@ namespace OpenSkies.UI
             return row;
         }
 
-        static SettingsRow RowBase(RectTransform page, Font font, int index, SettingId id, string label)
+        static SettingsRow RowBase(RectTransform page, Font font, int index, SettingId id, string label, float panelWidth, float rowTop, float rowStep)
         {
             var root = NewRect(id + "Row", page);
             root.anchorMin = root.anchorMax = root.pivot = new Vector2(0f, 1f);
-            root.anchoredPosition = new Vector2(0f, RowTop - index * RowStep);
-            root.sizeDelta = new Vector2(PanelWidth, Row);
+            root.anchoredPosition = new Vector2(0f, rowTop - index * rowStep);
+            root.sizeDelta = new Vector2(panelWidth, Row);
             var row = new SettingsRow { id = id, root = root };
             row.label = NewText("Label", root, font, HudStyle.BodySize + 2, TextAnchor.MiddleLeft, HudStyle.TextPrimary);
             TopLeft(row.label.rectTransform, Pad, -6f, LabelWidth, 44f);

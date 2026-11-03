@@ -1,5 +1,6 @@
 using System;
 using OpenSkies.FlightState;
+using OpenSkies.Gestures;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -34,6 +35,14 @@ namespace OpenSkies.UI
         public RectTransform faceHost;
         public InstrumentFace[] faces = new InstrumentFace[InstrumentCount];
         public HudButton instrumentClose;
+        [Tooltip("Over the enlarged face: drags, pinches and double taps go to the interaction surface (route Instrument).")]
+        public GestureHotspot faceHotspot;
+        [Tooltip("A thin ring around the face that brightens while the player adjusts the instrument.")]
+        public Image manipulationRing;
+        [Tooltip("What the gesture is doing, under the face ('Drag around to set the bug').")]
+        public Text manipulationNote;
+        public RotarySettings rotary = new RotarySettings();
+        public MapViewSettings mapView = new MapViewSettings();
 
         [Header("System selector")]
         public RectTransform systemCard;
@@ -54,7 +63,12 @@ namespace OpenSkies.UI
         public float minimumOptionWidth = 120f;
         public float spacing = 12f;
         public float padding = 14f;
+        public float noteHeight = 30f;
         public Color confirmColour = new Color(0.85f, 0.2f, 0.12f, 0.95f);
+        [Tooltip("The enlarged instrument grows out of its cockpit instrument and shrinks back into it, s.")]
+        public float emergeSeconds = HudStyle.EmergeSeconds;
+        public Color ringIdle = new Color(1f, 1f, 1f, 0f);
+        public Color ringActive = HudStyle.Selected;
 
         /// <summary>The player wants the panel closed.</summary>
         public event Action CloseRequested;
@@ -71,6 +85,10 @@ namespace OpenSkies.UI
         HudFade _instrumentFade, _systemFade;
         bool _initialized, _reducedMotion;
         readonly Color[] _engagedColours = new Color[MaxOptions];
+        Vector2 _emergeFrom;
+        float _emergeScale = 0.3f, _emergeProgress = 1f;
+        bool _hasOrigin, _returning;
+        float _ringAlpha, _ringShown;
 
         public bool IsOpen => _mode != Mode.None;
         public int OptionCount => _optionCount;
@@ -101,6 +119,7 @@ namespace OpenSkies.UI
             _initialized = true;
             RoundCard(instrumentCard);
             RoundCard(systemCard);
+            if (manipulationRing != null && manipulationRing.sprite == null) manipulationRing.sprite = HudSprites.Ring;
             if (instrumentGroup != null) _instrumentFade = new HudFade(instrumentGroup, interactive: true);
             if (systemGroup != null) _systemFade = new HudFade(systemGroup, interactive: true);
             if (instrumentClose != null) instrumentClose.Clicked += RaiseClose;
@@ -133,9 +152,75 @@ namespace OpenSkies.UI
             SetFacesActive((int)kind);
             SetText(instrumentTitle, title);
             SetText(instrumentHint, hint);
+            SetManipulation(null, false);
             _systemFade?.SetTarget(0f, 0f, 0f); // one panel at a time: the other goes at once
-            _instrumentFade?.SetTarget(1f, motion.FadeSeconds(_reducedMotion), motion.Slide(_reducedMotion));
+            _instrumentFade?.SetTarget(1f, motion.FadeSeconds(_reducedMotion), _hasOrigin ? 0f : motion.Slide(_reducedMotion));
             Layout();
+            BeginEmerge();
+        }
+
+        /// <summary>
+        /// Shows the enlarged instrument growing out of its cockpit instrument at a screen
+        /// point (the card starts there, small, and settles in its place), so the focused
+        /// view is spatially one with the panel. With reduced motion it simply appears.
+        /// </summary>
+        public void ShowInstrument(InstrumentKind kind, string title, string hint, Vector2 originScreenPoint, float originScale)
+        {
+            EnsureInitialized();
+            _hasOrigin = column != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(column, originScreenPoint, CanvasCamera, out _emergeFrom);
+            _emergeScale = Mathf.Clamp(originScale, 0.05f, 1f);
+            ShowInstrument(kind, title, hint);
+        }
+
+        Camera CanvasCamera
+        {
+            get
+            {
+                var canvas = column != null ? column.GetComponentInParent<Canvas>() : null;
+                return canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+            }
+        }
+
+        void BeginEmerge()
+        {
+            _returning = false;
+            _emergeProgress = _reducedMotion || !_hasOrigin || emergeSeconds <= 0f ? 1f : 0f;
+            ApplyEmerge();
+        }
+
+        void ApplyEmerge()
+        {
+            if (instrumentCard == null) return;
+            float t = _returning ? 1f - HudEasing.EaseInOut(_emergeProgress) : HudEasing.EaseOut(_emergeProgress);
+            if (!_hasOrigin) t = 1f;
+            instrumentCard.anchoredPosition = Vector2.Lerp(_emergeFrom, Vector2.zero, t);
+            float scale = Mathf.Lerp(_emergeScale, 1f, t);
+            instrumentCard.localScale = new Vector3(scale, scale, 1f);
+        }
+
+        /// <summary>The face's design-space point (400 units across, centre 0) under a screen point; false when off the face.</summary>
+        public bool TryGetFacePoint(Vector2 screenPoint, out Vector2 designPoint)
+        {
+            designPoint = Vector2.zero;
+            if (faceHost == null) return false;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(faceHost, screenPoint, CanvasCamera, out var local)) return false;
+            float size = Mathf.Max(1f, faceHost.rect.width);
+            designPoint = local / size * InstrumentFace.DesignSize;
+            return true;
+        }
+
+        /// <summary>Says what the current gesture does and lights the ring while it is active (cached strings only).</summary>
+        public void SetManipulation(string note, bool active)
+        {
+            if (manipulationNote != null && !ReferenceEquals(manipulationNote.text, note ?? string.Empty)) manipulationNote.text = note ?? string.Empty;
+            _ringAlpha = active ? 1f : 0f;
+            if (_reducedMotion) { _ringShown = _ringAlpha; ApplyRing(_ringAlpha); }
+        }
+
+        void ApplyRing(float alpha)
+        {
+            if (manipulationRing == null) return;
+            manipulationRing.color = Color.Lerp(ringIdle, ringActive, alpha);
         }
 
         /// <summary>Shows a selector with up to <see cref="MaxOptions"/> options. Labels should be cached strings.</summary>
@@ -194,11 +279,18 @@ namespace OpenSkies.UI
         public void Close()
         {
             if (_mode == Mode.None) return;
+            bool instrument = _mode == Mode.Instrument;
             _mode = Mode.None;
             _confirmOption = -1;
+            SetManipulation(null, false);
             float fade = motion.FadeSeconds(_reducedMotion);
             _instrumentFade?.SetTarget(0f, fade, 0f);
             _systemFade?.SetTarget(0f, fade, 0f);
+            if (instrument && _hasOrigin && !_reducedMotion && emergeSeconds > 0f)
+            {
+                _returning = true;
+                _emergeProgress = 0f;
+            }
         }
 
         /// <summary>Draws the enlarged instrument (if one is shown) from the shared readings.</summary>
@@ -214,6 +306,22 @@ namespace OpenSkies.UI
             float dt = Time.unscaledDeltaTime;
             _instrumentFade?.Tick(dt);
             _systemFade?.Tick(dt);
+            if (_emergeProgress < 1f)
+            {
+                _emergeProgress = Mathf.Min(1f, _emergeProgress + dt / Mathf.Max(0.01f, emergeSeconds));
+                ApplyEmerge();
+                if (_emergeProgress >= 1f && _returning)
+                {
+                    _returning = false;
+                    _hasOrigin = false;
+                    ApplyEmerge();
+                }
+            }
+            if (manipulationRing != null)
+            {
+                _ringShown = _reducedMotion ? _ringAlpha : HudEasing.Approach(_ringShown, _ringAlpha, HudStyle.HoverSeconds, dt);
+                ApplyRing(_ringShown);
+            }
             // Once the enlarged instrument has faded out it stops existing: no second copy is drawn.
             if (_mode != Mode.Instrument && _instrumentFade != null && !_instrumentFade.IsAnimating && _instrumentFade.Alpha <= 0f)
                 SetFacesActive(-1);
@@ -251,9 +359,18 @@ namespace OpenSkies.UI
                 instrumentCard.sizeDelta = new Vector2(side, side);
                 if (faceHost != null)
                 {
-                    float face = Mathf.Max(0f, Mathf.Min(side - 2f * padding, side - headerHeight - padding));
+                    float face = Mathf.Max(0f, Mathf.Min(side - 2f * padding, side - headerHeight - padding - noteHeight));
                     faceHost.sizeDelta = new Vector2(face, face);
-                    faceHost.anchoredPosition = new Vector2(0f, -0.5f * (headerHeight - padding));
+                    faceHost.anchoredPosition = new Vector2(0f, -0.5f * (headerHeight - padding - noteHeight));
+                }
+                if (manipulationNote != null)
+                {
+                    var note = manipulationNote.rectTransform;
+                    note.anchorMin = new Vector2(0f, 0f);
+                    note.anchorMax = new Vector2(1f, 0f);
+                    note.pivot = new Vector2(0.5f, 0f);
+                    note.anchoredPosition = new Vector2(0f, padding * 0.5f);
+                    note.sizeDelta = new Vector2(-2f * padding, noteHeight);
                 }
             }
 
