@@ -132,6 +132,18 @@ namespace OpenSkies.Tests
         }
 
         [UnityTest]
+        public IEnumerator Launch_WaitsForThePlayer_NoModeStartsByItself()
+        {
+            // The screen's START action must not be a Unity message: nothing may choose a mode for the player.
+            yield return Build();
+            for (int frame = 0; frame < 3; frame++) yield return null;
+            Assert.IsTrue(_entry.IsOpen, "the entry screen stays open until the player chooses");
+            Assert.IsFalse(_modes.ModeActive, "no mode started on its own");
+            Assert.IsTrue(_modes.IsPaused);
+            Assert.AreEqual(CameraMode.Showcase, _rig.mode);
+        }
+
+        [UnityTest]
         public IEnumerator SwipeLeft_MovesToTheNextStation_AndTheCameraMovesWithIt()
         {
             yield return Build();
@@ -201,7 +213,7 @@ namespace OpenSkies.Tests
         public IEnumerator ChangeMode_FromThePause_ReopensTheStations()
         {
             yield return Build();
-            _entry.Start();
+            _entry.StartSelected();
             yield return null;
             Assert.IsFalse(_entry.IsOpen);
             _modes.OpenModeSelect();

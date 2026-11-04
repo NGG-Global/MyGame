@@ -86,10 +86,10 @@ namespace OpenSkies.UI
                 chips[i].SetLabel(Names[i]);
                 chips[i].Clicked += () => { if (_open) Select(station); };
             }
-            if (startButton != null) startButton.Clicked += () => { if (_open) Start(); };
+            if (startButton != null) startButton.Clicked += () => { if (_open) StartSelected(); };
             if (settingsButton != null) settingsButton.Clicked += () => { if (_open) SettingsRequested?.Invoke(); };
-            if (fromRunwayButton != null) fromRunwayButton.Clicked += () => { if (_open) { _freeStart = FreeFlightStart.Runway; Start(); } };
-            if (inTheAirButton != null) inTheAirButton.Clicked += () => { if (_open) { _freeStart = FreeFlightStart.Airborne; Start(); } };
+            if (fromRunwayButton != null) fromRunwayButton.Clicked += () => { if (_open) { _freeStart = FreeFlightStart.Runway; StartSelected(); } };
+            if (inTheAirButton != null) inTheAirButton.Clicked += () => { if (_open) { _freeStart = FreeFlightStart.Airborne; StartSelected(); } };
             if (title != null) title.text = "OPEN SKIES";
             Present(force: true);
         }
@@ -133,7 +133,7 @@ namespace OpenSkies.UI
         }
 
         /// <summary>Starts the selected station's experience (Free Flight: the chosen start).</summary>
-        public void Start()
+        public void StartSelected()
         {
             if (!_open) return;
             switch (_model.Station)
@@ -182,7 +182,7 @@ namespace OpenSkies.UI
                     }
                     break;
                 case GestureKind.Tap:
-                    if (e.Type == GestureEventType.Completed && !_model.IsSettling) Start(); // a tap on the scene begins
+                    if (e.Type == GestureEventType.Completed && !_model.IsSettling) StartSelected(); // a tap on the scene begins
                     break;
             }
         }

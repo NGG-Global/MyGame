@@ -107,8 +107,8 @@ namespace OpenSkies.Editor
                 }
                 else
                 {
-                    float shade = 1f - contrast * Mathf.SmoothStep(0.35f, 0.75f, n);
-                    c = Color.Lerp(Color.white, tint, Mathf.SmoothStep(0.45f, 0.8f, n)) * shade;
+                    float shade = 1f - contrast * ProceduralNoise.SmoothStep(0.35f, 0.75f, n);
+                    c = Color.Lerp(Color.white, tint, ProceduralNoise.SmoothStep(0.45f, 0.8f, n)) * shade;
                     c.a = 1f;
                 }
                 pixels[y * TextureSize + x] = c;
