@@ -31,12 +31,29 @@ namespace OpenSkies.Editor
             Palette,
         }
 
-        /// <summary>Returns the texture at <paramref name="path"/>, creating it from <paramref name="pixels"/> when missing.</summary>
+        /// <summary>
+        /// Returns the texture at <paramref name="path"/>, creating it from <paramref name="pixels"/> when
+        /// missing. A failure is logged and returns null (materials then fall back to their flat colour),
+        /// so one bad texture never stops the scene build.
+        /// </summary>
         public static Texture2D LoadOrCreateTexture(string path, int width, int height, Func<Color32[]> pixels, TextureKind kind, int maxSize = 2048)
         {
             var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (existing != null) return existing;
+            try
+            {
+                return CreateTexture(path, width, height, pixels, kind, maxSize);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError($"[OpenSkies] Could not generate {path}; its material keeps a flat colour.");
+                return null;
+            }
+        }
 
+        static Texture2D CreateTexture(string path, int width, int height, Func<Color32[]> pixels, TextureKind kind, int maxSize)
+        {
             EditorFolders.Ensure(Path.GetDirectoryName(path).Replace('\\', '/'));
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             texture.SetPixels32(pixels());
