@@ -20,10 +20,18 @@ namespace OpenSkies.World
         /// <summary>Regenerates the reflection cubemap from the current skybox (a few milliseconds, once).</summary>
         public void Refresh()
         {
-            RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Skybox;
-            RenderSettings.reflectionIntensity = reflectionIntensity;
-            DynamicGI.UpdateEnvironment();
-            Updated = true;
+            try
+            {
+                RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Skybox;
+                RenderSettings.reflectionIntensity = reflectionIntensity;
+                DynamicGI.UpdateEnvironment();
+                Updated = true;
+            }
+            catch (System.Exception e)
+            {
+                // Reflections are a nicety: never let them stop the scene from starting.
+                Debug.LogWarning($"[OpenSkies] Environment reflections not updated: {e.Message}");
+            }
         }
     }
 }
