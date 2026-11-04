@@ -583,7 +583,7 @@ namespace OpenSkies.Gameplay
                 {
                     int step = flight.Devices.MenuStepPressedThisFrame();
                     if (step != 0) entryScreen.Step(step);
-                    if (flight.Devices.MenuConfirmPressedThisFrame()) entryScreen.Start();
+                    if (flight.Devices.MenuConfirmPressedThisFrame()) entryScreen.StartSelected();
                 }
                 if (_showcase != null && _entryOpen) _showcase.Present(entryScreen.Model.Position);
             }
