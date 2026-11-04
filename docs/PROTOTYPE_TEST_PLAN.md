@@ -97,6 +97,16 @@ Needs the `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` secrets.
 Use a **development build** for testing: it shows the telemetry line and the
 touch diagnostics. Release builds hide all development overlays.
 
+**If the app fails at launch (development builds):** a dark panel in the top-left
+corner lists the launch steps (bootstrap, scene loaded, first frames) and every
+error or exception with the line that raised it; the same lines are written to
+`openskies-launch.log` under the app's files folder
+(`Android/data/com.dor.openskies/files/`). Double-tap the panel to hide it.
+Photograph the panel and send it. If the app closes with no panel at all, the
+fault is below managed code: only the device log can name it, so run
+`adb logcat -s Unity AndroidRuntime DEBUG` while launching and send the last
+hundred lines.
+
 **Frame rate:** 30 FPS by default; Settings > Graphics > Frame rate offers 60 FPS where
 the display supports it. (`GameConfig.targetFrameRate` only sets the value used before
 the settings are applied at start-up.)
