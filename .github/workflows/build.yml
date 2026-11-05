@@ -54,6 +54,28 @@ jobs:
           restore-keys: |
             Library-build-${{ matrix.targetPlatform }}-
 
+      - name: Check the Unity licence secrets (fails fast, so a bad secret never locks the Unity account)
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          ok=1
+          if [ -z "$UNITY_LICENSE" ]; then
+            echo "::error::UNITY_LICENSE is empty. Add the whole content of Unity_lic.ulf as a repository secret (Settings > Secrets and variables > Actions)."; ok=0
+          else
+            case "$UNITY_LICENSE" in *"<root"*) ;; *) echo "::error::UNITY_LICENSE does not look like a .ulf licence file (no <root> element)."; ok=0;; esac
+          fi
+          for name in UNITY_EMAIL UNITY_PASSWORD; do
+            value="${!name}"
+            if [ -z "$value" ]; then echo "::error::$name is empty."; ok=0; continue; fi
+            case "$value" in *$'\n'*|*$'\r'*) echo "::error::$name contains a line break: paste the value on one line with nothing after it."; ok=0;; esac
+            case "$value" in [[:space:]]*|*[[:space:]]) echo "::error::$name starts or ends with whitespace: re-create the secret without it."; ok=0;; esac
+          done
+          case "$UNITY_EMAIL" in *@*.*) ;; *) echo "::error::UNITY_EMAIL is not an email address."; ok=0;; esac
+          [ "$ok" = 1 ] || { echo "::error::Unity activation was not attempted; nothing was sent to Unity."; exit 1; }
+          echo "Unity secrets present and well-formed."
+
       - name: Build
         uses: game-ci/unity-builder@v6
         env:
