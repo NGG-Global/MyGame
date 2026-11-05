@@ -270,6 +270,7 @@ namespace OpenSkies.Gameplay
             {
                 _cockpit = new CockpitSession(_systems, _gate, cockpit, cockpitInteraction, focusPanel, cockpitViewControls, aircraftLights, cameraRig,
                     touchControls != null ? touchControls.Ownership : null, AirspeedMarkingsFor(aircraftConfiguration, config.warnings), _instruments, _leverInteraction);
+                _cockpit.screenHeightOverride = interactionSurface != null ? interactionSurface.screenHeightOverride : 0f;
                 _cockpit.PanelOpened += CloseFlightSettings; // one panel at a time in the free column
                 _cockpit.PauseRequested += RaisePauseRequested;
                 _cockpit.SystemChanged += OnCockpitSystemChanged;

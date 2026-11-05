@@ -52,9 +52,11 @@ namespace OpenSkies.Editor
             plain = Mathf.Max(plain, -1f);
 
             // Western hills: a ridge system that grows from 3.4 km west of the runway to the edge of the land.
+            // The fractal spans about 0.15 to 0.56 here, so the ridges are mapped from that range (not from 0.38
+            // to 1, which left them under 110 m): summits reach about 350 m, slopes mostly under 30 degrees.
             float west = ProceduralNoise.SmoothStep(-3300f, -5400f, x);
-            float ridge = ProceduralNoise.Fractal(u * 3f, v * 6f, 2, 5, Seed + 3, 0.55f);
-            ridge = Mathf.Pow(Mathf.Clamp01((ridge - 0.38f) / 0.62f), 1.6f);
+            float ridge = ProceduralNoise.Fractal(u * 3f, v * 6f, 2, 5, Seed + 3, 0.4f);
+            ridge = Mathf.Clamp01((ridge - 0.3f) / 0.3f);
             float hills = west * (50f + 450f * ridge);
             // Two foothills nearer the plain, low and broad, south-west and north-west of the field.
             hills += 70f * Bump(x, z, -4300f, -3900f, 900f) + 90f * Bump(x, z, -4200f, 4300f, 1000f);

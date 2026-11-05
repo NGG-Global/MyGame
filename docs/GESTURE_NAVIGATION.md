@@ -34,8 +34,10 @@ A sheet from the bottom edge with two stops (`SheetModel`, pure C#):
 
 - **Pull the grip band** at the top of the sheet (a hotspot with the `Sheet`
   route): the sheet follows the finger with 60 units of over-travel; release projects the velocity
-  0.18 s ahead and settles on the nearest stop (`HudStyle.SheetSettleSeconds`,
-  0.28 s, `HudEasing.SoftSpring`; instant with reduced motion).
+  0.18 s ahead and settles on the nearer of the two stops the finger is between
+  (`HudStyle.SheetSettleSeconds`, 0.28 s, `HudEasing.SoftSpring`; instant with reduced
+  motion). A flick never skips a stop, however fast: from the second stop a pull down
+  reaches the first, and only a finger below the first stop can dismiss.
 - **Pull down past 55 % of the first stop** and release: dismissed, which resumes.
 - **Tap the dim** above the sheet (the scrim): resume. A tap on the grip jumps to
   the other stop. **Esc** or the back button: from the second stop back to the
@@ -69,8 +71,9 @@ aircraft presented by a showcase camera for each:
 | Landing Challenge | Behind the aircraft, down the runway (46°) | The best score |
 
 - **Swipe** left or right (`EntryStationModel`: station width 900 units, 25 %
-  overscroll at the ends, release projected 0.2 s, settle 0.35 s): the stations
-  slide and the camera moves between the framings in proportion to the position
+  overscroll at the ends, release projected 0.2 s, settle 0.35 s; a flick carries the
+  presentation to the next station at most, never past one the finger did not reach):
+  the stations slide and the camera moves between the framings in proportion to the position
   (`CameraRig.SetShowcase`, `CameraMode.Showcase`), so the showcase is part of the
   swipe, not a cut after it.
 - **Tap** START, or the scene itself (route `Entry`, once the stations have

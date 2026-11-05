@@ -61,6 +61,10 @@ namespace OpenSkies.Gameplay
         const int NoPointer = int.MinValue;
         /// <summary>A flick must travel this share of the screen height to move the switch.</summary>
         public float flickDistance = 0.05f;
+        /// <summary>The screen height the flick distance refers to when not the real one (tests); 0 = Screen.height. Same rule as the interaction surface.</summary>
+        public float screenHeightOverride;
+
+        float ScreenHeight => screenHeightOverride > 1f ? screenHeightOverride : Mathf.Max(1f, Screen.height);
 
         /// <summary>Two fingers tapped the cockpit together: the pause gesture.</summary>
         public event Action PauseRequested;
@@ -351,7 +355,7 @@ namespace OpenSkies.Gameplay
             _flickPointer = NoPointer;
             _flickView?.SetPreview(0f, false);
             if (revoked) return;
-            float travel = (screenPoint.y - _flickStartY) / Mathf.Max(1f, Screen.height);
+            float travel = (screenPoint.y - _flickStartY) / ScreenHeight;
             if (Mathf.Abs(travel) < flickDistance) { HudButton.Report(UiFeedback.Tap); return; } // too short: the switch springs back
             int value = travel > 0f ? 1 : 0; // up is on or set, down is off or released
             var outcome = _gate.Request(new SystemChange(_flickSystem, value), _systems, _onGround, Time.unscaledTime);
@@ -376,7 +380,7 @@ namespace OpenSkies.Gameplay
 
         float FlickPosition(float fingerY)
         {
-            float travel = (fingerY - _flickStartY) / Mathf.Max(1f, Screen.height) / Mathf.Max(0.01f, flickDistance);
+            float travel = (fingerY - _flickStartY) / ScreenHeight / Mathf.Max(0.01f, flickDistance);
             return Mathf.Clamp01(_systems.Get(_flickSystem) + travel);
         }
 
