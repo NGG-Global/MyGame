@@ -87,6 +87,27 @@ namespace OpenSkies.Tests
             Assert.That(min, Is.GreaterThanOrEqualTo(0f), "closing never goes below zero");
         }
 
+        [Test]
+        public void Sheet_AFlickNeverSkipsAStop()
+        {
+            var sheet = Sheet();
+            sheet.Open(SheetModel.SecondStop, instant: true);
+            sheet.BeginDrag(900f);
+            sheet.Drag(900f - 400f); // down to 460: between the stops
+            Assert.AreEqual(SheetModel.FirstStop, sheet.Release(-4000f), "the hardest flick down from the settings stops at the first stop");
+            Settle(sheet);
+            Assert.AreEqual(300f, sheet.Height, 1e-3f);
+
+            sheet.BeginDrag(900f);
+            sheet.Drag(900f - 260f); // to 40: the finger itself is below the dismiss share
+            Assert.AreEqual(SheetModel.Closed, sheet.Release(-4000f), "from below the first stop a flick dismisses");
+
+            sheet.Open(SheetModel.FirstStop, instant: true);
+            sheet.BeginDrag(100f);
+            sheet.Drag(100f + 40f); // 340: just above the first stop
+            Assert.AreEqual(SheetModel.FirstStop, sheet.Release(-4000f), "a flick down from above the first stop lands on it, not past it");
+        }
+
         // ---- Entry stations -----------------------------------------------------------------------
 
         static EntryStationModel Stations() => new EntryStationModel(new EntryStationSettings { stationWidth = 900f, settleSeconds = 0.2f, velocityProjectionSeconds = 0.2f });
@@ -148,6 +169,27 @@ namespace OpenSkies.Tests
             Assert.IsFalse(m.IsSettling);
             m.Drag(500f);
             Assert.AreEqual(mid, m.Position, 1e-3f);
+        }
+
+        [Test]
+        public void Stations_AFlickNeverSkipsAStation()
+        {
+            var m = Stations();
+            m.Set(0, instant: true);
+            m.BeginDrag(1000f);
+            m.Drag(1000f - 700f); // most of a station
+            Assert.AreEqual(1, m.Release(-6000f), "the fastest flick left carries it to the next station only");
+            Settle(m);
+            Assert.AreEqual(1f, m.Position, 1e-3f);
+
+            m.BeginDrag(1000f);
+            m.Drag(1000f - 1400f); // the finger itself went past the next station
+            Assert.AreEqual(2, m.Release(0f), "where the finger left it still counts");
+
+            m.Set(2, instant: true);
+            m.BeginDrag(1000f);
+            m.Drag(1000f + 100f); // a little towards the previous station
+            Assert.AreEqual(1, m.Release(6000f), "a flick right moves one station back, never two");
         }
     }
 }

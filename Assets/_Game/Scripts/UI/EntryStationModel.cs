@@ -76,13 +76,19 @@ namespace OpenSkies.UI
 
         float Compress(float beyond) => _s.overscroll * beyond / (beyond + _s.overscroll);
 
-        /// <summary>Released with a horizontal velocity (units per second): settles on the nearest station ahead of the movement.</summary>
+        /// <summary>
+        /// Released with a horizontal velocity (units per second): settles on the nearest station ahead of
+        /// the movement, between the two stations the finger left the presentation between. A flick carries
+        /// it to the next station at most, never past one the finger did not reach.
+        /// </summary>
         public int Release(float velocityX)
         {
             if (!_dragging) return _station;
             _dragging = false;
             float projected = _position - Mathf.Clamp(velocityX, -6000f, 6000f) * _s.velocityProjectionSeconds / Mathf.Max(1f, _s.stationWidth);
-            SettleTo(Mathf.Clamp(Mathf.RoundToInt(projected), 0, Count - 1));
+            int lower = Mathf.Clamp(Mathf.FloorToInt(_position), 0, Count - 1);
+            int upper = Mathf.Clamp(Mathf.CeilToInt(_position), 0, Count - 1);
+            SettleTo(Mathf.Clamp(Mathf.RoundToInt(projected), lower, upper));
             return _station;
         }
 

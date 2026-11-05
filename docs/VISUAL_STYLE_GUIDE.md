@@ -263,7 +263,7 @@ the visual model.
 
 - **Terrain**: a height field over the 8 x 16 km land (`TerrainShape.Height`): exactly
   flat on the airfield and its approaches (within 900 m of the runway's 1.8 x 3 km
-  surroundings), a rolling plain of a few metres, hills to 450 m west of x = -3.3 km
+  surroundings), a rolling plain of a few metres, hills to about 350 m west of x = -3.3 km
   (outside every mission route), falling to the beach. Sixteen 2 x 4 km tiles with 80 m
   cells and mesh colliders; the wheels and the radio altimeter see them.
 - **Land use** (`TerrainShape.Colour`, painted into a 2048 px albedo): a patchwork of

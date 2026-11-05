@@ -104,18 +104,24 @@ namespace OpenSkies.UI
             _height = Mathf.Max(0f, raw);
         }
 
-        /// <summary>Released with a velocity (units per second, up positive): settles on a stop, or dismisses.</summary>
+        /// <summary>
+        /// Released with a velocity (units per second, up positive): settles on a stop, or dismisses.
+        /// The finger's own height decides which two stops are within reach (the ones it is between);
+        /// the velocity, projected ahead, chooses between them. A flick never skips a stop, however
+        /// fast: from the second stop a pull down reaches the first, and dismissal needs the finger
+        /// itself below the first stop.
+        /// </summary>
         public int Release(float velocity)
         {
             if (!_dragging) return _stop;
             _dragging = false;
             float projected = _height + Mathf.Clamp(velocity, -4000f, 4000f) * _s.velocityProjectionSeconds;
-            if (projected < _stops[FirstStop] * _s.dismissShare) { SettleTo(Closed); return _stop; }
-            int nearest = FirstStop;
-            float best = Mathf.Abs(projected - _stops[FirstStop]);
-            float d2 = Mathf.Abs(projected - _stops[SecondStop]);
-            if (d2 < best) nearest = SecondStop;
-            SettleTo(nearest);
+            int chosen;
+            if (_height < _stops[FirstStop])
+                chosen = projected < _stops[FirstStop] * _s.dismissShare ? Closed : FirstStop;
+            else
+                chosen = Mathf.Abs(projected - _stops[SecondStop]) < Mathf.Abs(projected - _stops[FirstStop]) ? SecondStop : FirstStop;
+            SettleTo(chosen);
             return _stop;
         }
 
