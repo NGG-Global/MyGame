@@ -136,6 +136,10 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
   rate-limited and optional; nothing vibrates continuously.
 
 ## Working without an Editor
+- A `MonoBehaviour` (any component, including `Graphic`) or `ScriptableObject` class lives in a file
+  of the same name, one per file. Otherwise Unity cannot save it into the generated scene or an asset:
+  it works in code and in every test, but the player reads the scene as corrupted ("The file 'level0'
+  is corrupted"). `ScriptFileTests` and the build script's missing-script check enforce this.
 - Every new file or folder under `Assets/` needs a `.meta` with a fresh GUID:
   `python3 tools/unity_meta.py <paths>`. Models, images, audio and fonts get a
   GUID-only `.meta` (`--guid-only`); never hand-write their importer settings (use an
@@ -159,6 +163,7 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
 | Device performance | `PerformanceMonitor` in development builds; protocol in `docs/MOBILE_PERFORMANCE_REPORT.md` |
 | EditMode + PlayMode tests | `tests.yml` on every PR (checks "editmode/playmode test results") |
 | WebGL + Android builds | `build.yml` on `main` or manual dispatch; APK artifact, WebGL on Pages |
+| Android launch test | `build.yml` dispatched with **Development build**: the `launch-test` job runs the APK on an emulator (logcat and screenshots as an artifact) |
 | Local Editor (owner) | `Unity -batchmode -projectPath . -runTests -testPlatform EditMode -testResults editmode.xml` |
 | Generate scene (local) | `Unity -batchmode -quit -projectPath . -executeMethod OpenSkies.Editor.FlightPrototypeSceneBuilder.BuildFromCommandLine` |
 

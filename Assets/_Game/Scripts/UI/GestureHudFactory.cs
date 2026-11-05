@@ -402,10 +402,4 @@ namespace OpenSkies.UI
             rect.offsetMax = Vector2.zero;
         }
     }
-
-    /// <summary>A raycast target that draws nothing (the UI layer's own; layers do not share code).</summary>
-    public sealed class RaycastOnlyHudGraphic : Graphic
-    {
-        protected override void OnPopulateMesh(VertexHelper vh) => vh.Clear();
-    }
 }

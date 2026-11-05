@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -66,6 +67,7 @@ namespace OpenSkies.Editor
             {
                 RenderPipelineSetup.EnsureUrp();
                 EnsurePrototypeScene();
+                EnsureNoMissingScripts();
                 ConfigureCommon();
                 configure();
                 AssetDatabase.SaveAssets();
@@ -129,6 +131,29 @@ namespace OpenSkies.Editor
             else EditorUtility.DisplayDialog("Open Skies build failed", reason + "\n\nSee the Console for details.", "OK");
         }
 
+        /// <summary>
+        /// Reloads the prototype scene from disk and fails the build if any object in it has a missing
+        /// script. A component whose class has no script file of the same name works while the scene is
+        /// in memory but is saved without its script, and the player then reads the scene as corrupted
+        /// ("The file 'level0' is corrupted! [Position out of bounds!]"). This also catches a scene saved
+        /// before such a fix: rebuild it (Open Skies > Rebuild Flight Prototype Scene).
+        /// </summary>
+        static void EnsureNoMissingScripts()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single); // so the next line really reads the file
+            var scene = EditorSceneManager.OpenScene(FlightPrototypeSceneBuilder.ScenePath, OpenSceneMode.Single);
+            var broken = new List<string>();
+            foreach (var root in scene.GetRootGameObjects())
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject) > 0)
+                    broken.Add(PathOf(t));
+            if (broken.Count == 0) return;
+            throw new BuildFailedException($"{broken.Count} object(s) in {FlightPrototypeSceneBuilder.ScenePath} have a missing script " +
+                $"(a class without a script file of its own name, or a scene saved before a fix: rebuild it). First: {string.Join(", ", broken.GetRange(0, Math.Min(5, broken.Count)))}");
+        }
+
+        static string PathOf(Transform t) => t.parent == null ? t.name : PathOf(t.parent) + "/" + t.name;
+
         static void EnsurePrototypeScene()
         {
             // A scene committed from an Editor is used as-is; CI only generates it when missing.
@@ -161,7 +186,8 @@ namespace OpenSkies.Editor
         {
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, AndroidIdentifier);
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
-            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+            // ARM64 for phones; the CI launch test (development builds) adds x86_64 so the same APK runs natively on the Android emulator.
+            PlayerSettings.Android.targetArchitectures = HasArg("-androidX86_64") ? AndroidArchitecture.ARM64 | AndroidArchitecture.X86_64 : AndroidArchitecture.ARM64;
             PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)AndroidTargetApiLevel;
             EditorUserBuildSettings.buildAppBundle = false; // APK for sideloading playtests
 

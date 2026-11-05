@@ -90,7 +90,10 @@ through the Open Skies menu (or CI), not with default Build Profile settings.
 4. Alternative: **Open Skies › Apply Android Player Settings**, then
    File › Build Profiles › Android › Development Build ✓ › Build And Run.
 
-**From CI:** Actions › Build › Run workflow › tick **Development build**.
+**From CI:** Actions › Build › Run workflow › tick **Development build**. A development
+build also carries x86_64 code, and the **Launch test (Android emulator)** job installs it on
+an emulator, launches it and watches it for 90 s; it fails if the app dies, reads its scene as
+corrupted or has a missing script, and its `launch-test` artifact holds the logcat and screenshots.
 Download the `OpenSkies-android-apk` artifact, unzip, `adb install -r OpenSkies.apk`.
 Needs the `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` secrets.
 

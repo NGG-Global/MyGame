@@ -198,18 +198,4 @@ namespace OpenSkies.Missions
         [Tooltip("The aircraft must have flown this long before a touchdown is scored, s.")]
         public float minimumAirborneSeconds = 2f;
     }
-
-    /// <summary>
-    /// Mission tuning in one asset, so it survives scene rebuilds (the scene
-    /// builder creates it once and never overwrites it). Without an asset, the
-    /// defaults in code are used.
-    /// </summary>
-    [CreateAssetMenu(menuName = "Open Skies/Mission Configuration", fileName = "MissionConfiguration")]
-    public sealed class MissionConfiguration : ScriptableObject
-    {
-        public TutorialSettings tutorial = new TutorialSettings();
-        public LandingChallengeSettings landingChallenge = new LandingChallengeSettings();
-        public LandingScoringSettings landingScoring = new LandingScoringSettings();
-        public FreeFlightSettings freeFlight = new FreeFlightSettings();
-    }
 }
