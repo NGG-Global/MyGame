@@ -90,10 +90,12 @@ through the Open Skies menu (or CI), not with default Build Profile settings.
 4. Alternative: **Open Skies › Apply Android Player Settings**, then
    File › Build Profiles › Android › Development Build ✓ › Build And Run.
 
-**From CI:** Actions › Build › Run workflow › tick **Development build**. A development
-build also carries x86_64 code, and the **Launch test (Android emulator)** job installs it on
-an emulator, launches it and watches it for 90 s; it fails if the app dies, reads its scene as
-corrupted or has a missing script, and its `launch-test` artifact holds the logcat and screenshots.
+**From CI:** Actions › Build › Run workflow › tick **Development build**.
+
+There is no emulator launch test: Unity 6000.6 removed x86_64 Android builds, and the
+x86_64 emulator's ARM translator (`ndk_translation` 0.2.3) does not implement `SEVL`, an
+ARMv8.0 instruction the engine uses in its first lock, so every build aborts there before any
+game code runs. Real ARM64 phones run it natively. Launch problems are diagnosed on a device.
 Download the `OpenSkies-android-apk` artifact, unzip, `adb install -r OpenSkies.apk`.
 Needs the `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` secrets.
 

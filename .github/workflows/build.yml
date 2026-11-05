@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       development:
-        description: 'Development build (diagnostics overlays; the APK also carries x86_64 and is launch-tested on an Android emulator)'
+        description: 'Development build (shows the diagnostics overlays and the launch log panel)'
         type: boolean
         default: false
 
@@ -86,7 +86,7 @@ jobs:
           targetPlatform: ${{ matrix.targetPlatform }}
           buildMethod: ${{ matrix.buildMethod }}
           buildName: ${{ env.BUILD_NAME }}
-          customParameters: ${{ inputs.development && '-developmentBuild -androidX86_64' || '' }}
+          customParameters: ${{ inputs.development && '-developmentBuild' || '' }}
 
       - name: Upload APK
         if: matrix.targetPlatform == 'Android'
@@ -119,108 +119,3 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
-
-  # Development builds only: install the APK on an Android emulator, launch it, and watch it for 90 s.
-  # Fails if the app is not running at the end, dies (fatal signal or exception), reads its scene as
-  # corrupted, or has a missing script. The logcat, screenshots and launch log are an artifact.
-  launch-test:
-    name: Launch test (Android emulator)
-    needs: build
-    if: ${{ !cancelled() && inputs.development }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      PACKAGE: com.dor.openskies
-      SYSTEM_IMAGE: system-images;android-34;google_apis;x86_64
-    steps:
-      - name: Download the APK
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ env.BUILD_NAME }}-android-apk
-          path: apk
-
-      - name: Enable hardware acceleration (KVM)
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Start the emulator (API 34, x86_64)
-        timeout-minutes: 20 # every wait below is bounded too; this is the backstop
-        run: |
-          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          echo "SDK=$SDK" >> "$GITHUB_ENV"
-          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
-          echo "$SDK/emulator" >> "$GITHUB_PATH"
-          ADB="$SDK/platform-tools/adb"
-          # avdmanager and the emulator must agree on where virtual devices live (the first run failed with "Unknown AVD name").
-          export ANDROID_USER_HOME="$HOME/.android" ANDROID_AVD_HOME="$HOME/.android/avd"
-          mkdir -p "$ANDROID_AVD_HOME"
-          echo "ANDROID_USER_HOME=$ANDROID_USER_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
-          ls -l /dev/kvm || echo "::warning::/dev/kvm is missing: the emulator cannot use hardware acceleration."
-          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > sdkmanager.log 2>&1 || true
-          if ! "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "emulator" "$SYSTEM_IMAGE" >> sdkmanager.log 2>&1; then
-            echo "::error::sdkmanager could not install the emulator or the system image."; tail -50 sdkmanager.log; exit 1
-          fi
-          echo no | "$SDK/cmdline-tools/latest/bin/avdmanager" create avd -n launch -k "$SYSTEM_IMAGE" -d pixel_6 --force
-          if ! "$SDK/emulator/emulator" -list-avds | grep -qx launch; then
-            echo "::error::The virtual device was not created where the emulator looks for it ($ANDROID_AVD_HOME)."
-            ls -la "$ANDROID_AVD_HOME" "$HOME/.android" "$HOME/.config/.android" 2>/dev/null || true
-            "$SDK/cmdline-tools/latest/bin/avdmanager" list avd || true
-            tail -30 sdkmanager.log; exit 1
-          fi
-          "$SDK/emulator/emulator" -accel-check || true
-          nohup "$SDK/emulator/emulator" -avd launch -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 4096 > emulator.log 2>&1 &
-          emulator_pid=$!
-          booted=0
-          for i in $(seq 1 120); do # up to 10 minutes
-            if ! kill -0 "$emulator_pid" 2>/dev/null; then echo "::error::The emulator exited during start-up."; break; fi
-            if [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then booted=1; break; fi
-            sleep 5
-          done
-          if [ "$booted" != 1 ]; then
-            [ "$i" = 120 ] && echo "::error::The emulator did not finish booting in 10 minutes."
-            echo "::group::emulator.log (last 200 lines)"; tail -200 emulator.log; echo "::endgroup::"
-            exit 1
-          fi
-          "$ADB" shell settings put global window_animation_scale 0
-          echo "Emulator booted after about $(( i * 5 )) s."
-
-      - name: Install, launch and watch the app for 90 s
-        run: |
-          mkdir -p launch
-          adb install -r apk/*.apk
-          adb logcat -c
-          adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 > /dev/null
-          alive=1
-          for t in 15 30 60 90; do
-            sleep $(( t - ${last:-0} )); last=$t
-            adb exec-out screencap -p > "launch/screen-${t}s.png" || true
-            if [ -z "$(adb shell pidof "$PACKAGE" | tr -d '\r')" ]; then echo "::error::The app is not running ${t} s after launch."; alive=0; break; fi
-            echo "Running at ${t} s."
-          done
-          adb logcat -d -v threadtime > launch/logcat.txt
-          adb pull "/sdcard/Android/data/$PACKAGE/files/openskies-launch.log" launch/ > /dev/null 2>&1 || true
-          echo "::group::Unity, crash and runtime lines"
-          grep -E ' (Unity|AndroidRuntime|DEBUG|libc|CRASH|crash_dump64|ActivityManager)\s*:' launch/logcat.txt | grep -v 'ActivityManager.*Start proc' | tail -400 || true
-          echo "::endgroup::"
-          fail=0
-          [ "$alive" = 1 ] || fail=1
-          for pattern in 'Fatal signal' 'FATAL EXCEPTION' 'is corrupted' 'referenced script .* is missing'; do
-            if grep -qE "$pattern" launch/logcat.txt; then echo "::error::Logcat contains '$pattern':"; grep -E "$pattern" launch/logcat.txt | head -5; fail=1; fi
-          done
-          echo "Unity errors and exceptions in the log: $(grep -cE ' E Unity\s*:|Exception' launch/logcat.txt || true)"
-          exit $fail
-
-      - name: Upload the launch log and screenshots
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: launch-test
-          path: |
-            launch
-            emulator.log
-            sdkmanager.log
-          if-no-files-found: warn
-          retention-days: 14

@@ -163,7 +163,7 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
 | Device performance | `PerformanceMonitor` in development builds; protocol in `docs/MOBILE_PERFORMANCE_REPORT.md` |
 | EditMode + PlayMode tests | `tests.yml` on every PR (checks "editmode/playmode test results") |
 | WebGL + Android builds | `build.yml` on `main` or manual dispatch; APK artifact, WebGL on Pages |
-| Android launch test | `build.yml` dispatched with **Development build**: the `launch-test` job runs the APK on an emulator (logcat and screenshots as an artifact) |
+| Android launch on a device | Development build (`build.yml` dispatched with **Development build**): the launch log panel and `openskies-launch.log`; or `adb logcat`. No emulator test: Unity 6000.6 builds ARM64 only and the x86_64 emulator's ARM translator lacks an instruction the engine uses at start-up |
 | Local Editor (owner) | `Unity -batchmode -projectPath . -runTests -testPlatform EditMode -testResults editmode.xml` |
 | Generate scene (local) | `Unity -batchmode -quit -projectPath . -executeMethod OpenSkies.Editor.FlightPrototypeSceneBuilder.BuildFromCommandLine` |
 

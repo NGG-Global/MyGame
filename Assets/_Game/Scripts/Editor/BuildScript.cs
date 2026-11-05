@@ -186,8 +186,7 @@ namespace OpenSkies.Editor
         {
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, AndroidIdentifier);
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
-            // ARM64 for phones; the CI launch test (development builds) adds x86_64 so the same APK runs natively on the Android emulator.
-            PlayerSettings.Android.targetArchitectures = HasArg("-androidX86_64") ? AndroidArchitecture.ARM64 | AndroidArchitecture.X86_64 : AndroidArchitecture.ARM64;
+            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)AndroidTargetApiLevel;
             EditorUserBuildSettings.buildAppBundle = false; // APK for sideloading playtests
 
