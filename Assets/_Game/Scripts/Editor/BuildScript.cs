@@ -84,6 +84,7 @@ namespace OpenSkies.Editor
                 BuildReport report = BuildPipeline.BuildPlayer(options);
                 BuildSummary summary = report.summary;
                 Debug.Log($"[BuildScript] Result: {summary.result}, errors: {summary.totalErrors}, size: {summary.totalSize} bytes");
+                ReportForGameCi(summary);
 
                 if (summary.result != BuildResult.Succeeded)
                     Fail($"Build {summary.result}");
@@ -95,6 +96,29 @@ namespace OpenSkies.Editor
                 Debug.LogException(e);
                 Fail(e.Message);
             }
+        }
+
+        /// <summary>
+        /// The build results block and the "Build succeeded!" line that GameCI's build validation looks
+        /// for; its own default build script prints them, so a custom buildMethod must print them itself,
+        /// or every successful build is reported as "There was an error building the project". Plain
+        /// console output: Unity appends a stack trace to Debug.Log lines in batch mode.
+        /// </summary>
+        static void ReportForGameCi(BuildSummary summary)
+        {
+            var report = new System.Text.StringBuilder();
+            report.AppendLine();
+            report.AppendLine("###########################");
+            report.AppendLine("#      Build results      #");
+            report.AppendLine("###########################");
+            report.AppendLine();
+            report.AppendLine($"Duration: {summary.totalTime}");
+            report.AppendLine($"Warnings: {summary.totalWarnings}");
+            report.AppendLine($"Errors: {summary.totalErrors}");
+            report.AppendLine($"Size: {summary.totalSize} bytes");
+            report.AppendLine();
+            report.AppendLine(summary.result == BuildResult.Succeeded ? "Build succeeded!" : "Build failed!");
+            Console.WriteLine(report.ToString());
         }
 
         static void Fail(string reason)
