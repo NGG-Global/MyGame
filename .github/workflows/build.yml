@@ -146,19 +146,46 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Start the emulator (API 34, x86_64)
+        timeout-minutes: 20 # every wait below is bounded too; this is the backstop
         run: |
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           echo "SDK=$SDK" >> "$GITHUB_ENV"
           echo "$SDK/platform-tools" >> "$GITHUB_PATH"
           echo "$SDK/emulator" >> "$GITHUB_PATH"
-          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "emulator" "$SYSTEM_IMAGE" > /dev/null
+          ADB="$SDK/platform-tools/adb"
+          # avdmanager and the emulator must agree on where virtual devices live (the first run failed with "Unknown AVD name").
+          export ANDROID_USER_HOME="$HOME/.android" ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_USER_HOME=$ANDROID_USER_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          ls -l /dev/kvm || echo "::warning::/dev/kvm is missing: the emulator cannot use hardware acceleration."
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > sdkmanager.log 2>&1 || true
+          if ! "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "emulator" "$SYSTEM_IMAGE" >> sdkmanager.log 2>&1; then
+            echo "::error::sdkmanager could not install the emulator or the system image."; tail -50 sdkmanager.log; exit 1
+          fi
           echo no | "$SDK/cmdline-tools/latest/bin/avdmanager" create avd -n launch -k "$SYSTEM_IMAGE" -d pixel_6 --force
+          if ! "$SDK/emulator/emulator" -list-avds | grep -qx launch; then
+            echo "::error::The virtual device was not created where the emulator looks for it ($ANDROID_AVD_HOME)."
+            ls -la "$ANDROID_AVD_HOME" "$HOME/.android" "$HOME/.config/.android" 2>/dev/null || true
+            "$SDK/cmdline-tools/latest/bin/avdmanager" list avd || true
+            tail -30 sdkmanager.log; exit 1
+          fi
+          "$SDK/emulator/emulator" -accel-check || true
           nohup "$SDK/emulator/emulator" -avd launch -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 4096 > emulator.log 2>&1 &
-          "$SDK/platform-tools/adb" wait-for-device
-          timeout 600 bash -c 'until [ "$('"$SDK"'/platform-tools/adb shell getprop sys.boot_completed | tr -d "\r")" = "1" ]; do sleep 5; done'
-          "$SDK/platform-tools/adb" shell settings put global window_animation_scale 0
-          echo "Emulator booted."
+          emulator_pid=$!
+          booted=0
+          for i in $(seq 1 120); do # up to 10 minutes
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then echo "::error::The emulator exited during start-up."; break; fi
+            if [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then booted=1; break; fi
+            sleep 5
+          done
+          if [ "$booted" != 1 ]; then
+            [ "$i" = 120 ] && echo "::error::The emulator did not finish booting in 10 minutes."
+            echo "::group::emulator.log (last 200 lines)"; tail -200 emulator.log; echo "::endgroup::"
+            exit 1
+          fi
+          "$ADB" shell settings put global window_animation_scale 0
+          echo "Emulator booted after about $(( i * 5 )) s."
 
       - name: Install, launch and watch the app for 90 s
         run: |
@@ -194,5 +221,6 @@ jobs:
           path: |
             launch
             emulator.log
+            sdkmanager.log
           if-no-files-found: warn
           retention-days: 14
