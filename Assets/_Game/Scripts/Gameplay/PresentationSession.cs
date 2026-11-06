@@ -260,8 +260,7 @@ namespace OpenSkies.Gameplay
 
         void ApplyOpacity()
         {
-            if (flight != null) flight.ApplyHudOpacity(_options.HudOpacity);
-            if (modes != null) modes.SetHudOpacity(_options.HudOpacity);
+            if (flight != null) flight.ApplyHudOpacity(_options.HudOpacity); // the command cluster included
         }
 
         /// <summary>The interface scale the screen allows; recomputed when the screen or safe area changes.</summary>

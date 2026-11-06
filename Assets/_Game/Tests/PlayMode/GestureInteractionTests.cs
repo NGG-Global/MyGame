@@ -35,6 +35,7 @@ namespace OpenSkies.Tests
         TouchFlightControls _touch;
         ContextualHud _hud;
         GestureHud _gestureHud;
+        CommandCluster _cluster;
         InteractionSurface _surface;
         CameraRig _camera;
         float _width;
@@ -83,6 +84,7 @@ namespace OpenSkies.Tests
             _hud = ContextualHudFactory.Build(safeArea, font);
             _hud.SetMotionPreference(MotionPreference.Reduced);
             _gestureHud = GestureHudFactory.Build(safeArea, font, _surface);
+            _cluster = CommandClusterFactory.Build(safeArea, font);
 
             var sessionGo = new GameObject("FlightSession");
             sessionGo.SetActive(false);
@@ -95,6 +97,7 @@ namespace OpenSkies.Tests
             _session.contextualHud = _hud;
             _session.interactionSurface = _surface;
             _session.gestureHud = _gestureHud;
+            _session.commandCluster = _cluster;
             _session.rememberHudPreferences = false;
             _session.homeRunway = new RunwayInfo(Vector3.zero, 0f, 2000f, 30f);
             _session.SetControlSource(new ScriptedControls());
@@ -414,12 +417,16 @@ namespace OpenSkies.Tests
         }
 
         [UnityTest]
-        public IEnumerator ProfileButton_StillCyclesTheProfile()
+        public IEnumerator CommandClusterSelector_IsTheTapTwinOfTheBand()
         {
             yield return Build();
-            _hud.profileButton.OnPointerClick(new PointerEventData(EventSystem.current));
+            var tap = new PointerEventData(EventSystem.current);
+            _cluster.optionsButton.OnPointerClick(tap);
+            _cluster.hudRow.OnPointerClick(tap);
+            _cluster.profileButtons[CommandClusterModel.IndexOf(HudProfile.Detailed)].OnPointerClick(tap);
             yield return null;
-            Assert.AreEqual(HudProfile.Detailed, _session.ActiveHudProfile, "the conventional fallback works beside the gesture");
+            Assert.AreEqual(HudProfile.Detailed, _session.ActiveHudProfile, "the tappable selector works beside the gesture");
+            Assert.IsFalse(_session.Commands.IsOpen);
         }
 
         // ---- Camera -------------------------------------------------------------------------------

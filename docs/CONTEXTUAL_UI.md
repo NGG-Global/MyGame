@@ -7,8 +7,11 @@ short, restrained transitions. It never takes control away from the pilot.
 
 ## Rules that do not bend
 
-1. **Flight controls are outside the system.** Joystick, throttle, BRAKE, CAM and
-   RESET are not managed by disclosure at all. No rule can hide or move them.
+1. **Flight controls are outside the system.** Joystick, throttle, BRAKE and the
+   top-right command cluster (camera, options, pause; RESET in its options panel) are not
+   managed by disclosure at all. No rule can hide or move them. The camera is always one
+   tap away; RESET is one level deep by design (`docs/TAP_DISCLOSURE_DESIGN.md`,
+   milestone 3), never because of a disclosure rule.
    BRAKE follows weight on wheels (a physical fact), never the estimated phase.
 2. **Fixed homes.** Every HUD element and action has one position for the
    session. Disclosure only fades things in and out; nothing reflows or slides
@@ -119,7 +122,8 @@ against recorded flights in the Editor with the inspector open.
 
 ## HUD profiles
 
-The profile button (top right, or **H**) cycles Smart → Detailed → Cinematic; in
+The command cluster's HUD selector (top right: options, HUD, then CINEMATIC, SMART or
+DETAILED directly) chooses a profile; **H** still cycles Smart → Detailed → Cinematic; in
 the gesture-first interface a pull on the HUD band previews and commits a profile
 (`docs/GESTURE_INTERACTION.md`): while the band is pulled, the disclosure controller
 runs with the previewed profile and the committed one is untouched until release. The
@@ -229,15 +233,15 @@ appears. Banners are never dimmed by the HUD opacity setting.
 | Flight data IAS, ALT, VS, HDG, GS | top left, x = 24 + 156·i, y = −16 | 148 × 84 each |
 | Approach guide / navigation guide | top left, y = −112 (x 24 / 474) | 430 × 96 / 300 × 96 |
 | Warning banners | anchor 56 % of the width, y = −250, −334, −418, −502 | 380 × 72 |
-| HUD profile button | top right, left of RESET and CAM | 128 × 96 |
-| LOOK FWD (cockpit view, not part of disclosure) | top right, left of the HUD profile button (x = −456) | 128 × 96 |
+| Command cluster, primary row (camera, options, pause; not part of disclosure) | top right, x = −24 to −344, y = −16 (`CommandClusterLayout`, `docs/TAP_DISCLOSURE_DESIGN.md`) | 112 / 96 / 96 × 96 touch; smaller visuals |
+| LOOK FWD (cockpit view, not part of disclosure) | under the camera (y = −120) | 112 × 96 touch, 104 × 52 visual |
+| Command options panel (HUD, RESET, SETTINGS, SKIP TUTORIAL; transient) | under the row against the right edge, x = −24 to −404, y = −120 to −324 | 380 × 204 |
 | SYSTEMS | bottom right, left of the throttle, directly above BRAKE | 168 × 96 |
 | Action rail | stacked above SYSTEMS, 112 apart, nearest the thumb first: PARK BRAKE, (FLAPS), APPROACH, NAV, ASSIST | 168 × 96 each |
-| Inspector (development only) | top right, under the buttons; built before the rail, so where the top slot (ASSIST) reaches under it the rail button takes the touch | 520 × 216 |
+| Inspector (development only) | top right, under the top bar, left of the cluster's column (x = −152); built before the rail, so where the top slot (ASSIST) reaches under it the rail button takes the touch | 488 × 216 |
 | Flight settings card | free column (as the cockpit focus panel, never both at once) | up to 600 × 486 |
 | Flying tips (Assisted) | bottom of the free column, 12-76 units up, below the panel band; takes no touches | column width × 64 |
 | Mission coaching (`docs/ONBOARDING_DESIGN.md`) | same place, 12-108 units up (never with the tips); tap for the explanation | column width × 96 |
-| MENU / SKIP TUTORIAL | top right under CAM (x = −24, y = −128 / −240) | 128 × 96 |
 | Pause card (M12, legacy interface) | free column; RESUME and SETTINGS share the first row | up to 600 wide, five buttons |
 | Settings screen (M12) | centred over a dimmed, paused world | 1180 × 872 |
 | Pause sheet (M14, gesture-first) | from the bottom edge, full width; stops at 300 and 860 units, the settings embedded at the second | `docs/GESTURE_NAVIGATION.md` |
@@ -313,7 +317,8 @@ PlayMode (`Tests/PlayMode`):
 - `ContextualHudTests`: layout clear of the flight controls at three aspect
   ratios; flight controls accessible and unmoved across every profile, phase and
   warning; warning shown in Cinematic; fade timing; reduced motion; rail taps;
-  a pressed action is not hidden; engaged parking brake in Cinematic; profile button.
+  a pressed action is not hidden; engaged parking brake in Cinematic. The HUD profile's
+  tap control is tested with the command cluster (`CommandClusterPlayModeTests`).
 - `FlightSessionDisclosureTests` (Rigidbody aircraft): Parked then Takeoff roll from
   physics telemetry; profile switching during the take-off roll keeps the controls;
   airspeed shown on the take-off roll; parking brake holds at full power and

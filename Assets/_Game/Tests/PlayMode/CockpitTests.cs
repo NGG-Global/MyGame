@@ -98,7 +98,7 @@ namespace OpenSkies.Tests
             _touch = TouchControlsFactory.Build(safeArea, font);
             _touch.visibility = TouchControlsVisibility.Always;
             _panel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
-            _viewControls = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
+            _viewControls = CommandClusterFactory.BuildLookForward(safeArea, font);
             _viewControls.SetReducedMotion(true);
             if (withHud)
             {
@@ -671,7 +671,7 @@ namespace OpenSkies.Tests
         [TestCase(1440f)]
         [TestCase(1920f)]
         [TestCase(2400f)]
-        public void LookForward_SitsInTheTopBar_ClearOfEverythingElse(float width)
+        public void LookForward_SitsUnderTheCamera_ClearOfEverythingElse(float width)
         {
             _root = new GameObject("TopBarLayoutRoot");
             new GameObject("EventSystem", typeof(EventSystem)).transform.SetParent(_root.transform);
@@ -691,7 +691,8 @@ namespace OpenSkies.Tests
             var touch = TouchControlsFactory.Build(safeArea, font);
             var panel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
             var hud = ContextualHudFactory.Build(safeArea, font);
-            var view = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
+            var cluster = CommandClusterFactory.Build(safeArea, font);
+            var view = cluster.lookForward;
             Canvas.ForceUpdateCanvases();
             panel.ShowSystem(AircraftSystem.Flaps, "Flaps", "hint", new[] { "UP", "10", "20", "30" }, 4);
             panel.Layout();
@@ -701,10 +702,13 @@ namespace OpenSkies.Tests
             Assert.That(button.width, Is.GreaterThanOrEqualTo(96f));
             Assert.That(button.xMin, Is.GreaterThanOrEqualTo(0f), "inside the safe area");
             Assert.That(button.yMax, Is.LessThanOrEqualTo(1080f));
-            Assert.That(button.xMax, Is.LessThanOrEqualTo(WorldRect(hud.profileButton).xMin), "left of the HUD profile button (and so of RESET and CAM)");
+            var camera = WorldRect(cluster.cameraButton);
+            Assert.That(button.yMax, Is.LessThanOrEqualTo(camera.yMin), "under the camera button: a contextual camera option");
+            Assert.AreEqual(camera.xMax, button.xMax, 0.01f, "aligned with the camera");
 
-            var others = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton, hud.profileButton, hud.inspector,
-                hud.approachGuide, hud.navigationGuide, panel.systemCard, panel.instrumentCard };
+            var others = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton, hud.inspector,
+                hud.approachGuide, hud.navigationGuide, panel.systemCard, panel.instrumentCard,
+                cluster.cameraButton, cluster.optionsButton, cluster.pauseButton };
             others.AddRange(hud.railSlots);
             others.AddRange(hud.dataItems);
             others.AddRange(hud.warningSlots);

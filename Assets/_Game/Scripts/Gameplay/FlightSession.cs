@@ -22,8 +22,9 @@ namespace OpenSkies.Gameplay
     /// the player's profile) and hands them to the aircraft, then
     /// updates flight awareness (phase of flight, warnings) from the latest
     /// telemetry. Each frame it handles session commands (reset, camera, systems,
-    /// HUD profile), decides HUD disclosure, runs the cockpit and feeds the HUD
-    /// and touch controls. Layers only meet here.
+    /// HUD profile, from the keys and the top-right command cluster), decides HUD
+    /// disclosure, runs the cockpit and feeds the HUD and touch controls. Layers only
+    /// meet here.
     ///
     /// <see cref="Systems"/> is the one authoritative state of the aircraft's
     /// switches and levers; every change (cockpit, contextual HUD, keyboard) goes
@@ -37,6 +38,10 @@ namespace OpenSkies.Gameplay
         public CameraRig cameraRig;
         public HudPresenter hud;
         public TouchFlightControls touchControls;
+
+        [Header("Command cluster")]
+        [Tooltip("Top right: camera, options (HUD profile, RESET, SETTINGS, SKIP TUTORIAL), pause and LOOK FWD.")]
+        public CommandCluster commandCluster;
 
         [Header("Contextual HUD")]
         public ContextualHud contextualHud;
@@ -61,7 +66,7 @@ namespace OpenSkies.Gameplay
         public CockpitRig cockpit;
         public CockpitInteractionManager cockpitInteraction;
         public CockpitFocusPanel focusPanel;
-        [Tooltip("LOOK FWD and other cockpit view controls in the top bar.")]
+        [Tooltip("LOOK FWD (the command cluster's contextual camera option). Taken from the command cluster when empty.")]
         public CockpitViewControls cockpitViewControls;
         public AircraftLightsView aircraftLights;
         [Tooltip("The airframe's moving parts (propeller, control surfaces, flaps, nosewheel); optional.")]
@@ -90,6 +95,7 @@ namespace OpenSkies.Gameplay
         IFlightControlSource _controls;
         DisclosureCoordinator _coordinator;
         int _flightSettingsLayer = DisclosureCoordinator.None;
+        CommandClusterSession _commands;
         GestureSession _gestures;
         GestureHints _hints;
         bool _hintsEnabled = true;
@@ -182,6 +188,8 @@ namespace OpenSkies.Gameplay
         /// collapsing tap. Eligibility stays with <see cref="Disclosure"/> (the flight context).
         /// </summary>
         public DisclosureCoordinator Coordinator => _coordinator;
+        /// <summary>The top-right command cluster (null without one): camera, HUD profile, RESET, pause and the session actions.</summary>
+        public CommandClusterSession Commands => _commands;
         /// <summary>The authoritative switch and lever positions of the aircraft.</summary>
         public AircraftSystems Systems => _systems;
         public CockpitSession Cockpit => _cockpit;
@@ -248,6 +256,7 @@ namespace OpenSkies.Gameplay
 
         void Awake()
         {
+            if (cockpitViewControls == null && commandCluster != null) cockpitViewControls = commandCluster.lookForward;
             _devices = new KeyboardGamepadInputProvider();
             _router = new FlightInputRouter();
             _router.AddProvider(_devices);
@@ -279,6 +288,11 @@ namespace OpenSkies.Gameplay
             _coordinator.TransitionSeconds = contextualHud != null && contextualHud.ReducedMotion ? 0f : HudStyle.FadeSeconds;
             if (flightSettings != null)
                 _flightSettingsLayer = _coordinator.Register("Flight settings", IsOnFlightSettings, CollapseFlightSettings);
+            if (commandCluster != null)
+            {
+                commandCluster.SetReducedMotion(contextualHud != null && contextualHud.ReducedMotion);
+                _commands = new CommandClusterSession(this, commandCluster, _coordinator);
+            }
 
             // The flap lever interaction is shared by the systems arc and the cockpit's lever: one model, one view, one commit path.
             _leverInteraction = new FlapsLeverInteraction(this, gestureHud != null ? gestureHud.lever : null, gestureHud);
@@ -456,6 +470,7 @@ namespace OpenSkies.Gameplay
                 _cockpit.Dispose();
             }
             _manipulation?.Dispose();
+            _commands?.Dispose();
             if (interactionSurface != null) interactionSurface.GestureRaised -= OnDiaryGesture;
             _diary?.Flush();
             if (_gestures != null)
@@ -483,16 +498,10 @@ namespace OpenSkies.Gameplay
 
         void OnEnable()
         {
-            if (hud != null)
-            {
-                hud.CameraToggleRequested += ToggleCamera;
-                hud.ResetRequested += ResetFlight;
-            }
             if (contextualHud != null)
             {
                 contextualHud.ActionRequested += OnContextAction;
                 contextualHud.SystemsToggleRequested += ToggleSystemsRail;
-                contextualHud.ProfileCycleRequested += CycleHudProfile;
             }
             if (flightSettings != null)
             {
@@ -505,16 +514,10 @@ namespace OpenSkies.Gameplay
 
         void OnDisable()
         {
-            if (hud != null)
-            {
-                hud.CameraToggleRequested -= ToggleCamera;
-                hud.ResetRequested -= ResetFlight;
-            }
             if (contextualHud != null)
             {
                 contextualHud.ActionRequested -= OnContextAction;
                 contextualHud.SystemsToggleRequested -= ToggleSystemsRail;
-                contextualHud.ProfileCycleRequested -= CycleHudProfile;
             }
             if (flightSettings != null)
             {
@@ -559,11 +562,7 @@ namespace OpenSkies.Gameplay
 
             var t = Telemetry;
             if (airframeView != null && aircraft != null) airframeView.Present(t, aircraft.Controls, Time.deltaTime);
-            if (hud != null)
-            {
-                hud.Present(t);
-                hud.ShowView(CurrentView == ViewMode.Cockpit);
-            }
+            if (hud != null) hud.Present(t);
             if (touchControls != null)
             {
                 touchControls.ShowThrottle(aircraft != null ? aircraft.Controls.Throttle : _router.Throttle);
@@ -572,6 +571,7 @@ namespace OpenSkies.Gameplay
             }
             // Gestures first: they may preview a HUD profile for this frame's disclosure.
             _gestures?.Update(CurrentView, Time.timeScale <= 0f, _hudProfile, _disclosure, _systems);
+            _commands?.Update(Time.timeScale <= 0f);
             _hints?.Tick(Time.unscaledTime);
             UpdateDisclosure(t, Time.deltaTime);
             _cockpit?.Update(t, _runway, CurrentView);
@@ -710,6 +710,7 @@ namespace OpenSkies.Gameplay
             bool reduced = contextualHud.ReducedMotion;
             if (focusPanel != null) focusPanel.SetReducedMotion(reduced);
             if (cockpitViewControls != null) cockpitViewControls.SetReducedMotion(reduced);
+            if (commandCluster != null) commandCluster.SetReducedMotion(reduced);
             if (flightSettings != null) flightSettings.SetReducedMotion(reduced);
             if (guidanceLine != null) guidanceLine.SetReducedMotion(reduced);
             _gestures?.SetReducedMotion(reduced);
@@ -722,7 +723,7 @@ namespace OpenSkies.Gameplay
         {
             if (contextualHud != null) contextualHud.SetOpacity(opacity);
             if (gestureHud != null) gestureHud.SetOpacity(opacity);
-            if (hud != null) hud.SetOpacity(opacity);
+            if (commandCluster != null) commandCluster.SetOpacity(opacity);
             if (touchControls != null) touchControls.SetOpacityScale(opacity);
             if (cockpitViewControls != null) cockpitViewControls.SetOpacity(opacity);
         }
@@ -880,7 +881,7 @@ namespace OpenSkies.Gameplay
             if (rememberHudPreferences) HudPreferences.SaveProfile(profile);
         }
 
-        /// <summary>Smart, then Detailed, then Cinematic.</summary>
+        /// <summary>Smart, then Detailed, then Cinematic (the H key; on screen the command cluster chooses directly).</summary>
         public void CycleHudProfile() => SetHudProfile(NextProfile(_hudProfile));
 
         public static HudProfile NextProfile(HudProfile profile) =>

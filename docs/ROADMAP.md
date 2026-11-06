@@ -319,3 +319,21 @@ the M15 section of `docs/MOBILE_PERFORMANCE_REPORT.md`.
 - [ ] Decide after the device test: HDR and post-processing on Balanced, the normal map
       on the terrain, the cloud deck's height and density, the livery's colours
 - [ ] Later: cloud shadows, a modelled cockpit interior, a lower-detail F-16
+
+## UI redesign: tap-first disclosure (milestones 1 to 3)
+
+See `docs/TAP_DISCLOSURE_DESIGN.md`.
+
+- [x] Milestone 1: one disclosure coordinator for every transient interface; outside taps
+      consumed by the interaction surface; no close buttons
+- [x] Milestone 2: the tap-first systems wheel (tap SYSTEMS, an action, its option)
+- [x] Milestone 3: the compact top-right command cluster: camera (one tap), options (⋯)
+      and pause in a weighted primary row; LOOK FWD under the camera only while useful;
+      the HUD profile chosen directly in a selector; RESET, SETTINGS and SKIP TUTORIAL as
+      quieter session actions behind the options, RESET and SKIP with a deliberate second
+      tap; EditMode and PlayMode tests
+- [ ] CI green for milestones 2 and 3
+- [ ] Owner: rebuild the scene (Open Skies > Rebuild Flight Prototype Scene); try the
+      cluster on a phone: reach, the ⋯ symbol, the pause disc's discoverability, the RESET
+      confirmation
+- [ ] Next: the top-left flight-information cluster; the tutorial redesign

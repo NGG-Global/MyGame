@@ -64,10 +64,8 @@ namespace OpenSkies.UI
         public HudButton[] railSlots = new HudButton[RailSlotCount];
         [Tooltip("Always visible: opens every available action (manual access to aircraft systems).")]
         public HudButton systemsButton;
-        public HudButton profileButton;
-        [Tooltip("Opacity groups of SYSTEMS and the HUD profile button (the player's HUD opacity).")]
+        [Tooltip("Opacity group of SYSTEMS (the player's HUD opacity). The HUD profile is chosen in the command cluster.")]
         public CanvasGroup systemsGroup;
-        public CanvasGroup profileGroup;
 
         [Header("Development")]
         public DisclosureInspector inspector;
@@ -91,7 +89,6 @@ namespace OpenSkies.UI
 
         public event Action<ContextAction> ActionRequested;
         public event Action SystemsToggleRequested;
-        public event Action ProfileCycleRequested;
 
         const int NoValue = int.MinValue;
 
@@ -115,7 +112,6 @@ namespace OpenSkies.UI
         readonly int[] _slotWarning = new int[WarningSlotCount];
         int _shownRunway = NoValue, _shownApproachDistance = NoValue, _shownApproachHeight = NoValue, _shownNavDistance = NoValue;
         int _shownPapi = NoValue, _shownLateral = NoValue, _shownArrow = NoValue, _shownBearing = NoValue;
-        HudProfile _shownProfile = (HudProfile)(-1);
         float _nextValueRefresh;
         float _opacity = 1f;
         bool _initialized, _actionsConfigured, _reducedMotion;
@@ -129,8 +125,8 @@ namespace OpenSkies.UI
         public int WarningInSlot(int slot) => slot >= 0 && slot < WarningSlotCount && _slotWarning[slot] != NoValue ? _slotWarning[slot] : -1;
 
         /// <summary>
-        /// Shows or hides SYSTEMS and the rail. The HUD profile button, the flight data, the
-        /// guides and the warnings are unaffected: they belong to both interfaces.
+        /// Shows or hides SYSTEMS and the rail. The flight data, the guides and the warnings
+        /// are unaffected: they belong to both interfaces.
         /// </summary>
         public void SetLegacyRailEnabled(bool enabled)
         {
@@ -207,7 +203,6 @@ namespace OpenSkies.UI
             _navigationFade?.SetOpacityScale(_opacity);
             for (int i = 0; i < RailSlotCount; i++) _railFades[i]?.SetOpacityScale(_opacity);
             if (systemsGroup != null) systemsGroup.alpha = _legacyRail ? _opacity : 0f;
-            if (profileGroup != null) profileGroup.alpha = _opacity;
         }
 
         public void SetMotionPreference(MotionPreference preference)
@@ -253,7 +248,6 @@ namespace OpenSkies.UI
                 slot.Clicked += () => OnRailSlotClicked(index);
             }
             if (systemsButton != null) systemsButton.Clicked += OnSystemsClicked;
-            if (profileButton != null) profileButton.Clicked += OnProfileClicked;
 
             AssignSprites();
             RefreshMotionPreference();
@@ -521,11 +515,6 @@ namespace OpenSkies.UI
                 systemsButton.SetInteractable(useful);
                 systemsButton.SetEngaged(useful && disclosure.RailExpanded);
             }
-            if (profileButton != null && profile != _shownProfile)
-            {
-                _shownProfile = profile;
-                profileButton.SetLabel(ProfileLabel(profile));
-            }
         }
 
         void OnRailSlotClicked(int slot)
@@ -534,7 +523,6 @@ namespace OpenSkies.UI
         }
 
         void OnSystemsClicked() => SystemsToggleRequested?.Invoke();
-        void OnProfileClicked() => ProfileCycleRequested?.Invoke();
 
         float AlphaFor(Prominence prominence) =>
             prominence == Prominence.Full ? 1f : (prominence == Prominence.Quiet ? quietAlpha : 0f);
@@ -549,16 +537,6 @@ namespace OpenSkies.UI
                 case ContextAction.Navigation: return "NAV";
                 case ContextAction.Assistance: return "ASSIST";
                 default: return "?";
-            }
-        }
-
-        public static string ProfileLabel(HudProfile profile)
-        {
-            switch (profile)
-            {
-                case HudProfile.Cinematic: return "HUD\nCINEMATIC";
-                case HudProfile.Detailed: return "HUD\nDETAILED";
-                default: return "HUD\nSMART";
             }
         }
     }

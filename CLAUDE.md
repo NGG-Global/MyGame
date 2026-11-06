@@ -82,8 +82,10 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
   `InstrumentSettings`; change them only through `FlightSession.RequestInstrumentSetting`.
   The flight model never reads them.
 - Cockpit objects never get colliders; picking uses `CockpitPicking`.
-- Flight controls (joystick, throttle, brakes, CAM, RESET) are outside HUD
-  disclosure: no disclosure rule may hide or move them. Missions ask for guides and
+- Flight controls (joystick, throttle, brakes) and the command cluster (camera, options,
+  pause; RESET inside its options panel) are outside HUD disclosure: no disclosure rule
+  (profile, phase) may hide or move them. The camera stays one tap away; RESET sits one
+  level deep by the owner's choice (milestone 3), never because of a disclosure rule. Missions ask for guides and
   rail actions only through `FlightSession.SetMissionGuidance` (disclosure), never
   bypassing the player's choice or the warnings. Tutorial thresholds come from the
   aircraft data (`TrainingSpeeds`) and `MissionConfiguration`, not from code. Disclosure thresholds go
@@ -131,6 +133,20 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
   development-only comparison (`FlightSession.pullGestureComparison`, F4 cycles; never in
   a release build). Keep six primary segments at most: a seventh does not fit at 4:3 with
   full-size targets (group related systems as options instead, as the switch panel does).
+- The top-right command cluster (`docs/TAP_DISCLOSURE_DESIGN.md`, milestone 3) replaces the
+  old CAM, RESET, HUD profile, LOOK FWD, MENU and SKIP buttons; never add equal-weight
+  buttons back to the top bar. Primary row: camera (corner, one tap, names the view),
+  options (⋯) and pause (the quietest); LOOK FWD under the camera only while useful; the
+  options panel holds HUD (a direct selector: CINEMATIC, SMART, DETAILED) and the tertiary
+  session actions RESET, SETTINGS and SKIP TUTORIAL. Geometry lives in `CommandClusterLayout`
+  (pure, EditMode-tested): visuals and 96-unit touch targets are sized separately, the panel
+  stays inside the rail's inset (clear of the warnings) and above the throttle. State lives
+  in `CommandClusterModel`; `CommandClusterSession` (Gameplay) registers the panel ("Command
+  options") and the selector (its child) with the coordinator and applies requests through
+  `FlightSession` (`ToggleCamera`, `SetHudProfile`, `ResetFlight`). Destructive session actions
+  (RESET, SKIP) need a second tap between `confirmMinSeconds` and `confirmWindowSeconds`
+  (`CommandClusterSettings`); every collapse drops a waiting confirmation, so dismissing the
+  panel can never reset the flight. Keys are unchanged (`C`, `H`, `R`, Esc).
 - Visuals (M15): the project renders in **Linear** colour space with HDR and a global
   post-processing volume; the URP asset and the profile are made by `RenderPipelineSetup`
   (change it, not the assets). The aircraft, the terrain, the scenery and their textures

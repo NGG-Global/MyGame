@@ -114,8 +114,8 @@ namespace OpenSkies.Tests
                 Assert.AreEqual(1f, session.aircraft.Controls.Throttle);
             }
 
-            // The HUD button cycles profiles the same way.
-            session.contextualHud.profileButton.OnPointerClick(new PointerEventData(EventSystem.current));
+            // The H key's cycle changes profiles the same way (on screen, the command cluster chooses directly).
+            session.CycleHudProfile();
             Assert.AreEqual(FlightSession.NextProfile(HudProfile.Smart), session.ActiveHudProfile);
             Assert.AreEqual(1f, session.aircraft.Controls.Throttle);
         }

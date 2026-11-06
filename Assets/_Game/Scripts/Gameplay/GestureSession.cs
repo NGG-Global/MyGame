@@ -483,11 +483,11 @@ namespace OpenSkies.Gameplay
             if (_contextualHud != null)
                 for (int k = 0; k < ContextualHud.WarningSlotCount; k++)
                     if (_contextualHud.warningSlots[k] != null) n = AddKeepOut(n, _hud.LocalRect((RectTransform)_contextualHud.warningSlots[k].transform));
-            // The top bar (HUD profile, RESET, CAM) and the session buttons over the throttle (MENU, SKIP).
-            float top = ContextualHudFactory.TopMargin + HudStyle.MinTouchTarget + HudStyle.Gap;
+            // The top bar (the command cluster's primary row) and LOOK FWD under the camera. The cluster's options
+            // panel needs no keep-out: it and the wheel are never open together (one coordinator).
+            float top = CommandClusterLayout.RowBottom + HudStyle.Gap;
             n = AddKeepOut(n, Rect.MinMaxRect(bounds.xMin, bounds.yMax - top, bounds.xMax, bounds.yMax));
-            n = AddKeepOut(n, SessionButtonRect(bounds, MissionUiFactory.MenuPosition));
-            n = AddKeepOut(n, SessionButtonRect(bounds, MissionUiFactory.SkipPosition));
+            n = AddKeepOut(n, TopRightRect(bounds, CommandClusterLayout.LookForwardHit));
             return n;
         }
 
@@ -498,11 +498,9 @@ namespace OpenSkies.Gameplay
             return count + 1;
         }
 
-        static Rect SessionButtonRect(Rect bounds, Vector2 topRightPosition)
-        {
-            float xMax = bounds.xMax + topRightPosition.x, yMax = bounds.yMax + topRightPosition.y;
-            return Rect.MinMaxRect(xMax - MissionUiFactory.SessionButtonSize.x, yMax - MissionUiFactory.SessionButtonSize.y, xMax, yMax);
-        }
+        /// <summary>A rectangle given from the safe area's top-right corner (<see cref="CommandClusterLayout"/>), in the HUD's local units.</summary>
+        static Rect TopRightRect(Rect bounds, Rect topRight) =>
+            new Rect(bounds.xMax + topRight.xMin, bounds.yMax + topRight.yMin, topRight.width, topRight.height);
 
         // ---- Per frame -----------------------------------------------------------------------------
 

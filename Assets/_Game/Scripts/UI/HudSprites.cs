@@ -2,7 +2,10 @@ using UnityEngine;
 
 namespace OpenSkies.UI
 {
-    /// <summary>The systems wheel's symbols (docs/TAP_DISCLOSURE_DESIGN.md). Every one has a label beside it.</summary>
+    /// <summary>
+    /// The HUD's symbols (docs/TAP_DISCLOSURE_DESIGN.md): the systems wheel's, each with a label
+    /// beside it, and the command cluster's (camera with the view's name, options, pause).
+    /// </summary>
     public enum HudIcon
     {
         None = 0,
@@ -12,6 +15,9 @@ namespace OpenSkies.UI
         Approach = 4,
         Navigation = 5,
         Assist = 6,
+        Camera = 7,
+        More = 8,
+        Pause = 9,
     }
 
     /// <summary>
@@ -27,7 +33,7 @@ namespace OpenSkies.UI
         public const float RoundedRectRadius = Size * 0.3f;
         static Sprite _disc, _roundedRect, _arrow, _ring, _bezel, _roundedOutline, _diamond, _cautionIcon, _warningIcon;
         const int IconSize = 64;
-        const int IconCount = 7;
+        const int IconCount = 10;
         static readonly Sprite[] _icons = new Sprite[IconCount];
         static readonly Sprite[] _annuli = new Sprite[4];
         static readonly float[] _annulusRatios = new float[4];
@@ -144,10 +150,11 @@ namespace OpenSkies.UI
         // ---- Wheel symbols ---------------------------------------------------------------------------
 
         /// <summary>
-        /// A systems wheel symbol (white, tinted by its Image), generated once at 64 × 64;
-        /// null for <see cref="HudIcon.None"/>. Simple, high-contrast shapes: a P in a ring
-        /// (parking brake), a wing with its flap lowered, a toggle switch, a runway in
-        /// perspective, a compass needle, three sliders (assistance settings).
+        /// A HUD symbol (white, tinted by its Image), generated once at 64 × 64; null for
+        /// <see cref="HudIcon.None"/>. Simple, high-contrast shapes: a P in a ring (parking
+        /// brake), a wing with its flap lowered, a toggle switch, a runway in perspective, a
+        /// compass needle, three sliders (assistance settings); a camera with its lens, three
+        /// dots (more options) and two bars (pause).
         /// </summary>
         public static Sprite Icon(HudIcon icon)
         {
@@ -170,6 +177,9 @@ namespace OpenSkies.UI
                 case HudIcon.Approach: return Runway;
                 case HudIcon.Navigation: return (x, y) => RingAt(x, y, 0.5f, 0.5f, 0.4f, 0.47f) || Needle(x, y);
                 case HudIcon.Assist: return Sliders;
+                case HudIcon.Camera: return CameraBody;
+                case HudIcon.More: return (x, y) => DiscAt(x, y, 0.2f, 0.5f, 0.09f) || DiscAt(x, y, 0.5f, 0.5f, 0.09f) || DiscAt(x, y, 0.8f, 0.5f, 0.09f);
+                case HudIcon.Pause: return (x, y) => y >= 0.24f && y <= 0.76f && ((x >= 0.28f && x <= 0.42f) || (x >= 0.58f && x <= 0.72f));
                 default: return null;
             }
         }
@@ -235,6 +245,25 @@ namespace OpenSkies.UI
             float px = x - 0.5f, py = y - 0.5f;
             float along = (px + py) * 0.70710678f, across = (py - px) * 0.70710678f;
             return Mathf.Abs(along) / 0.3f + Mathf.Abs(across) / 0.1f <= 1f;
+        }
+
+        /// <summary>A camera: a rounded body with a viewfinder on top and a lens (a ring cut out of the body).</summary>
+        static bool CameraBody(float x, float y)
+        {
+            bool body = RoundedBox(x, y, 0.1f, 0.2f, 0.9f, 0.72f, 0.08f);
+            bool finder = x >= 0.32f && x <= 0.56f && y >= 0.7f && y <= 0.82f;
+            float dx = x - 0.5f, dy = y - 0.46f;
+            float r2 = dx * dx + dy * dy;
+            bool lensGap = r2 <= 0.18f * 0.18f && r2 >= 0.11f * 0.11f;
+            return (body || finder) && !lensGap;
+        }
+
+        /// <summary>A box with rounded corners (normalised texture units).</summary>
+        static bool RoundedBox(float x, float y, float xMin, float yMin, float xMax, float yMax, float radius)
+        {
+            float cx = Mathf.Clamp(x, xMin + radius, xMax - radius), cy = Mathf.Clamp(y, yMin + radius, yMax - radius);
+            float dx = x - cx, dy = y - cy;
+            return x >= xMin && x <= xMax && y >= yMin && y <= yMax && dx * dx + dy * dy <= radius * radius;
         }
 
         /// <summary>Three sliders at different settings.</summary>

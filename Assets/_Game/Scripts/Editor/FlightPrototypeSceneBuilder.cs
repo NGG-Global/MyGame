@@ -101,7 +101,7 @@ namespace OpenSkies.Editor
             var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights, out var airframe);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
             var hud = CreateHud(cameraRig.ViewCamera, out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel,
-                out var viewControls, out var flightSettings, out var guidanceLine, out var missionUi, out var interactionSurface, out var gestureHud);
+                out var commandCluster, out var flightSettings, out var guidanceLine, out var missionUi, out var interactionSurface, out var gestureHud);
             var audioManager = CreateAudio();
             cockpitInteraction.cameraRig = cameraRig;
             CreateEventSystem();
@@ -114,12 +114,13 @@ namespace OpenSkies.Editor
             session.telemetry = aircraft.GetComponent<AircraftTelemetry>();
             session.cameraRig = cameraRig;
             session.hud = hud;
+            session.commandCluster = commandCluster;
             session.touchControls = touchControls;
             session.contextualHud = contextualHud;
             session.cockpit = cockpit;
             session.cockpitInteraction = cockpitInteraction;
             session.focusPanel = focusPanel;
-            session.cockpitViewControls = viewControls;
+            session.cockpitViewControls = commandCluster.lookForward;
             session.aircraftLights = lights;
             session.airframeView = airframe;
             session.awarenessConfiguration = LoadOrCreateAwarenessConfiguration();
@@ -147,8 +148,6 @@ namespace OpenSkies.Editor
             modes.coach = missionUi.Coach;
             modes.highlights = missionUi.Highlights;
             modes.marker = missionUi.Marker;
-            modes.menuButton = missionUi.Menu;
-            modes.skipButton = missionUi.Skip;
             modes.beacons = beacons;
             modesGo.SetActive(true);
 
@@ -565,8 +564,6 @@ namespace OpenSkies.Editor
             public CoachingPanel Coach;
             public ControlHighlights Highlights;
             public CheckpointMarker Marker;
-            public HudButton Menu;
-            public HudButton Skip;
             public SettingsScreen Settings;
             public PauseSheet PauseSheet;
             public EntryStationsScreen Entry;
@@ -575,7 +572,7 @@ namespace OpenSkies.Editor
         }
 
         static HudPresenter CreateHud(Camera viewCamera, out TouchFlightControls touchControls, out ContextualHud contextualHud,
-            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel, out CockpitViewControls viewControls,
+            out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel, out CommandCluster commandCluster,
             out FlightSettingsPanel flightSettings, out GuidanceLine guidanceLine, out MissionUi missionUi,
             out InteractionSurface interactionSurface, out GestureHud gestureHud)
         {
@@ -634,10 +631,6 @@ namespace OpenSkies.Editor
             perf.raycastTarget = false;
             missionUi.PerformanceText = perf;
 
-            // Session buttons, top-right, away from the flight controls; at least 96 px tall at 1080p.
-            var cameraButton = NewHudButton("CameraButton", "CAM\nCHASE", safeArea, font, new Vector2(-24f, -16f), HudStyle.LabelSize, out var cameraLabel);
-            var resetButton = NewHudButton("ResetButton", "RESET", safeArea, font, new Vector2(-168f, -16f), HudStyle.ButtonSize, out _);
-
             // Touch flight controls: joystick lower left, throttle and brakes lower right.
             // Built by runtime code so tests use the identical layout.
             touchControls = TouchControlsFactory.Build(safeArea, font);
@@ -656,23 +649,20 @@ namespace OpenSkies.Editor
             missionUi.Coach = MissionUiFactory.BuildCoachingPanel(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
             missionUi.Marker = MissionUiFactory.BuildCheckpointMarker(safeArea, font, viewCamera);
 
-            // Contextual HUD (flight data, guides, warnings, action rail, HUD profile, inspector),
+            // Contextual HUD (flight data, guides, warnings, action rail, inspector),
             // built after the touch controls so it draws on top; it overlaps none of them.
             contextualHud = ContextualHudFactory.Build(safeArea, font);
-
-            // Cockpit view controls (LOOK FWD) in the top bar, left of the HUD profile button; shown only
-            // in cockpit view while the view is turned away from rest.
-            viewControls = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
 
             // Gesture-first HUD: the systems handle (where SYSTEMS was), the HUD band, the arc, the flap
             // lever, the density ladder and the explanation plate, over the contextual HUD and under
             // the mission UI (a modal card still dims and blocks everything).
             gestureHud = GestureHudFactory.Build(safeArea, font, interactionSurface);
 
-            // Session buttons under CAM, the control highlights over the controls (no touches), the
-            // mission card (a modal pause card dims and blocks everything else), and the entry screen on top.
-            missionUi.Menu = MissionUiFactory.BuildMenuButton(safeArea, font);
-            missionUi.Skip = MissionUiFactory.BuildSkipButton(safeArea, font);
+            // The top-right command cluster (camera, options, pause; LOOK FWD under the camera; the options panel
+            // with the HUD profile and the session actions), over the HUDs; then the control highlights over the
+            // controls (no touches), the mission card (a modal pause card dims and blocks everything else), and
+            // the entry screen on top.
+            commandCluster = CommandClusterFactory.Build(safeArea, font);
             missionUi.Highlights = MissionUiFactory.BuildHighlights(safeArea);
             missionUi.Card = MissionUiFactory.BuildMissionCard(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset,
                 CockpitFocusPanelFactory.ColumnBottom, CockpitFocusPanelFactory.ColumnTop);
@@ -686,29 +676,7 @@ namespace OpenSkies.Editor
 
             var hud = canvasGo.AddComponent<HudPresenter>();
             hud.developerReadout = readout;
-            hud.cameraButton = cameraButton;
-            hud.resetButton = resetButton;
-            hud.cameraLabel = cameraLabel;
-            hud.opacityGroups = new[] { cameraButton.GetComponent<CanvasGroup>(), resetButton.GetComponent<CanvasGroup>() };
             return hud;
-        }
-
-        /// <summary>CAM and RESET: uGUI buttons styled like the HUD buttons (HudPresenter gives them their rounded shape at runtime).</summary>
-        static Button NewHudButton(string name, string caption, Transform parent, Font font, Vector2 topRightOffset, int fontSize, out Text label)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button), typeof(CanvasGroup));
-            var rect = go.GetComponent<RectTransform>();
-            rect.SetParent(parent, false);
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = topRightOffset;
-            rect.sizeDelta = new Vector2(128f, 96f);
-            go.GetComponent<Image>().color = HudStyle.ControlSurface;
-            label = NewText("Label", rect, font, fontSize, TextAnchor.MiddleCenter);
-            label.text = caption;
-            label.color = HudStyle.TextPrimary;
-            label.raycastTarget = false;
-            Stretch(label.rectTransform);
-            return go.GetComponent<Button>();
         }
 
         static void CreateEventSystem()

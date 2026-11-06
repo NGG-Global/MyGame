@@ -323,7 +323,7 @@ namespace OpenSkies.Tests
             settings.Open(new FlightSettingsState { Profile = FlightAssistProfile.Assisted, Sensitivity = ControlSensitivity.Medium });
             settings.Layout();
 
-            var controls = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton, hud.profileButton };
+            var controls = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton };
             controls.AddRange(hud.railSlots);
             Rect card = WorldRect(settings.card);
             foreach (var control in controls)

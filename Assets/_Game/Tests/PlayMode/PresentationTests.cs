@@ -102,14 +102,17 @@ namespace OpenSkies.Tests
             var safe = SafeArea(_root.transform, width, height, Vector3.zero);
             var touch = TouchControlsFactory.Build(safe, Font);
             var hud = ContextualHudFactory.Build(safe, Font);
-            var menu = MissionUiFactory.BuildMenuButton(safe, Font);
-            var skip = MissionUiFactory.BuildSkipButton(safe, Font);
             var coach = MissionUiFactory.BuildCoachingPanel(safe, Font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
-            var look = CockpitFocusPanelFactory.BuildViewControls(safe, Font);
+            var cluster = CommandClusterFactory.Build(safe, Font);
+            cluster.skipButton.gameObject.SetActive(true);
             Canvas.ForceUpdateCanvases();
 
             var flightControls = new List<Component> { touch.joystick, touch.throttle, touch.brake };
-            var targets = new List<Component>(hud.railSlots) { hud.systemsButton, hud.profileButton, menu, skip, coach, look.lookForward };
+            var targets = new List<Component>(hud.railSlots)
+            {
+                hud.systemsButton, coach, cluster.cameraButton, cluster.optionsButton, cluster.pauseButton, cluster.lookForward.lookForward,
+                cluster.panel, cluster.hudRow, cluster.resetButton, cluster.settingsButton, cluster.skipButton,
+            };
             string at = $" at aspect {aspect:0.00}, scale {scale:0.000}";
             foreach (var target in targets)
             {
@@ -121,16 +124,17 @@ namespace OpenSkies.Tests
                 Assert.That(r.yMin, Is.GreaterThanOrEqualTo(-0.01f), target.name + " inside" + at);
                 Assert.That(r.yMax, Is.LessThanOrEqualTo(height + 0.01f), target.name + " inside" + at);
             }
-            // The rail never runs into the top bar, whatever the scale allows.
+            // The rail never runs into the top bar (the command cluster's row and LOOK FWD), whatever the scale allows.
             foreach (var slot in hud.railSlots)
-                Assert.IsFalse(WorldRect(slot).Overlaps(WorldRect(hud.profileButton)), "rail under the HUD profile button" + at);
-            Assert.IsFalse(WorldRect(skip).Overlaps(WorldRect(menu)), at);
-            // Warning banners sit between the joystick region and the rail.
+                foreach (var permanent in new Component[] { cluster.cameraButton, cluster.optionsButton, cluster.pauseButton, cluster.lookForward.lookForward })
+                    Assert.IsFalse(WorldRect(slot).Overlaps(WorldRect(permanent)), $"rail under {permanent.name}" + at);
+            // Warning banners sit between the joystick region and the rail, and the open command panel never reaches them.
             foreach (var warning in hud.warningSlots)
             {
                 var w = WorldRect(warning);
                 foreach (var control in flightControls) Assert.IsFalse(w.Overlaps(WorldRect(control)), "warning over " + control.name + at);
                 foreach (var slot in hud.railSlots) Assert.IsFalse(w.Overlaps(WorldRect(slot)), "warning over the rail" + at);
+                Assert.IsFalse(w.Overlaps(WorldRect(cluster.panel)), "the command panel over a warning" + at);
             }
         }
 

@@ -31,7 +31,7 @@ namespace OpenSkies.Tests
         CameraRig _rig;
         MissionCard _card;
         CoachingPanel _coach;
-        HudButton _menu, _skip;
+        CommandCluster _cluster;
         ModeSelectScreen _modeSelect;
 
         [TearDown]
@@ -82,8 +82,7 @@ namespace OpenSkies.Tests
                 var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 TouchControlsFactory.Build(safeArea, font).visibility = TouchControlsVisibility.Never;
                 _coach = MissionUiFactory.BuildCoachingPanel(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
-                _menu = MissionUiFactory.BuildMenuButton(safeArea, font);
-                _skip = MissionUiFactory.BuildSkipButton(safeArea, font);
+                _cluster = CommandClusterFactory.Build(safeArea, font);
                 _card = MissionUiFactory.BuildMissionCard(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset,
                     CockpitFocusPanelFactory.ColumnBottom, CockpitFocusPanelFactory.ColumnTop);
                 _modeSelect = MissionUiFactory.BuildModeSelect(safeArea, font);
@@ -98,6 +97,7 @@ namespace OpenSkies.Tests
             _session.cameraRig = _rig;
             _session.rememberHudPreferences = false; // never read or write the player's real preferences
             _session.homeRunway = Runway;
+            _session.commandCluster = _cluster;
             sessionGo.SetActive(true);
 
             var modesGo = new GameObject("GameModes");
@@ -109,8 +109,6 @@ namespace OpenSkies.Tests
             _modes.showModeSelectOnStart = showModeSelect;
             _modes.coach = _coach;
             _modes.card = _card;
-            _modes.menuButton = _menu;
-            _modes.skipButton = _skip;
             _modes.modeSelect = _modeSelect;
             modesGo.SetActive(true);
             if (withUi)
@@ -227,7 +225,7 @@ namespace OpenSkies.Tests
             yield return Build(withUi: true);
             _modes.StartMode(GameMode.FirstFlight);
             yield return new WaitForSeconds(0.5f);
-            _menu.OnPointerClick(Pointer());
+            _cluster.pauseButton.OnPointerClick(Pointer()); // the command cluster's pause (MENU before)
             Assert.IsTrue(_modes.IsPaused);
             Assert.AreEqual(0f, Time.timeScale);
             Assert.IsTrue(_card.IsModal, "the pause card dims and takes the touches");
@@ -252,10 +250,14 @@ namespace OpenSkies.Tests
             yield return Build(withUi: true);
             _modes.StartMode(GameMode.FirstFlight);
             yield return new WaitForSeconds(0.5f);
-            _skip.OnPointerClick(Pointer());
+            // SKIP TUTORIAL is a session action behind the command cluster's options trigger.
+            Assert.IsTrue(_session.Commands.Model.SkipAvailable, "offered while the First Flight runs");
+            _cluster.optionsButton.OnPointerClick(Pointer());
+            _cluster.skipButton.OnPointerClick(Pointer());
             Assert.AreEqual(GameMode.FirstFlight, _modes.Mode, "one tap only arms it");
-            Assert.IsTrue(_skip.Engaged);
-            _skip.OnPointerClick(Pointer());
+            Assert.IsTrue(_cluster.skipButton.Engaged);
+            yield return new WaitForSecondsRealtime(0.5f); // a deliberate second tap, not a double tap
+            _cluster.skipButton.OnPointerClick(Pointer());
             Assert.AreEqual(GameMode.FreeFlight, _modes.Mode);
             Assert.AreEqual(FirstFlightTutorial.Status.Skipped, _modes.Tutorial.State);
             Assert.AreEqual(TutorialStatus.Skipped, _modes.Progress.Tutorial);
@@ -360,16 +362,6 @@ namespace OpenSkies.Tests
             return Rect.MinMaxRect(corners[0].x, corners[0].y, corners[2].x, corners[2].y);
         }
 
-        static RectTransform TopRight(RectTransform parent, string name, Vector2 position)
-        {
-            var rect = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
-            rect.SetParent(parent, false);
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = position;
-            rect.sizeDelta = new Vector2(128f, 96f);
-            return rect;
-        }
-
         [TestCase(1440f)]
         [TestCase(1920f)]
         [TestCase(2400f)]
@@ -382,26 +374,20 @@ namespace OpenSkies.Tests
             var touch = TouchControlsFactory.Build(safeArea, font);
             var hud = ContextualHudFactory.Build(safeArea, font);
             var coach = MissionUiFactory.BuildCoachingPanel(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
-            var menu = MissionUiFactory.BuildMenuButton(safeArea, font);
-            var skip = MissionUiFactory.BuildSkipButton(safeArea, font);
+            var cluster = CommandClusterFactory.Build(safeArea, font);
             var card = MissionUiFactory.BuildMissionCard(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset,
                 CockpitFocusPanelFactory.ColumnBottom, CockpitFocusPanelFactory.ColumnTop);
             var modeSelect = MissionUiFactory.BuildModeSelect(safeArea, font);
-            // The scene's CAM and RESET buttons (built by the scene builder).
-            var cam = TopRight(safeArea, "CAM", new Vector2(-24f, -16f));
-            var reset = TopRight(safeArea, "RESET", new Vector2(-168f, -16f));
             Canvas.ForceUpdateCanvases();
 
-            var controls = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton, hud.profileButton, cam, reset };
+            // The command cluster (camera, options, pause; its panel with SKIP TUTORIAL) is checked in CommandClusterPlayModeTests.
+            var controls = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton,
+                cluster.cameraButton, cluster.optionsButton, cluster.pauseButton, cluster.panel };
             controls.AddRange(hud.railSlots);
-            var mission = new List<Component> { coach, menu, skip };
-            foreach (var item in mission)
             foreach (var control in controls)
-                Assert.IsFalse(WorldRect(item).Overlaps(WorldRect(control)), $"{item.name} over {control.name} at width {width}");
-            Assert.IsFalse(WorldRect(menu).Overlaps(WorldRect(skip)));
+                Assert.IsFalse(WorldRect(coach).Overlaps(WorldRect(control)), $"coaching over {control.name} at width {width}");
             Assert.That(WorldRect(coach).yMax, Is.LessThan(CockpitFocusPanelFactory.ColumnBottom * 1080f), "below the panel band and the instruments");
-            foreach (var button in new[] { menu, skip, coach.button })
-                Assert.That(WorldRect(button).height, Is.GreaterThanOrEqualTo(96f), button.name);
+            Assert.That(WorldRect(coach.button).height, Is.GreaterThanOrEqualTo(96f));
 
             card.Show("Paused", "First Flight, step 3 of 8: rotation", null, true, "RESUME", "RESTART FIRST FLIGHT", "SKIP TUTORIAL", "CHANGE MODE");
             card.Layout();

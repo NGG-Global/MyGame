@@ -1,4 +1,4 @@
-# Open Skies: tap-first disclosure (UI redesign, milestones 1 and 2)
+# Open Skies: tap-first disclosure (UI redesign, milestones 1 to 3)
 
 The transient interfaces of the HUD, the cockpit, the coaching, the settings and
 the pause no longer need a hold or a drag to open, to go deeper or to close. A
@@ -9,13 +9,15 @@ tap so nothing underneath can react to it.
 
 Milestone 1 made every transient interface tap-first under one coordinator. Milestone 2
 turns the systems arc into a polished tap-first **systems wheel** (the section of that
-name below); the wheel-picker concept stays, by the owner's decision.
+name below); the wheel-picker concept stays, by the owner's decision. Milestone 3
+replaces the row of equal top-right buttons with a compact, hierarchical **command
+cluster** (the section of that name below).
 
 Status: implemented with EditMode and PlayMode tests. Milestone 1 passed CI (the only
 red runs were the CI editor being killed at start-up and one intermittent tip test that
-predates it). Milestone 2's status is in its pull request; **neither has been run in the
-Editor by hand or touched on a device.** Not in these milestones: the top-left flight
-data and the top-right controls (unchanged), the tutorial redesign, an APK.
+predates it). The status of milestones 2 and 3 is in their pull requests; **none of them
+has been run in the Editor by hand or touched on a device.** Not in these milestones: the
+top-left flight data (unchanged), the tutorial redesign, an APK.
 
 ## The contract
 
@@ -53,6 +55,172 @@ Every transient interface follows these rules:
 10. **Flight controls stay active and independently owned.** A finger the joystick,
     the throttle or the brake owns is never an outside tap. Nothing here changes
     `PointerOwnership`.
+
+## The command cluster (milestone 3)
+
+### Hierarchy
+
+The top right used to hold six controls of the same size and weight: CAM, RESET, the HUD
+profile (a one-way cycle), LOOK FWD, MENU and SKIP TUTORIAL. They are now one cluster whose
+visual weight follows how often and how urgently each command is needed.
+
+| Tier | Command | Where | How it looks | How it acts |
+|---|---|---|---|---|
+| Primary | Camera | Top-right corner | The largest visual: a 92 × 72 rounded plate with a camera symbol and the current view's name (CHASE or COCKPIT) | One tap switches the view, from any state of the cluster. Flight input is never touched. |
+| Primary | Options (⋯) | Left of the camera | A 64-unit disc with three dots; lighter while its panel is open | One tap opens the options panel; again folds it |
+| Primary | Pause | Left of the options | The smallest and quietest: a 52-unit disc, fainter surface, two bars | One tap pauses (the pause sheet, or the card in the legacy interface) |
+| Contextual | LOOK FWD | Under the camera | A compact 104 × 52 pill | Shown only in the cockpit view while it is turned away from rest; returns the view forward |
+| Secondary | HUD | Options panel, top row | A full-width row: HUD, the current profile (cyan, in words), a chevron | Opens the HUD selector in the panel's place |
+| Secondary | HUD selector | Same place as the options | A title row (back chevron, "HUD: SMART") and three profiles: CINEMATIC, SMART, DETAILED | A tap on a profile applies it and folds the cluster; the title row goes back |
+| Tertiary | RESET | Options panel, lower row, left slot | A smaller, quieter pill (18-unit caption) | First tap: "TAP AGAIN TO RESET" (engaged); a second, deliberate tap within the window resets |
+| Tertiary | SETTINGS | Lower row, middle slot | Same | Pauses the flight and opens the settings (the sheet's settings stop, or the settings screen over the card) |
+| Tertiary | SKIP TUTORIAL | Lower row, right slot, First Flight only | Same | First tap: "TAP AGAIN TO SKIP"; the second ends the tutorial |
+
+There is no permanent card and no row of equal rectangles: the primary row has no backing,
+each control carries its own small visual, and the three visuals differ in size and
+strength. The panel's plate exists only while it is open.
+
+### Placement
+
+All measures are canvas units at the 1080 reference height, from the safe area's top-right
+corner (`CommandClusterLayout`, pure and EditMode-tested; the factory builds exactly these
+rectangles).
+
+| Element | Touch target | Visual |
+|---|---|---|
+| Camera | x −136 to −24, y −112 to −16 (112 × 96) | 92 × 72, centred |
+| Options | x −240 to −144, same height (96 × 96) | 64 × 64 disc |
+| Pause | x −344 to −248, same height (96 × 96) | 52 × 52 disc |
+| LOOK FWD | x −136 to −24, y −216 to −120 (112 × 96) | 104 × 52 pill |
+| Options panel | x −404 to −24, y −324 to −120 | plate, `PanelSurface`, radius 18 |
+| Secondary row | the panel's inner width (372), 96 tall | 80 tall |
+| Lower row | three slots of 121 × 96 | 113 × 64 |
+
+- **Visual size and touch size are independent.** Every control is a 96-unit invisible
+  touch target (`RaycastOnlyHudGraphic`) around its visual; a coach's highlight frames the
+  visual, not the touch area.
+- **Frequency decides the place.** The camera is in the corner, the place a right thumb
+  finds without looking; pause is the farthest, so a reach for the camera never pauses.
+- **The panel opens against the right edge, under the row**, and stays inside the action
+  rail's inset from the right edge (404 < 436 units), so the warning column can never be
+  under it at any interface scale. Its bottom (324 units below the top) is above the
+  throttle at every allowed scale: the interface-scale limit now uses the panel
+  (`UiScaleMath.Layout.SessionColumnBottom`), and it is no tighter than the old MENU/SKIP
+  column (336). Wide phones now get the full 110 %.
+- **Safe areas.** The cluster is a child of the `SafeAreaFitter` area and measured from its
+  corner, so a cut-out moves it in.
+- The development disclosure inspector moved left of the cluster's column (x −640 to −152)
+  to leave LOOK FWD's place free.
+- In the legacy rail comparison, the open panel may cover the rail's top slot while it is
+  open (it is transient and draws on top); the permanent controls never meet the rail.
+
+### Interaction and disclosure
+
+1. **Camera**: one tap, always. With the panel open it switches the view and folds the
+   panel. The fingers on the stick and the throttle keep their pointers and their input.
+2. **Options**: tap ⋯ to open, tap ⋯ again or anywhere outside to fold. No X. The panel is a
+   root surface of the `DisclosureCoordinator` ("Command options"): opening it replaces any
+   other expanded cluster (the systems wheel, a cockpit card, the flight settings, the
+   coaching explanation), and opening any of those folds it. An outside tap is consumed by
+   the interaction surface on the `Dismiss` route, so nothing underneath reacts; a drag
+   outside does nothing. A press between the panel's rows lands on its plate and goes
+   nowhere.
+3. **HUD**: tap HUD, then tap a profile. The selector is a child surface ("HUD selector") in
+   the panel's place, so the cluster never grows towards the warnings; the current profile
+   is marked (cyan) and named in the title row (never colour alone). The choice applies
+   through `FlightSession.SetHudProfile` and the cluster folds. The `H` key still cycles.
+   The HUD band's pull (top left) remains the gesture; the selector is its tap twin.
+4. **RESET**: behind the options, with a confirmation. The first tap only arms it; the
+   second confirms only if it comes at least 0.4 s and at most 3 s later
+   (`CommandClusterSettings`). A double tap or a bounce never confirms. Any collapse (an
+   outside tap, the trigger, another cluster, the pause, focus loss, a new flight), the HUD
+   row or another action drops the waiting confirmation, so **trying to dismiss the menu can
+   never reset the aircraft**. RESET is never where the trigger is. The `R` key is unchanged.
+5. **SKIP TUTORIAL** follows the same confirmation and is offered only while the First
+   Flight runs.
+6. **Pause** and **SETTINGS** fold the cluster and freeze the flight; the trigger never opens
+   the panel over a frozen flight (the pause interfaces are deliberate to leave).
+7. **Warnings** are untouched: never registered, never covered (see the placement), never
+   dimmed. The camera and the cluster are never hidden or moved by HUD disclosure (profile
+   or phase); RESET is now one level deep by the owner's request for this milestone, never by
+   a disclosure rule.
+
+### Tutorial highlights
+
+The coach's frames follow the cluster (`GameModeSession`): "tap CAM" frames the camera;
+"tap RESET" frames the options trigger while the panel is folded and RESET itself once the
+panel shows it. The frames take no touches and show only while their control is visible.
+The tutorial's own text and steps are unchanged.
+
+### Retired elements
+
+| Before | Now |
+|---|---|
+| `HudPresenter.cameraButton`, `resetButton`, `cameraLabel`, `opacityGroups` (uGUI buttons built by the scene builder) | The cluster's camera and RESET. `HudPresenter` keeps only the development telemetry overlay. |
+| `ContextualHud.profileButton`, `profileGroup`, `ProfileCycleRequested`, `ProfileLabel` | The cluster's HUD row and selector |
+| `MissionUiFactory.BuildMenuButton`, `BuildSkipButton`, `MenuPosition`, `SkipPosition`, `SessionButtonSize`; `GameModeSession.menuButton`, `skipButton`, `skipConfirmSeconds`, `SetHudOpacity` | The cluster's pause and SKIP TUTORIAL; the confirmation moved into `CommandClusterModel` |
+| `CockpitFocusPanelFactory.BuildViewControls`, `LookForwardPosition` | `CommandClusterFactory.BuildLookForward` (the same `CockpitViewControls`, under the camera, suppressed while the panel is open) |
+
+No development comparison of the old top bar is kept: it was a layout, not an interaction
+grammar worth comparing on a device, and the history holds it. The scene builder builds
+the cluster instead of the old buttons; a scene generated before this milestone must be
+rebuilt (**Open Skies > Rebuild Flight Prototype Scene**).
+
+### Code
+
+| Where | What |
+|---|---|
+| `CommandClusterModel` (UI, pure) | Levels (collapsed, options, HUD selector), the confirmation of RESET and SKIP, profile order and cached labels; `CommandClusterSettings` (the confirmation window and minimum) |
+| `CommandClusterLayout` (UI, pure) | Every rectangle of the cluster from the safe area's corner |
+| `CommandCluster` (UI, MonoBehaviour) | The view: buttons, the panel's fade, presenting the model; raises requests |
+| `CommandClusterFactory` (UI) | Builds the cluster and LOOK FWD in code |
+| `CommandClusterSession` (Gameplay) | Registers the panel and the selector with the coordinator, applies requests through `FlightSession`, raises pause, skip and settings for the game modes |
+| `HudSprites` | Three more generated symbols: camera, more (three dots), pause |
+| `FlightSession` | `commandCluster`, `Commands`; LOOK FWD taken from the cluster |
+| `GameModeSession` | Pause, SKIP and SETTINGS from the cluster; the highlight targets |
+| `GestureSession`, `UiScaleMath` | The wheel's keep-outs and the scale limit use the cluster's geometry |
+| `FlightPrototypeSceneBuilder` | Builds the cluster after the HUDs and before the highlights, the card, the sheet and the entry screen |
+
+### Tests
+
+EditMode `CommandClusterTests`: the levels; RESET armed by one tap, confirmed by a second
+inside the window, never by a double tap or a bounce, lapsing after the window, dropped by a
+collapse, a level change or another action, ignored while not shown; SKIP likewise and
+withdrawn with the tutorial; sanitised settings; the three profiles by direct index in
+density order with cached labels; the primary row ordered by frequency with falling visual
+weight and visuals inside their touch targets; the panel's rows and slots as full targets
+without overlap, RESET away from the trigger; the panel inside the rail's inset; on 4:3,
+16:9 and 20:9 at the smallest and largest interface scales, every target on screen and
+clear of the joystick region, the throttle, the brake, the handle, the warnings, the flight
+data and the guides, in the right half above the throttle; a cut-out's safe area; the scale
+limit no tighter than before.
+
+PlayMode `CommandClusterPlayModeTests` (real `FlightSession`, Rigidbody aircraft, touch
+controls, both HUDs, the flight settings card, the cockpit focus panel and, where needed,
+the game modes): the camera one tap away from the folded cluster, the open panel and the
+selector, and in every HUD profile; a camera switch keeps the stick's and the throttle's
+fingers and their input; profiles chosen directly with the current one shown, the title row
+going back, the `H` cycle kept, flight input untouched; RESET never by accident (hidden,
+first tap, double tap, outside tap, trigger, another cluster, a lapsed window) and reset by
+a deliberate second tap; the panel opened and folded by taps, the outside tap consumed and
+a drag ignored, cluster replacement both ways, a new flight and focus loss folding it;
+pause and SETTINGS freezing the flight and the trigger refused over it; one of each command
+and none of the retired ones; reach and large targets at 4:3, 16:9 and 20:9 at the scale
+limits; a cut-out's safe area; the tutorial's highlights following the cluster and SKIP
+TUTORIAL from the cluster. `FlightSessionTests`, `GameModeTests`, `PresentationTests`,
+`CockpitTests`, `GestureInteractionTests`, `ContextualHudTests` and
+`FlightSessionDisclosureTests` were updated for the retired controls.
+
+### Decisions and open points
+
+- SKIP TUTORIAL moved behind the options (a less frequent session action); the pause menu
+  keeps its own SKIP choice. The owner may want it back on the surface for first-time players.
+- SETTINGS from the cluster pauses the flight (the settings live over a paused world).
+- LOOK FWD stays a one-tap chip (it is contextual and directly useful), rather than a
+  second tap inside the panel; the panel takes its place while open.
+- Device questions: whether the 52-unit pause disc is discoverable enough; whether the ⋯
+  symbol reads as "more" to every player; whether 0.4 s is the right bounce time for RESET;
+  how the camera caption reads at arm's length.
 
 ## The systems wheel (milestone 2)
 
@@ -152,8 +320,8 @@ settings (`SystemsArcSettings`: band 196 to 300 units, first slot at 98°, at mo
 between slots) and the space around the handle. It searches the largest outer radius,
 the preferred band thickness first and then the minimum (96), for which the longest free
 run of angles (every radial line through the band clear of the joystick region, the
-throttle, the brake, the handle, the four warning slots, the top bar and the session
-buttons, 8 units of clearance and 16 from the safe-area edges) holds every slot with
+throttle, the brake, the handle, the four warning slots, the top bar and LOOK FWD under
+the camera, 8 units of clearance and 16 from the safe-area edges) holds every slot with
 segments of at least 96 units along the middle of the band. The largest band that keeps
 the preferred first slot wins, as long as it is within 32 units of the largest band that
 fits (`PreferredSlotWindow`, which also bounds the search: a one-off cost on the first
@@ -309,6 +477,7 @@ Press on the open surface ──▶ InteractionSurface.Begin
 Owners register their surfaces once, open and close them as they always did, and tell the coordinator:
   GestureSession ─ Systems arc (root), Systems sub-arc (child of the arc)
   FlightSession ─ Flight settings card
+  CommandClusterSession ─ Command options (root), HUD selector (child of the options)
   CockpitSession ─ Cockpit panel (instrument card or selector)
   GameModeSession ─ Pause sheet (stays), Pause sheet settings (child), Pause card (stays), Coaching detail
   PresentationSession ─ Settings screen (child of the pause card when it opened from it)
@@ -375,7 +544,7 @@ way, except that the lights ring is gone and the handle goes back one level.
 | Coaching explanation | "×" glyph; tap the message to fold | "–" glyph; tap the message or outside it to fold |
 | Pause sheet scrim | a tap resumed | a tap folds the settings to the first stop, or does nothing; RESUME resumes |
 | Settings screen scrim | took touches, did nothing | a tap closes the settings (as DONE) back to the pause card or the entry screen |
-| HUD band | pull only | unchanged as a continuous preview; a tap on it counts as a tap outside; the profile button remains the tap twin |
+| HUD band | pull only | unchanged as a continuous preview; a tap on it counts as a tap outside; the command cluster's HUD selector is the tap twin (milestone 3) |
 | Explanation plate (hold) | shown while held | unchanged: it is tied to the held finger, never a surface of its own |
 
 Presses on a panel that has no handler of its own bubble to the nearest ancestor with
@@ -430,7 +599,6 @@ whether an outside tap is ever an accident, how the folded "–" reads. Device p
   ring (hidden until needed) is a layout decision for the next milestone.
 - Focus loss folds the flight-time transients; a paused interface keeps its state.
   Coming back from another app while the sheet was at the settings finds it there.
-- The HUD band has no tap-first ladder; the profile button is its tap twin. A tappable
-  density ladder is possible under the same contract if wanted.
+- The HUD band has no tap-first ladder; the command cluster's HUD selector is its tap twin.
 - The explanation plate (hold to explain) is not a registered surface by design.
 - Nothing here is compiled or run until CI does it (`tests.yml`).

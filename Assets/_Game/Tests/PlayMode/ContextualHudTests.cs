@@ -88,7 +88,7 @@ namespace OpenSkies.Tests
         {
             Build(width);
             var flightControls = new[] { WorldRect(_touch.joystick), WorldRect(_touch.throttle), WorldRect(_touch.brake) };
-            var hudTargets = new List<Component>(_hud.railSlots) { _hud.systemsButton, _hud.profileButton, _hud.inspector };
+            var hudTargets = new List<Component>(_hud.railSlots) { _hud.systemsButton, _hud.inspector };
             foreach (var target in hudTargets)
             {
                 var rect = WorldRect(target);
@@ -260,22 +260,6 @@ namespace OpenSkies.Tests
             Assert.IsTrue(button.GetComponent<CanvasGroup>().blocksRaycasts);
             Assert.IsTrue(button.Engaged);
             Assert.AreEqual("BRAKE SET", button.label.text);
-        }
-
-        [Test]
-        public void ProfileButton_ShowsTheProfileAndRequestsTheNext()
-        {
-            Build();
-            int requests = 0;
-            _hud.ProfileCycleRequested += () => requests++;
-            var disclosure = new DisclosureController();
-            disclosure.Update(Input(FlightPhase.Cruise, HudProfile.Detailed), 0.02f);
-            _hud.Present(default, default, disclosure, null, HudProfile.Detailed);
-            Assert.AreEqual("HUD\nDETAILED", _hud.profileButton.label.text);
-            Assert.IsFalse(_hud.systemsButton.Interactable, "SYSTEMS has nothing to add in Detailed");
-
-            _hud.profileButton.OnPointerClick(new PointerEventData(EventSystem.current));
-            Assert.AreEqual(1, requests);
         }
     }
 }

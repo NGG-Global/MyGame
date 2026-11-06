@@ -38,8 +38,6 @@ namespace OpenSkies.Gameplay
         public CoachingPanel coach;
         public ControlHighlights highlights;
         public CheckpointMarker marker;
-        public HudButton menuButton;
-        public HudButton skipButton;
 
         [Header("World")]
         [Tooltip("Landmark lights that flash while their landmark is the active checkpoint.")]
@@ -50,12 +48,8 @@ namespace OpenSkies.Gameplay
         public bool showModeSelectOnStart = true;
         [Tooltip("Keep progress (First Flight, best landing) between sessions (PlayerPrefs). Tests keep it in memory.")]
         public bool rememberProgress = true;
-        [Tooltip("A first tap on SKIP TUTORIAL asks for a second within this time, s.")]
-        public float skipConfirmSeconds = 3f;
 
         const string Footnote = "Game score for practice, not a flight-training standard.";
-        const string SkipLabel = "SKIP\nTUTORIAL";
-        const string SkipConfirmLabel = "TAP AGAIN\nTO SKIP";
 
         /// <summary>A mission result waiting on the card (it comes back after the pause menu).</summary>
         enum OpenResult
@@ -86,15 +80,14 @@ namespace OpenSkies.Gameplay
         LandingChallenge _challenge;
         GameMode _mode;
         FreeFlightStart _freeStart;
-        bool _initialized, _modeActive, _paused, _resultShown, _skipArmed;
-        float _resumeTimeScale = 1f, _skipArmedAt;
+        bool _initialized, _modeActive, _paused, _resultShown;
+        float _resumeTimeScale = 1f;
         int _checkpointVersion = -1, _destination = -1, _cueSource = -1;
         OpenResult _openResult;
         string _resultTitle, _resultBody;
         readonly CardAction[] _cardActions = new CardAction[MissionCard.MaxButtons];
-        HudFade _skipFade;
-        CanvasGroup _menuGroup;
         EntryShowcase _showcase;
+        RectTransform _resetHighlightTarget;
         CameraMode _cameraBeforeEntry = CameraMode.Chase;
         bool _entryOpen, _sheetUsed;
         GestureHints _hints;
@@ -105,7 +98,6 @@ namespace OpenSkies.Gameplay
         bool _detailOpen;
 
         public GestureHints Hints => _hints;
-        float _hudOpacity = 1f;
         string[] _destinationLabels;
         string _airfieldDestinationLabel;
 
@@ -199,19 +191,13 @@ namespace OpenSkies.Gameplay
             RegisterTransients();
             if (flight.interactionSurface != null) flight.interactionSurface.GestureRaised += OnSurfaceGesture;
             if (highlights != null) highlights.SetReducedMotion(reduced);
-            if (menuButton != null)
+            // The command cluster's pause, SKIP TUTORIAL (already confirmed by its second tap) and SETTINGS.
+            if (flight.Commands != null)
             {
-                menuButton.Clicked += ToggleMenu;
-                _menuGroup = menuButton.GetComponent<CanvasGroup>();
-                if (_menuGroup == null) _menuGroup = menuButton.gameObject.AddComponent<CanvasGroup>();
+                flight.Commands.PauseRequested += ToggleMenu;
+                flight.Commands.SkipConfirmed += SkipTutorial;
+                flight.Commands.SettingsRequested += OpenSettingsFromFlight;
             }
-            if (skipButton != null)
-            {
-                var group = skipButton.GetComponent<CanvasGroup>();
-                if (group != null) _skipFade = new HudFade(group, interactive: true);
-                skipButton.Clicked += OnSkipClicked;
-            }
-            SetHudOpacity(_hudOpacity);
             flight.ResetPerformed += OnFlightReset;
             flight.PauseRequested += OnPauseRequested;
             ResolveHighlightTargets();
@@ -239,11 +225,13 @@ namespace OpenSkies.Gameplay
                 if (touch.throttle != null) highlights.SetTarget(CoachHighlight.Throttle, touch.throttle.track != null ? touch.throttle.track : (RectTransform)touch.throttle.transform);
                 if (touch.brake != null) highlights.SetTarget(CoachHighlight.Brake, (RectTransform)touch.brake.transform);
             }
-            var hud = flight.hud;
-            if (hud != null)
+            // CAM and RESET: the command cluster's camera (one tap away), and RESET behind its options trigger (see PresentCoaching).
+            var commands = flight.Commands;
+            if (commands != null)
             {
-                if (hud.cameraButton != null) highlights.SetTarget(CoachHighlight.Camera, (RectTransform)hud.cameraButton.transform);
-                if (hud.resetButton != null) highlights.SetTarget(CoachHighlight.Reset, (RectTransform)hud.resetButton.transform);
+                highlights.SetTarget(CoachHighlight.Camera, commands.CameraHighlightTarget);
+                _resetHighlightTarget = commands.ResetHighlightTarget;
+                highlights.SetTarget(CoachHighlight.Reset, _resetHighlightTarget);
             }
             // FLAPS: the systems handle in the gesture-first interface (tap it, then FLAPS), the rail slot in the legacy one.
             var gestureHud = flight.gestureHud;
@@ -349,14 +337,6 @@ namespace OpenSkies.Gameplay
             }
         }
 
-        /// <summary>The player's HUD opacity for MENU and SKIP TUTORIAL.</summary>
-        public void SetHudOpacity(float opacity)
-        {
-            _hudOpacity = opacity;
-            if (_menuGroup != null) _menuGroup.alpha = opacity;
-            _skipFade?.SetOpacityScale(opacity);
-        }
-
         void OnDisable()
         {
             // Never leave the game frozen (scene change, tests).
@@ -370,6 +350,12 @@ namespace OpenSkies.Gameplay
             {
                 flight.ResetPerformed -= OnFlightReset;
                 flight.PauseRequested -= OnPauseRequested;
+                if (flight.Commands != null)
+                {
+                    flight.Commands.PauseRequested -= ToggleMenu;
+                    flight.Commands.SkipConfirmed -= SkipTutorial;
+                    flight.Commands.SettingsRequested -= OpenSettingsFromFlight;
+                }
                 if (flight.interactionSurface != null) flight.interactionSurface.GestureRaised -= OnSurfaceGesture;
             }
             if (pauseSheet != null) pauseSheet.SettingsShown -= OnSheetSettingsShown;
@@ -561,7 +547,6 @@ namespace OpenSkies.Gameplay
             if (_challenge != null) _challenge.Stop();
             _resultShown = false;
             _openResult = OpenResult.None;
-            _skipArmed = false;
             CloseCard();
             if (coach != null) coach.Hide();
             _cueSource = -1;
@@ -717,7 +702,17 @@ namespace OpenSkies.Gameplay
                     else _coordinator.NotifyClosed(_coachLayer);
                 }
             }
-            if (highlights != null) highlights.Present(source >= 0 && cue.Visible && !_paused ? cue.Highlights : CoachHighlight.None);
+            if (highlights != null)
+            {
+                // RESET lives behind the cluster's options trigger: the frame points at the trigger, then at RESET once the panel shows it.
+                var resetTarget = flight.Commands != null ? flight.Commands.ResetHighlightTarget : null;
+                if (resetTarget != _resetHighlightTarget)
+                {
+                    _resetHighlightTarget = resetTarget;
+                    highlights.SetTarget(CoachHighlight.Reset, resetTarget);
+                }
+                highlights.Present(source >= 0 && cue.Visible && !_paused ? cue.Highlights : CoachHighlight.None);
+            }
             // The tutorial's coaching replaces the Assisted flying tips; the challenge's only while it speaks.
             flight.SuppressFlyingTips = source == 0 || (source == 1 && cue.Visible);
         }
@@ -742,39 +737,12 @@ namespace OpenSkies.Gameplay
                 if (beacons[i] != null) beacons[i].SetActive(landmarkId != null && beacons[i].landmarkId == landmarkId);
         }
 
+        /// <summary>SKIP TUTORIAL is one of the command cluster's session actions while the First Flight runs (it asks for a second tap there).</summary>
         void PresentSkip()
         {
-            if (skipButton == null) return;
-            bool show = _modeActive && _mode == GameMode.FirstFlight && _tutorial.IsActive && !_paused;
-            if (_skipArmed && (!show || Time.unscaledTime - _skipArmedAt > skipConfirmSeconds))
-            {
-                _skipArmed = false;
-                skipButton.SetLabel(SkipLabel);
-                skipButton.SetEngaged(false);
-            }
-            if (_skipFade != null)
-            {
-                _skipFade.SetTarget(show ? 1f : 0f, 0.2f, 0f);
-                _skipFade.Tick(Time.unscaledDeltaTime);
-            }
-        }
-
-        void OnSkipClicked()
-        {
-            if (_mode != GameMode.FirstFlight || !_tutorial.IsActive) return;
-            if (!_skipArmed)
-            {
-                // A second tap confirms: an accidental brush never ends the tutorial.
-                _skipArmed = true;
-                _skipArmedAt = Time.unscaledTime;
-                skipButton.SetLabel(SkipConfirmLabel);
-                skipButton.SetEngaged(true);
-                return;
-            }
-            _skipArmed = false;
-            skipButton.SetLabel(SkipLabel);
-            skipButton.SetEngaged(false);
-            SkipTutorial();
+            var commands = flight.Commands;
+            if (commands == null) return;
+            commands.SetSkipAvailable(_modeActive && _mode == GameMode.FirstFlight && _tutorial.IsActive && !_paused);
         }
 
         void OnDetailRequested()
@@ -812,6 +780,20 @@ namespace OpenSkies.Gameplay
             if (ModeSelectOpen || OverlayOpen) return;
             if (_paused) ResumeFromMenu();
             else OpenMenu();
+        }
+
+        /// <summary>
+        /// SETTINGS from the command cluster: the settings live over a paused world, so the flight
+        /// pauses first; then the sheet goes to its settings stop, or the legacy card opens the
+        /// settings screen over itself.
+        /// </summary>
+        public void OpenSettingsFromFlight()
+        {
+            if (!_modeActive || ModeSelectOpen || OverlayOpen) return;
+            if (!_paused) OpenMenu();
+            if (!_paused) return;
+            if (_sheetUsed && pauseSheet != null && pauseSheet.IsOpen) pauseSheet.GoTo(SheetModel.SecondStop);
+            else if (card != null && card.IsModal) RaiseSettingsRequested();
         }
 
         /// <summary>Pauses the flight and shows the menu for the current mode: the pull-up sheet, or the card in the legacy interface.</summary>

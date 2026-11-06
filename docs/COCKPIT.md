@@ -14,7 +14,7 @@ controls.
 | No precise taps | Every instrument and control has a pick volume larger than its visible part, plus a screen-space tolerance (6 % of the screen height). At the resting view each target is at least about 110 × 150 px on a 1080-px-high screen. |
 | Flight controls always accessible | The cockpit only receives touches no flight control or HUD element took, and never handles a pointer owned in the shared `PointerOwnership` table. Joystick, throttle and brake never move. |
 | Progressive disclosure for systems | A tap on a switch selects it (an amber frame on the panel) and opens a selector with large options; it never changes the system by itself. Hazardous changes need a second tap. |
-| Return to forward is always one tap away | LOOK FWD appears in the top bar only while the view is turned away (more than 10° from rest), next to CAM; the double tap on the sky and **V** do the same. |
+| Return to forward is always one tap away | LOOK FWD appears under the command cluster's camera button only while the view is turned away (more than 10° from rest); the double tap on the sky and **V** do the same. |
 | No accidental activation | Tap selection with a slop threshold; drags look around instead; selectors need a deliberate tap on a 96-unit option; engine off in flight needs confirmation; the parking brake cannot be set in the air. |
 
 ## Architecture
@@ -93,13 +93,14 @@ light, **N** navigation lights, **P** parking brake.
 
 The camera only reads transforms; nothing in the cockpit view changes flight input.
 
-**LOOK FWD** (`CockpitViewControls`, built by `CockpitFocusPanelFactory.BuildViewControls`)
-sits in the top bar left of the HUD profile button (128 × 96 units, anchored 456 units
-from the right safe-area edge, 16 from the top), so all view buttons are together:
-LOOK FWD, HUD profile, RESET, CAM. It fades in (0.2 s, or at once with reduced motion)
-only while the view is turned away, stays put while a finger presses it, and starts the
-same smooth return as the double tap. A layout test checks at 4:3, 16:9 and 20:9 that it
-overlaps no flight control, HUD element, guide, banner or focus card. The 10° threshold
+**LOOK FWD** (`CockpitViewControls`, built by `CommandClusterFactory.BuildLookForward` as part
+of the top-right command cluster, `docs/TAP_DISCLOSURE_DESIGN.md`) is a contextual camera
+option: a compact 104 × 52 pill under the camera button (a 112 × 96 touch target, 120 units
+below the top of the safe area, aligned with the camera). It fades in (0.2 s, or at once
+with reduced motion) only while the view is turned away, stays put while a finger presses
+it, and starts the same smooth return as the double tap. While the cluster's options panel
+is open it gives way to the panel. A layout test checks at 4:3, 16:9 and 20:9 that it
+overlaps no flight control, HUD element, guide, banner, focus card or cluster control. The 10° threshold
 is a camera setting on `CameraRig`, next to the other look settings; it is not a
 flight-awareness disclosure rule, so it is not in `FlightAwarenessConfiguration`.
 
@@ -222,7 +223,7 @@ All cockpit visuals are placeholders built from primitives and flat colours:
 - Exterior light assets: landing light flare, navigation light glow, strobe/beacon.
 - Night lighting for the panel (instrument backlighting).
 - Selection frame: flat amber bars; a designed highlight (soft glow or bezel ring) would read better.
-- LOOK FWD: text label; an icon (eye and arrow, or a recentre glyph) once the HUD has an icon set.
+- LOOK FWD: text label; the HUD now has generated symbols (`HudSprites.Icon`), so a recentre glyph could join it.
 - Sound: switch clicks, flap motor, engine start.
 
 ## Tests
@@ -244,7 +245,7 @@ PlayMode (`CockpitTests`, real session and Rigidbody aircraft):
 - drag-to-look limits, remembered direction and double-tap recentring;
 - the selected item is framed in the cockpit (switch, instrument, flap lever opened from the HUD) and the frame clears on every dismissal;
 - LOOK FWD appears only while looking away in cockpit view, returns the view smoothly, never changes flight input and stays under a pressing finger;
-- `CockpitFocusPanelLayoutTests`: the panel fits between the controls at 4:3, 16:9 and 20:9 with large options; LOOK FWD sits in the top bar clear of everything else.
+- `CockpitFocusPanelLayoutTests`: the panel fits between the controls at 4:3, 16:9 and 20:9 with large options; LOOK FWD sits under the camera, clear of everything else.
 
 The tests prove routing, ownership, state and layout logic. They do not prove how
 touches arrive on a device, legibility, or comfort: use the device checklist.
@@ -272,10 +273,10 @@ not run. None of this replaces CI.
 
 1. Cockpit view: the six instruments are readable at a glance (digital windows) and nothing covers them at rest.
 2. Fly a full circuit from the cockpit only (take-off, climb, turns, approach with the GPS map, landing).
-3. Tap each instrument with the thumb: the enlarged view opens at once; it closes by tap, close button, tapping the sky, or CAM.
+3. Tap each instrument with the thumb: the enlarged view opens at once; it closes by tap, tapping the sky, or the camera button.
 4. Keep flying (joystick and throttle held) while an instrument is enlarged.
 5. Tap each switch: it is framed in amber and a selector opens; nothing changes until an option is tapped. Try near misses: the right control is still selected (the frame shows which).
-6. Drag on the sky to look around; LOOK FWD appears top right: tap it to look forward; also double tap the sky; pinch to change the field of view.
+6. Drag on the sky to look around; LOOK FWD appears under the camera button: tap it to look forward; also double tap the sky; pinch to change the field of view.
 7. Hold the joystick with one thumb and tap or look with the other; try three fingers.
 8. Set flaps from the HUD rail (FLAPS) and check the cockpit lever; set the parking brake in the cockpit and check the HUD.
 9. In flight, tap OFF on the ignition: it asks for confirmation; restart the engine.

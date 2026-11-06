@@ -35,17 +35,17 @@ below is a first proposal to be tuned on a phone (`docs/GESTURE_TEST_PLAN.md`).
 
 | Gesture | Where | Peek | Manipulate | Armed | Release | Fallback |
 |---|---|---|---|---|---|---|
-| **Pull the systems handle** (*comparison*) | The 168 × 96 handle left of the throttle, above BRAKE (where SYSTEMS was) | Past 2 % of the screen height the arc starts unfolding | By 9 % it is fully unfolded; the thumb slides onto a segment, which lifts | A selectable segment under the thumb (cyan, dark label) | Does what the segment says; the arc folds | HUD profile button, keyboard keys, cockpit switches |
+| **Pull the systems handle** (*comparison*) | The 168 × 96 handle left of the throttle, above BRAKE (where SYSTEMS was) | Past 2 % of the screen height the arc starts unfolding | By 9 % it is fully unfolded; the thumb slides onto a segment, which lifts | A selectable segment under the thumb (cyan, dark label) | Does what the segment says; the arc folds | The legacy rail, keyboard keys, cockpit switches |
 | **Continue into the flap lever** (*comparison*) | From the FLAPS segment, the same finger | Resting 0.18 s on FLAPS (or pulling 30 units beyond the band) folds the arc and puts a vertical lever under the thumb, the current detent at the finger | Down extends, up retracts, with detent snapping and hysteresis; the knob is held by its stops | The previewed detent differs from the aircraft's | Sets that detent through the gate; nothing if unchanged | Release on FLAPS without the lever: one detent down (wrapping to UP); `[` `]` keys; cockpit lever |
 | **Rest while the arc is open** (*comparison*) | On a segment, 0.5 s without moving | | A sub-arc unfolds centred on the rested segment: LIGHTS opens LDG LIGHT and NAV LIGHTS; NAV opens the destinations (airfield, then each landmark); ASSIST opens the assistance profiles. The current choice is marked | A sub-arc item under the thumb | Chooses it (the same request the selector or MENU › GUIDE makes) | Cockpit switches, L and N keys, MENU › GUIDE, the assistance selector |
 | **Tap the handle** (primary) | | | | | The wheel opens and stays, every system on it; tap a segment to act or focus its options, tap an option to apply it; the handle goes back one level, outside folds (`docs/TAP_DISCLOSURE_DESIGN.md`) | |
 | **Long press** (0.45 s, still) | The handle, a flight value, a guide, a warning banner | A thin ring fills under the finger from 20 % of the hold | | | An explanation plate appears next to the element and stays while held; lifting hides it | Coaching explanations, this document |
-| **Pull the HUD band** | The band over the flight data strip (top left) | Past 2 % the density ladder appears with the committed stop at the finger | Down is more HUD, up is less: Cinematic, Smart, Detailed, 110 units apart with hysteresis; the HUD itself shows the previewed level | The previewed level differs from the committed one | Commits the profile; the ladder fades | HUD profile button, H key |
+| **Pull the HUD band** | The band over the flight data strip (top left) | Past 2 % the density ladder appears with the committed stop at the finger | Down is more HUD, up is less: Cinematic, Smart, Detailed, 110 units apart with hysteresis; the HUD itself shows the previewed level | The previewed level differs from the committed one | Commits the profile; the ladder fades | The command cluster's HUD selector, H key |
 | **Drag the sky** (chase view) | Open world outside every control and target | | The camera orbits the aircraft with the finger (120° per screen height), within limits | | Springs back to the chase position in 0.45 s (at once with reduced motion) | None needed: a look is never a state |
 | **Pinch the sky** (chase view) | Two fingers the surface owns | | Chase distance 8 to 30 m, 30 m per screen height of spread | | | Fixed distance |
-| **Double tap the sky** (chase view) | | | | | Switches to the cockpit view | CAM button, C key |
-| **Two-finger tap** | The sky (chase view) or the cockpit | | | | Pauses: the pause sheet rises (`docs/GESTURE_NAVIGATION.md`) | MENU, Esc |
-| **Pull the pause sheet** | The sheet's grip | | Two stops: actions, then the settings; the depth fades the settings in | | Settles on the nearest stop; pulled below 55 % of the first stop it dismisses and resumes | MENU, RESUME, the settings screen |
+| **Double tap the sky** (chase view) | | | | | Switches to the cockpit view | The command cluster's camera button, C key |
+| **Two-finger tap** | The sky (chase view) or the cockpit | | | | Pauses: the pause sheet rises (`docs/GESTURE_NAVIGATION.md`) | The command cluster's pause, Esc |
+| **Pull the pause sheet** | The sheet's grip | | Two stops: actions, then the settings; the depth fades the settings in | | Settles on the nearest stop; pulled below 55 % of the first stop it dismisses and resumes | Pause, RESUME, SETTINGS in the command cluster, the settings screen |
 | **Swipe the entry stations** | The entry screen | | The three modes slide under the finger; the showcase camera moves with them | | Settles on the nearest station (a flick carries over) | Chips, START, arrow keys and Enter |
 | **Drag around a dial** (cockpit focus panel) | The enlarged heading indicator or altimeter | | The heading bug or the subscale follows the sweep; cyan preview; the dial's centre cancels | The previewed value differs | Sets it through `RequestInstrumentSetting` | None required: the defaults fly |
 | **Flick a switch** (cockpit) | A switch on the panel | The switch tilts with the finger | | Past 5 % of the screen height | Requests the change through the gate (hazardous: the selector with its confirmation) | Tap: the selector |
@@ -200,8 +200,8 @@ turns a candidate into a pinch or a two-finger tap and ends a drag.
 | Gesture | Fallback |
 |---|---|
 | Arc and lever | The legacy SYSTEMS rail (development setting), the cockpit switches and levers, keys `P` `[` `]` `L` `N` |
-| HUD density pull | The HUD profile button (always shown), key `H` |
-| Camera gestures | CAM button, key `C`; the chase view works without ever looking around |
+| HUD density pull | The command cluster's HUD selector (options, HUD, a profile; `docs/TAP_DISCLOSURE_DESIGN.md`), key `H` |
+| Camera gestures | The command cluster's camera button (always one tap away), key `C`; the chase view works without ever looking around |
 | Explanations | Coaching explanations in the First Flight; nothing is only explained by a long press |
 | Reduced motion | Follows the system or the setting; gestures are unchanged, transitions are instant |
 
@@ -260,7 +260,7 @@ routes nothing but the cockpit; a pull released on nothing changes nothing; rele
 on NAV makes the same request as the button; the parking brake through the gate
 and its engaged emphasis; revocation mid-pull; the flap lever previews and commits
 once on release, cancels sideways; the HUD band previews, reverts and commits; the
-profile button still works; chase free look, spring-back and untouched controls;
+command cluster's HUD selector works beside it; chase free look, spring-back and untouched controls;
 double tap switches view; pinch within limits; explanations on the handle and on a
 flight value; layout clear of the flight controls and the warning banner; reduced
 motion.

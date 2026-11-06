@@ -10,10 +10,11 @@ nothing over the centre of the screen.
 | Floating joystick | Invisible touch region over the lower-left ~42 % × 78 % of the screen | Left | The base appears where the thumb lands (kept fully inside the region); the knob follows the thumb. Drag **down = stick back = nose up**; left/right = roll. Release returns the stick to neutral. It never levels the aircraft. |
 | Throttle | Lower right: slim 64 × 460 track inside a 220 × 620 touch area | Right | Drag up/down to change 0-100 %. Relative drag: touching never makes it jump. Stays where it is left. The label shows the percentage. |
 | Brakes | Left of the throttle, 168 × 112 | Right | Hold to brake (main wheels). Shown only with weight on wheels; fades out after lift-off and releases any finger on it. |
-| CAM | Top right | Either | Switches chase/cockpit. Never changes flight input. |
-| RESET | Top right, left of CAM | Either | Back to the runway start at rest, throttle idle. |
-| HUD profile | Top right, left of RESET | Either | Cycles Smart, Detailed, Cinematic. Never changes flight input. |
-| LOOK FWD | Top right, left of the HUD profile button | Either | Cockpit view only, while the view is turned more than 10° away: returns it forward smoothly. Never changes flight input. |
+| Camera (command cluster) | Top-right corner | Either | One tap switches chase/cockpit from any state; names the current view. Never changes flight input. |
+| Options ⋯ (command cluster) | Left of the camera | Either | Opens the options panel: HUD (a selector: CINEMATIC, SMART, DETAILED, chosen directly), then RESET, SETTINGS and, in the First Flight, SKIP TUTORIAL. A tap outside folds it. See `docs/TAP_DISCLOSURE_DESIGN.md`. |
+| Pause (command cluster) | Left of the options, the quietest | Either | Pauses the flight (the pause sheet or card). |
+| RESET | In the options panel | Either | Back to the runway start (or the mode's checkpoint) at rest, throttle idle, after a second, deliberate tap. Never from dismissing the panel. |
+| LOOK FWD | Under the camera | Either | Cockpit view only, while the view is turned more than 10° away: returns it forward smoothly. Never changes flight input. |
 | Systems handle (gesture-first) | Left of the throttle, directly above BRAKE (168 × 96) | Right | Pull up: the arc of aircraft actions unfolds with the thumb; slide onto one and release. Rest on FLAPS: the flap lever. Tap: a hint. Hold: an explanation. See `docs/GESTURE_INTERACTION.md`. |
 | HUD band (gesture-first) | Over the flight data strip, top left | Either | Pull down for more HUD, up for less, with a preview; hold a value to explain it. |
 | SYSTEMS and action rail (legacy interface only) | Left of the throttle: SYSTEMS directly above BRAKE, contextual actions stacked above it | Right | SYSTEMS (always visible) opens every available action; actions appear by phase of flight. ASSIST opens the flight assistance and stick sensitivity settings. See `docs/CONTEXTUAL_UI.md`, `docs/FLIGHT_ASSISTANCE.md`. |
@@ -157,8 +158,8 @@ A development build is needed for the diagnostics and telemetry overlays.
    camera button: it keeps steering; throttle and camera do not react.
 7. On the ground, hold BRAKE with the right thumb while steering roll with the
    left thumb. After lift-off the brake button fades out.
-8. Switch camera (CAM) during a turn: stick and throttle keep working without
-   a re-touch.
+8. Switch camera (the cluster's camera button) during a turn: stick and throttle keep
+   working without a re-touch.
 9. Mid-gesture, pull down the notification shade or press Home, then return:
    diagnostics show no pointers, stick neutral, throttle unchanged, and the
    controls respond to new touches.
