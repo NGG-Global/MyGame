@@ -20,6 +20,12 @@ namespace OpenSkies.UI
         public const int SearchFrom = 30, SearchTo = 300;
         const int RadialSamples = 8;
         const float RadiusStep = 4f;
+        /// <summary>
+        /// The most outer radius given up to keep the preferred first slot, canvas units. It also
+        /// bounds the search: once a band fits, only this much smaller is tried (a one-off cost on
+        /// the first frame and on a screen change, kept small for low-end phones).
+        /// </summary>
+        public const float PreferredSlotWindow = 32f;
 
         /// <summary>The space the wheel opens into, in the HUD's local units (origin at the safe area's bottom left).</summary>
         public struct Space
@@ -63,6 +69,7 @@ namespace OpenSkies.UI
 
             for (float outer = Mathf.Max(p.outerRadius, minOuter); outer >= minOuter - 0.01f; outer -= RadiusStep)
             {
+                if (firstFit.Fits && outer < firstFit.Geometry.outerRadius - PreferredSlotWindow - 0.01f) break;
                 for (int t = 0; t < 2; t++)
                 {
                     float thickness = t == 0 ? preferredThickness : minThickness;
@@ -74,8 +81,9 @@ namespace OpenSkies.UI
                     var candidate = Place(p, n, inner, outer, runStart, runEnd);
                     if (candidate.Fits)
                     {
-                        // Consistent positions first: the largest band that keeps the preferred first slot wins;
-                        // otherwise the largest band that fits at all, with its slots moved as little as possible.
+                        // Consistent positions first: the largest band that keeps the preferred first slot wins (within
+                        // PreferredSlotWindow of the largest that fits); otherwise the largest band that fits at all,
+                        // with its slots moved as little as possible.
                         if (Mathf.Abs(candidate.Geometry.firstSlotAngle - p.firstSlotAngle) < 0.5f) return candidate;
                         if (!firstFit.Fits) firstFit = candidate;
                     }

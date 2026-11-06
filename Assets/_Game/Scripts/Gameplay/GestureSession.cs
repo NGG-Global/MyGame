@@ -177,7 +177,8 @@ namespace OpenSkies.Gameplay
             _surface.GestureRaised += OnGesture;
 
             // The wheel is a transient interface: the coordinator closes it on an outside tap or when another cluster opens.
-            // Its focus (one action's options) is a child: the handle or a tap on the wheel outside the options goes back to it.
+            // Its focus (one action's options) is a child: the handle goes back to the wheel; a tap anywhere but an option
+            // (the free part of the band included: the hit area takes only the options) folds everything.
             _disclosure = surface.Disclosure;
             _arcLayer = _disclosure.Register("Systems wheel", IsOnArc, CollapseArc);
             _subArcLayer = _disclosure.Register("Systems wheel options", IsOnSubLevel, CollapseSubArc, true, _arcLayer);

@@ -155,7 +155,9 @@ run of angles (every radial line through the band clear of the joystick region, 
 throttle, the brake, the handle, the four warning slots, the top bar and the session
 buttons, 8 units of clearance and 16 from the safe-area edges) holds every slot with
 segments of at least 96 units along the middle of the band. The largest band that keeps
-the preferred first slot wins; otherwise the largest that fits. It works on a copy of the
+the preferred first slot wins, as long as it is within 32 units of the largest band that
+fits (`PreferredSlotWindow`, which also bounds the search: a one-off cost on the first
+frame and on a screen change); otherwise the largest that fits. It works on a copy of the
 settings (the tuning asset is never written at runtime), runs when the screen or the
 entries change and never while the wheel is open.
 
@@ -165,8 +167,9 @@ entries change and never while the wheel is open.
 | 16:9 (1920) | 196 to 300 | 87.3° + 24.5° × i | 106 |
 | 20:9 (2400) | 196 to 300 | 87.3° + 24.5° × i | 106 |
 
-(Six segments; computed with the fit's own algorithm before CI, to be confirmed by the
-EditMode tests.) On 4:3 the band shrinks because the warning column comes close above the
+(Six segments; the numbers come from the fit's algorithm, cross-checked by an independent
+port of it. The EditMode and PlayMode tests, which pass in CI, assert that every case fits
+with full-size segments and covers nothing; they do not pin the exact radii.) On 4:3 the band shrinks because the warning column comes close above the
 handle; nothing else moves. At the smallest interface scale (0.9) every aspect fits at
 the preferred size; the largest scale is already limited on 4:3 by `UiScaleMath`. The
 caption sits left of the wheel, in the free space before the joystick region, and hides
