@@ -6,7 +6,8 @@ Differentiator: touch-first UX with progressive disclosure. Detail lives in
 `docs/TOUCH_CONTROLS.md`, `docs/CONTEXTUAL_UI.md`, `docs/COCKPIT.md`,
 `docs/FLIGHT_ASSISTANCE.md`, `docs/ONBOARDING_DESIGN.md`, `docs/VISUAL_STYLE_GUIDE.md`,
 `docs/GESTURE_INTERACTION.md`, `docs/COCKPIT_DIRECT_MANIPULATION.md`,
-`docs/GESTURE_NAVIGATION.md`, `docs/MOBILE_PERFORMANCE_REPORT.md` and `docs/ROADMAP.md`.
+`docs/GESTURE_NAVIGATION.md`, `docs/TAP_DISCLOSURE_DESIGN.md`, `docs/MOBILE_PERFORMANCE_REPORT.md`
+and `docs/ROADMAP.md`.
 Read them before changing design, architecture, physics, input, assistance, the HUD,
 the cockpit, gestures, game modes, tutorials, visuals, audio, settings or performance.
 
@@ -106,6 +107,18 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
   in `PlayerProgress`; the interaction diary is local, development-only, and never
   sends anything anywhere. See `docs/COCKPIT_DIRECT_MANIPULATION.md` and
   `docs/GESTURE_NAVIGATION.md`.
+- Tap-first disclosure (`docs/TAP_DISCLOSURE_DESIGN.md`): every transient interface
+  (the arc and its options, the focus panel, the flight settings, the coaching
+  explanation, the pause sheet and its settings, the settings screen) registers with the
+  one `DisclosureCoordinator` (`OpenSkies.Gestures`, owned by the surface,
+  `FlightSession.Coordinator`) and tells it when it opens or closes itself. It decides
+  what an outside tap collapses; the surface consumes that tap on the `Dismiss` route.
+  `DisclosureController` keeps deciding eligibility; the coordinator only manages what
+  the player expanded. No X-shaped close controls; no transient that needs a drag to
+  open or close; paused interfaces stay through outside taps (resume is deliberate);
+  warnings are never registered. A new transient surface is registered with a screen
+  hit test and a collapse callback, never with a scrim handler of its own; a panel
+  whose presses would bubble to a scrim handler carries a catch-all `HudButton`.
 - Visuals (M15): the project renders in **Linear** colour space with HDR and a global
   post-processing volume; the URP asset and the profile are made by `RenderPipelineSetup`
   (change it, not the assets). The aircraft, the terrain, the scenery and their textures

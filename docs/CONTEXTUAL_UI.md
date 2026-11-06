@@ -19,9 +19,10 @@ short, restrained transitions. It never takes control away from the pilot.
 4. **Engaged systems stay reachable.** An action whose system is on (parking
    brake set, a guide shown) stays visible in every profile so it can be undone.
 5. **Manual access.** Every available action is always reachable: in the gesture-first
-   interface by pulling the systems handle (the arc shows every action, the relevant
-   ones emphasised; `docs/GESTURE_INTERACTION.md`), in the legacy interface by SYSTEMS
-   (always visible). The player can show or hide any guide. The player's choice wins.
+   interface by tapping the systems handle (the arc opens and stays, every action on
+   it, the relevant ones emphasised; a pull still works; `docs/GESTURE_INTERACTION.md`,
+   `docs/TAP_DISCLOSURE_DESIGN.md`), in the legacy interface by SYSTEMS (always
+   visible). The player can show or hide any guide. The player's choice wins.
 6. **No flicker.** The phase estimator has hysteresis, confirmation times and a
    minimum phase duration; the HUD shows things at once but hides them only after
    a delay and a minimum visible time.

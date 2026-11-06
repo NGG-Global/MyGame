@@ -52,6 +52,19 @@ namespace OpenSkies.UI
 
         public float ShownUnfold => _shownUnfold;
         public bool IsShown => _shownUnfold > 0.001f;
+        /// <summary>The arc's hit area takes presses (only while the arc is open as a menu).</summary>
+        public bool TakesTouches => group != null && group.blocksRaycasts;
+
+        /// <summary>
+        /// Open as a tappable menu: the band takes presses (through the hotspot shape over it);
+        /// folded or pulled, it takes none, so a hidden arc never intercepts a touch.
+        /// </summary>
+        public void SetTakesTouches(bool on)
+        {
+            if (group == null) return;
+            group.blocksRaycasts = on;
+            group.interactable = on;
+        }
 
         public void SetReducedMotion(bool reduced) => _reducedMotion = reduced;
 
@@ -115,7 +128,13 @@ namespace OpenSkies.UI
         public void ShowHint() => _hintUntil = Time.unscaledTime + settings.hintSeconds;
 
         /// <summary>Per frame from the session: the model's items, emphasis and hover.</summary>
-        public void Present(SystemsArcModel model, bool pulling)
+        public void Present(SystemsArcModel model, bool pulling) => Present(model, pulling, false);
+
+        /// <summary>
+        /// Per frame from the session. <paramref name="pulling"/>: a finger is pulling or sliding;
+        /// <paramref name="open"/>: the arc stands open as a tappable menu (fully unfolded, no finger needed).
+        /// </summary>
+        public void Present(SystemsArcModel model, bool pulling, bool open)
         {
             EnsureInitialized();
             if (model == null)
@@ -130,7 +149,8 @@ namespace OpenSkies.UI
             }
 
             bool hinting = Time.unscaledTime < _hintUntil;
-            if (pulling) SetUnfold(Mathf.Max(model.Progress, hinting ? 1f : 0f));
+            if (open) SetUnfold(1f);
+            else if (pulling) SetUnfold(Mathf.Max(model.Progress, hinting ? 1f : 0f));
             else if (hinting) { _targetUnfold = 1f; _fold = 0f; }
             else if (_targetUnfold > 0f && _fold == 0f) Fold();
 
@@ -170,13 +190,17 @@ namespace OpenSkies.UI
 
             if (caption != null)
             {
-                string text = CaptionFor(model, pulling);
+                string text = CaptionFor(model, pulling, open);
                 if (!ReferenceEquals(caption.text, text)) caption.text = text;
             }
         }
 
-        static string CaptionFor(SystemsArcModel model, bool pulling)
+        const string OpenCaption = "Tap to choose · tap outside to close";
+        const string SubArcCaption = "Tap an option · tap the action again to go back";
+
+        static string CaptionFor(SystemsArcModel model, bool pulling, bool open)
         {
+            if (open && !pulling) return model.OuterRevealed && model.OuterParent != SystemsArcModel.NoItem ? SubArcCaption : OpenCaption;
             if (!pulling) return string.Empty;
             if (!model.Selectable) return "Pull to open";
             if (!model.HasHovered) return model.OuterRevealed ? "Release here: nothing changes" : "Release here: nothing changes · rest for more";

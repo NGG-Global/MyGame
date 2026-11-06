@@ -8,7 +8,9 @@ namespace OpenSkies.UI
     /// Builds the focus panel in code (scene builder and tests). The column it
     /// uses spans from the right edge of the joystick region to the left edge of
     /// the action rail, between 17 % and 69 % of the safe-area height, so it never
-    /// covers a flight control, the top bar or the most urgent warning banner.
+    /// covers a flight control, the top bar or the most urgent warning banner. The
+    /// cards carry no close button: a tap outside them collapses them (the tap-first
+    /// contract, docs/TAP_DISCLOSURE_DESIGN.md).
     /// </summary>
     public static class CockpitFocusPanelFactory
     {
@@ -96,7 +98,6 @@ namespace OpenSkies.UI
 
             panel.instrumentTitle = TopText("Title", card, font, 30, TitleColour, -10f, 40f);
             panel.instrumentHint = TopText("Hint", card, font, 18, HintColour, -44f, 24f);
-            panel.instrumentClose = CloseButton(card, font);
 
             var host = Centred("Faces", card, new Vector2(300f, 300f));
             host.gameObject.AddComponent<FitToSquare>().designSize = InstrumentFace.DesignSize;
@@ -141,7 +142,6 @@ namespace OpenSkies.UI
             panel.systemTitle = TopText("Title", card, font, 30, TitleColour, -10f, 40f);
             panel.systemHint = TopText("Hint", card, font, 18, HintColour, -44f, 24f);
             panel.systemState = TopText("State", card, font, 24, TitleColour, -70f, 32f);
-            panel.systemClose = CloseButton(card, font);
 
             for (int i = 0; i < CockpitFocusPanel.MaxOptions; i++)
             {
@@ -169,24 +169,6 @@ namespace OpenSkies.UI
             panel.confirmation = confirm;
         }
 
-        static HudButton CloseButton(RectTransform card, Font font)
-        {
-            var rect = NewRect("Close", card);
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = new Vector2(-4f, -4f);
-            rect.sizeDelta = new Vector2(96f, 96f);
-            var image = rect.gameObject.AddComponent<Image>();
-            image.raycastTarget = true;
-            var button = rect.gameObject.AddComponent<HudButton>();
-            button.background = image;
-            button.idleColor = HudStyle.PanelControl;
-            var label = NewText("Label", rect, font, 48, TextAnchor.MiddleCenter, Color.white);
-            Stretch(label.rectTransform);
-            label.text = "×"; // multiplication sign, in the built-in font
-            button.label = label;
-            return button;
-        }
-
         static Text TopText(string name, RectTransform card, Font font, int size, Color colour, float y, float height)
         {
             var text = NewText(name, card, font, size, TextAnchor.UpperLeft, colour);
@@ -195,7 +177,7 @@ namespace OpenSkies.UI
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(0f, 1f);
             rect.offsetMin = new Vector2(16f, y - height);
-            rect.offsetMax = new Vector2(-108f, y); // clear of the close button
+            rect.offsetMax = new Vector2(-16f, y);
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             return text;
         }

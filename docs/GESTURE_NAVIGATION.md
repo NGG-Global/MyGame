@@ -39,9 +39,12 @@ A sheet from the bottom edge with two stops (`SheetModel`, pure C#):
   motion). A flick never skips a stop, however fast: from the second stop a pull down
   reaches the first, and only a finger below the first stop can dismiss.
 - **Pull down past 55 % of the first stop** and release: dismissed, which resumes.
-- **Tap the dim** above the sheet (the scrim): resume. A tap on the grip jumps to
-  the other stop. **Esc** or the back button: from the second stop back to the
-  first, then resume; with the full settings screen open, that closes first (M12).
+- **Tap the dim** above the sheet (the scrim): at the second stop the settings fold
+  back to the first stop; at the first stop nothing happens, so resuming stays a
+  deliberate action (RESUME, MENU, Esc, the pull down; `docs/TAP_DISCLOSURE_DESIGN.md`).
+  A tap on the grip jumps to the other stop. **Esc** or the back button: from the
+  second stop back to the first, then resume; with the full settings screen open,
+  that closes first (M12).
 - The depth (`SheetModel.Depth`, 0 at the first stop, 1 at the second) fades the
   settings in and dims the heading, so the second stop is visible before it is
   reached: disclosure proportional to the pull.
@@ -121,7 +124,7 @@ overscroll and clamp steps, and a settle is interruptible. PlayMode
 `PauseSheetTests` (real `FlightSession`, synthetic pointers): a two-finger tap on
 the sky pauses and raises the sheet at the first stop; joystick and throttle
 together never pause; pulling up reveals the settings and pulling down dismisses;
-the scrim tap and RESUME resume with the flight controls working again; the sheet's
+a scrim tap never resumes and RESUME does, with the flight controls working again; the sheet's
 buttons change mode and restart like the card; reduced motion puts the sheet at
 its stop at once; the sheet fits the screen and its buttons are touch targets.
 PlayMode `EntryStationsTests`: opens on the recommended station with the showcase

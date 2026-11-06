@@ -99,6 +99,10 @@ namespace OpenSkies.Gameplay
         bool _entryOpen, _sheetUsed;
         GestureHints _hints;
         int _entryStationAtOpen = -1;
+        DisclosureCoordinator _coordinator;
+        int _sheetLayer = DisclosureCoordinator.None, _sheetSettingsLayer = DisclosureCoordinator.None;
+        int _cardLayer = DisclosureCoordinator.None, _coachLayer = DisclosureCoordinator.None;
+        bool _detailOpen;
 
         public GestureHints Hints => _hints;
         float _hudOpacity = 1f;
@@ -124,6 +128,13 @@ namespace OpenSkies.Gameplay
         /// <summary>The gesture-first entry and pause experiences are used (the surface and the interface mode allow it).</summary>
         bool GestureFirst => flight != null && flight.CurrentInteractionMode == InteractionMode.GestureFirst;
         public bool PauseSheetOpen => pauseSheet != null && pauseSheet.IsOpen;
+        /// <summary>The legacy pause card is up (the settings screen opens as its child).</summary>
+        public bool PauseCardOpen => card != null && card.IsModal;
+        /// <summary>The pause card's id with the disclosure coordinator, or None.</summary>
+        public int PauseCardLayer => _cardLayer;
+        public int PauseSheetLayer => _sheetLayer;
+        public int PauseSheetSettingsLayer => _sheetSettingsLayer;
+        public int CoachDetailLayer => _coachLayer;
         /// <summary>Free Flight destination: a landmark index, or -1 for the airfield (guide on request).</summary>
         public int Destination => _destination;
 
@@ -183,7 +194,9 @@ namespace OpenSkies.Gameplay
                 pauseSheet.SetReducedMotion(reduced);
                 pauseSheet.ButtonClicked += OnCardButton; // the same actions as the card's
                 pauseSheet.DismissRequested += ResumeFromMenu;
+                pauseSheet.SettingsShown += OnSheetSettingsShown;
             }
+            RegisterTransients();
             if (flight.interactionSurface != null) flight.interactionSurface.GestureRaised += OnSurfaceGesture;
             if (highlights != null) highlights.SetReducedMotion(reduced);
             if (menuButton != null)
@@ -246,6 +259,68 @@ namespace OpenSkies.Gameplay
 
         void RaiseSettingsRequested() => SettingsRequested?.Invoke();
 
+        /// <summary>
+        /// The pause interfaces and the coaching detail with the disclosure coordinator. The
+        /// pause sheet and the pause card stay through outside taps (resuming is deliberate);
+        /// the sheet's settings and the coaching explanation collapse on one.
+        /// </summary>
+        void RegisterTransients()
+        {
+            _coordinator = flight.Coordinator;
+            if (_coordinator == null) return;
+            if (pauseSheet != null)
+            {
+                _sheetLayer = _coordinator.Register("Pause sheet", IsOnPauseSheet, CollapsePause, dismissOnOutsideTap: false);
+                _sheetSettingsLayer = _coordinator.Register("Pause sheet settings", IsOnSheetSettings, CollapseSheetSettings, true, _sheetLayer);
+            }
+            if (card != null) _cardLayer = _coordinator.Register("Pause card", IsOnPauseCard, CollapsePause, dismissOnOutsideTap: false);
+            if (coach != null) _coachLayer = _coordinator.Register("Coaching detail", IsOnCoach, CollapseCoachDetail);
+        }
+
+        bool IsOnPauseSheet(Vector2 screenPoint) => pauseSheet != null && pauseSheet.IsOpen && ScreenRects.Contains(pauseSheet.sheet, screenPoint);
+        bool IsOnSheetSettings(Vector2 screenPoint) =>
+            pauseSheet != null && pauseSheet.SettingsVisible && pauseSheet.secondStopGroup != null
+            && ScreenRects.Contains((RectTransform)pauseSheet.secondStopGroup.transform, screenPoint);
+        bool IsOnPauseCard(Vector2 screenPoint) => card != null && card.IsModal && ScreenRects.Contains(card.card, screenPoint);
+        bool IsOnCoach(Vector2 screenPoint) => coach != null && ScreenRects.Contains((RectTransform)coach.transform, screenPoint);
+
+        /// <summary>The pause interface was collapsed by the coordinator (only a reset or a replacing root does that): the flight resumes.</summary>
+        void CollapsePause(DisclosureCollapseReason reason)
+        {
+            if (_paused) ResumeFromMenu();
+        }
+
+        void CollapseSheetSettings(DisclosureCollapseReason reason)
+        {
+            if (pauseSheet != null && pauseSheet.IsOpen) pauseSheet.GoTo(SheetModel.FirstStop);
+        }
+
+        void CollapseCoachDetail(DisclosureCollapseReason reason)
+        {
+            if (_detailOpen) OnDetailRequested(); // the explanation folds back to the instruction
+        }
+
+        void OnSheetSettingsShown(bool shown)
+        {
+            if (_coordinator == null) return;
+            if (shown) _coordinator.Open(_sheetSettingsLayer);
+            else _coordinator.NotifyClosed(_sheetSettingsLayer);
+        }
+
+        void CloseSheet()
+        {
+            if (pauseSheet == null) return;
+            pauseSheet.Close();
+            _coordinator?.NotifyClosed(_sheetLayer);
+        }
+
+        void CloseCard()
+        {
+            if (card == null) return;
+            card.Close();
+            _coordinator?.NotifyClosed(_cardLayer);
+        }
+
         /// <summary>The player's motion preference for the mission UI.</summary>
         public void SetReducedMotion(bool reduced)
         {
@@ -296,6 +371,14 @@ namespace OpenSkies.Gameplay
                 flight.ResetPerformed -= OnFlightReset;
                 flight.PauseRequested -= OnPauseRequested;
                 if (flight.interactionSurface != null) flight.interactionSurface.GestureRaised -= OnSurfaceGesture;
+            }
+            if (pauseSheet != null) pauseSheet.SettingsShown -= OnSheetSettingsShown;
+            if (_coordinator != null)
+            {
+                _coordinator.Unregister(_sheetSettingsLayer);
+                _coordinator.Unregister(_sheetLayer);
+                _coordinator.Unregister(_cardLayer);
+                _coordinator.Unregister(_coachLayer);
             }
         }
 
@@ -442,7 +525,7 @@ namespace OpenSkies.Gameplay
             _challenge.Start();
             _resultShown = false;
             _openResult = OpenResult.None;
-            if (card != null) card.Close();
+            CloseCard();
             if (MissionStarts.TryCreate(_challenge.StartState, flight.aircraft.configuration, flight.homeRunway, AimPoint, _config.landingChallenge,
                     out var state, out int detent))
             {
@@ -479,7 +562,7 @@ namespace OpenSkies.Gameplay
             _resultShown = false;
             _openResult = OpenResult.None;
             _skipArmed = false;
-            if (card != null) card.Close();
+            CloseCard();
             if (coach != null) coach.Hide();
             _cueSource = -1;
             if (highlights != null) highlights.Present(CoachHighlight.None);
@@ -623,6 +706,17 @@ namespace OpenSkies.Gameplay
                 if (coach != null) coach.Hide(); // versions are per mission: start afresh
             }
             if (coach != null && source >= 0) coach.Present(cue);
+            // The explanation is a transient: expanded by a tap on the message, folded by a tap on it again or outside it.
+            bool detail = source >= 0 && cue.Visible && cue.ShowingDetail;
+            if (detail != _detailOpen)
+            {
+                _detailOpen = detail;
+                if (_coordinator != null && _coachLayer != DisclosureCoordinator.None)
+                {
+                    if (detail) _coordinator.Open(_coachLayer);
+                    else _coordinator.NotifyClosed(_coachLayer);
+                }
+            }
             if (highlights != null) highlights.Present(source >= 0 && cue.Visible && !_paused ? cue.Highlights : CoachHighlight.None);
             // The tutorial's coaching replaces the Assisted flying tips; the challenge's only while it speaks.
             flight.SuppressFlyingTips = source == 0 || (source == 1 && cue.Visible);
@@ -702,12 +796,12 @@ namespace OpenSkies.Gameplay
                 _challenge.Start();
                 _resultShown = false;
                 _openResult = OpenResult.None;
-                if (card != null && !card.IsModal) card.Close();
+                if (card != null && !card.IsModal) CloseCard();
             }
             else if (card != null && !card.IsModal)
             {
                 _openResult = OpenResult.None;
-                card.Close();
+                CloseCard();
             }
         }
 
@@ -730,6 +824,7 @@ namespace OpenSkies.Gameplay
                 Freeze();
                 _sheetUsed = true;
                 OpenSheet();
+                _coordinator?.Open(_sheetLayer);
                 if (_hints != null && flight.gestureHud != null && pauseSheet.grip != null)
                 {
                     var b = flight.gestureHud.Bounds;
@@ -741,6 +836,7 @@ namespace OpenSkies.Gameplay
             if (card == null) return;
             _sheetUsed = false;
             Freeze();
+            _coordinator?.Open(_cardLayer); // before the card shows, so nothing it replaces closes it
             switch (_mode)
             {
                 // RESUME and SETTINGS share the first row, so five choices fit the column.
@@ -787,8 +883,8 @@ namespace OpenSkies.Gameplay
 
         public void ResumeFromMenu()
         {
-            if (card != null && card.IsModal) card.Close();
-            if (pauseSheet != null && pauseSheet.IsOpen) pauseSheet.Close();
+            if (card != null && card.IsModal) CloseCard();
+            if (pauseSheet != null && pauseSheet.IsOpen) CloseSheet();
             if (_hints != null && _hints.IsShowing && (_hints.Showing == GestureId.PullSheet)) _hints.Hide();
             Unfreeze();
             // A mission result that was waiting comes back (it is not scored again).
@@ -816,8 +912,8 @@ namespace OpenSkies.Gameplay
                     RaiseSettingsRequested(); // the pause card stays underneath
                     break;
                 case CardAction.Restart:
-                    if (card != null) card.Close();
-                    if (pauseSheet != null) pauseSheet.Close();
+                    CloseCard();
+                    CloseSheet();
                     if (_mode == GameMode.LandingChallenge)
                     {
                         Unfreeze();
@@ -827,13 +923,13 @@ namespace OpenSkies.Gameplay
                     else StartMode(_mode, _freeStart);
                     break;
                 case CardAction.SkipTutorial:
-                    if (card != null) card.Close();
-                    if (pauseSheet != null) pauseSheet.Close();
+                    CloseCard();
+                    CloseSheet();
                     SkipTutorial();
                     break;
                 case CardAction.ChangeMode:
-                    if (card != null) card.Close();
-                    if (pauseSheet != null) pauseSheet.Close();
+                    CloseCard();
+                    CloseSheet();
                     OpenModeSelect();
                     break;
                 case CardAction.CycleDestination:
@@ -842,11 +938,11 @@ namespace OpenSkies.Gameplay
                     else if (card != null) card.SetButtonLabel(index, DestinationLabel());
                     break;
                 case CardAction.FreeFlightHere:
-                    if (card != null) card.Close();
+                    CloseCard();
                     ContinueInFreeFlight();
                     break;
                 case CardAction.LandingChallenge:
-                    if (card != null) card.Close();
+                    CloseCard();
                     StartMode(GameMode.LandingChallenge);
                     break;
             }
@@ -873,6 +969,7 @@ namespace OpenSkies.Gameplay
             if (flight.touchControls != null) flight.touchControls.Ownership.RevokeAll();
             flight.CloseFlightSettings();
             flight.Cockpit?.Close();
+            flight.CollapseTransients(DisclosureCollapseReason.Blocked); // the arc and any explanation fold under the pause
         }
 
         void Unfreeze()

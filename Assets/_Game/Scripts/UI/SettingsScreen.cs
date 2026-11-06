@@ -72,8 +72,10 @@ namespace OpenSkies.UI
     /// <summary>
     /// The settings screen: display, controls, sound and graphics, four short pages
     /// of large segmented choices and steppers. Opened from the pause menu and the
-    /// entry screen over a paused world; it takes every touch while open. It only
-    /// shows values and raises requests; the session applies, limits and stores them.
+    /// entry screen over a paused world; it takes every touch while open, and a tap on
+    /// the dimmed world around the panel closes it back to where it came from (DONE
+    /// does the same). It only shows values and raises requests; the session applies,
+    /// limits and stores them.
     /// </summary>
     public sealed class SettingsScreen : MonoBehaviour
     {
@@ -83,6 +85,8 @@ namespace OpenSkies.UI
         public RectTransform panel;
         public Text title;
         public HudButton doneButton;
+        [Tooltip("The dimmed world around the panel (full screen only): a tap on it closes the settings, like DONE.")]
+        public HudButton scrimButton;
         [Tooltip("Index = SettingsPage.")]
         public HudButton[] tabs = new HudButton[PageCount];
         [Tooltip("Index = SettingsPage.")]
@@ -149,6 +153,7 @@ namespace OpenSkies.UI
                 }
             }
             if (doneButton != null) doneButton.Clicked += () => CloseRequested?.Invoke();
+            if (scrimButton != null) scrimButton.Clicked += () => { if (_open) CloseRequested?.Invoke(); };
             for (int r = 0; r < rows.Length; r++)
             {
                 var row = rows[r];

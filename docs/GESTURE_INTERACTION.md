@@ -9,7 +9,15 @@ The experimental interaction model approved on 3 November 2026
 **Disclosure is proportional to the gesture.** A small movement shows a preview,
 a larger one reveals the control, continuing arms an action, releasing commits it,
 moving away cancels it, and resting reveals the next level. The interface answers
-the finger continuously; it does not open and close menus.
+the finger continuously.
+
+**Since the UI redesign (milestone 1, `docs/TAP_DISCLOSURE_DESIGN.md`) no hold or
+drag is required** to open, navigate or dismiss a HUD system: a tap on SYSTEMS opens
+the arc and keeps it, a tap on a segment acts or fans its options out, and a tap
+outside collapses whatever is open (the tap is consumed). The continuous gestures of
+this document remain for flight controls, camera look, the map, the cockpit
+instruments and as the alternative way through the arc, the lever, the band and the
+sheet. One `DisclosureCoordinator` keeps the branch of expanded interfaces.
 
 Status: implemented in code with EditMode and PlayMode tests; compiled offline
 against stand-ins for the Unity API; **not yet compiled by CI, not yet run in the
@@ -23,7 +31,7 @@ below is a first proposal to be tuned on a phone (`docs/GESTURE_TEST_PLAN.md`).
 | **Pull the systems handle** | The 168 × 96 handle left of the throttle, above BRAKE (where SYSTEMS was) | Past 2 % of the screen height the arc starts unfolding | By 9 % it is fully unfolded; the thumb slides onto a segment, which lifts | A selectable segment under the thumb (cyan, dark label) | Does what the segment says; the arc folds | HUD profile button, keyboard keys, cockpit switches |
 | **Continue into the flap lever** | From the FLAPS segment, the same finger | Resting 0.18 s on FLAPS (or pulling 30 units beyond the band) folds the arc and puts a vertical lever under the thumb, the current detent at the finger | Down extends, up retracts, with detent snapping and hysteresis; the knob is held by its stops | The previewed detent differs from the aircraft's | Sets that detent through the gate; nothing if unchanged | Release on FLAPS without the lever: one detent down (wrapping to UP); `[` `]` keys; cockpit lever |
 | **Rest while the arc is open** | On a segment, 0.5 s without moving | | A sub-arc unfolds centred on the rested segment: LIGHTS opens LDG LIGHT and NAV LIGHTS; NAV opens the destinations (airfield, then each landmark); ASSIST opens the assistance profiles. The current choice is marked | A sub-arc item under the thumb | Chooses it (the same request the selector or MENU › GUIDE makes) | Cockpit switches, L and N keys, MENU › GUIDE, the assistance selector |
-| **Tap the handle** | | | | | The arc shows itself for 1.1 s and folds: what a pull would reveal | |
+| **Tap the handle** | | | | | The arc opens and stays, every system on it; tap a segment to act or fan its options out, tap the handle again or outside to fold (`docs/TAP_DISCLOSURE_DESIGN.md`) | |
 | **Long press** (0.45 s, still) | The handle, a flight value, a guide, a warning banner | A thin ring fills under the finger from 20 % of the hold | | | An explanation plate appears next to the element and stays while held; lifting hides it | Coaching explanations, this document |
 | **Pull the HUD band** | The band over the flight data strip (top left) | Past 2 % the density ladder appears with the committed stop at the finger | Down is more HUD, up is less: Cinematic, Smart, Detailed, 110 units apart with hysteresis; the HUD itself shows the previewed level | The previewed level differs from the committed one | Commits the profile; the ladder fades | HUD profile button, H key |
 | **Drag the sky** (chase view) | Open world outside every control and target | | The camera orbits the aircraft with the finger (120° per screen height), within limits | | Springs back to the chase position in 0.45 s (at once with reduced motion) | None needed: a look is never a state |

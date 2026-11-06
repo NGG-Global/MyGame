@@ -54,9 +54,8 @@ namespace OpenSkies.UI
             titleRect.anchorMax = new Vector2(1f, 1f);
             titleRect.pivot = new Vector2(0f, 1f);
             titleRect.offsetMin = new Vector2(16f, -50f);
-            titleRect.offsetMax = new Vector2(-108f, -10f);
+            titleRect.offsetMax = new Vector2(-16f, -10f);
             panel.title.text = "Flight assistance";
-            panel.close = CloseButton(card, font);
 
             for (int i = 0; i < FlightAssistProfiles.Count; i++) panel.profiles[i] = Button("Profile" + i, card, font, 22);
             panel.description = Label("Description", card, font, 20, TextColour, TextAnchor.MiddleLeft, bestFit: true);
@@ -111,24 +110,6 @@ namespace OpenSkies.UI
             button.idleColor = ButtonColour;
             var label = Label("Label", rect, font, size, HudStyle.TextPrimary, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
-            button.label = label;
-            return button;
-        }
-
-        static HudButton CloseButton(RectTransform card, Font font)
-        {
-            var rect = NewRect("Close", card);
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = new Vector2(-4f, -4f);
-            rect.sizeDelta = new Vector2(96f, 96f);
-            var image = rect.gameObject.AddComponent<Image>();
-            image.raycastTarget = true;
-            var button = rect.gameObject.AddComponent<HudButton>();
-            button.background = image;
-            button.idleColor = HudStyle.PanelControl;
-            var label = Label("Label", rect, font, 48, HudStyle.TextPrimary, TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform);
-            label.text = "×";
             button.label = label;
             return button;
         }

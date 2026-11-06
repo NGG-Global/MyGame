@@ -21,6 +21,8 @@ namespace OpenSkies.Gestures
         Sheet = 7,
         /// <summary>The entry screen: swipe between stations, tap to start.</summary>
         Entry = 8,
+        /// <summary>A press outside the expanded interface: a tap collapses it and is consumed; nothing else happens.</summary>
+        Dismiss = 9,
     }
 
     /// <summary>What the router needs to know about a press.</summary>
@@ -35,6 +37,8 @@ namespace OpenSkies.Gestures
         public bool Blocked;
         /// <summary>The press landed on an explainable element.</summary>
         public bool OnTarget;
+        /// <summary>A transient interface is expanded and the press is outside it (the <see cref="DisclosureCoordinator"/> says so).</summary>
+        public bool OutsideActiveDisclosure;
     }
 
     /// <summary>
@@ -45,13 +49,17 @@ namespace OpenSkies.Gestures
     public static class InteractionRouter
     {
         /// <summary>Number of routes (array sizes in the surface).</summary>
-        public const int RouteCount = 9;
+        public const int RouteCount = 10;
 
         public static InteractionRoute Decide(in RouteContext c)
         {
             // Hotspots that belong to overlays (the pause sheet, the entry screen) work while the flight is blocked.
             if (c.Requested == InteractionRoute.Sheet || c.Requested == InteractionRoute.Entry) return c.Requested;
             if (c.Blocked) return InteractionRoute.None;
+            // An expanded interface takes the press that lands outside it: a tap collapses it, and nothing underneath
+            // (a cockpit switch, the free look) can react. Hotspots keep their routes: tapping another trigger
+            // replaces the cluster instead.
+            if (c.Requested == InteractionRoute.None && c.OutsideActiveDisclosure) return InteractionRoute.Dismiss;
             if (c.Requested == InteractionRoute.SystemsHandle || c.Requested == InteractionRoute.HudBand)
                 return c.GestureFirst ? c.Requested : InteractionRoute.None;
             if (c.Requested == InteractionRoute.Instrument) return c.Requested; // the focus panel's instrument, in both interfaces
@@ -79,6 +87,8 @@ namespace OpenSkies.Gestures
                     return GestureMask.Drag | GestureMask.Swipe | GestureMask.Tap;
                 case InteractionRoute.Entry:
                     return GestureMask.Drag | GestureMask.Swipe | GestureMask.Tap | GestureMask.DoubleTap;
+                case InteractionRoute.Dismiss:
+                    return GestureMask.Tap;
                 default:
                     return GestureMask.None;
             }

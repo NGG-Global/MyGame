@@ -232,7 +232,7 @@ namespace OpenSkies.Tests
             _hud.railSlots[slot].OnPointerClick(Pointer());
             Assert.IsTrue(_settings.IsOpen);
             Assert.IsFalse(_focus.IsOpen, "and the settings close the flap selector");
-            _settings.close.OnPointerClick(Pointer());
+            _session.ToggleFlightSettings(); // ASSIST again: the trigger closes (there is no close button)
             Assert.IsFalse(_settings.IsOpen);
             Assert.AreEqual(0f, _session.aircraft.Controls.Throttle, "settings never touch the flight controls");
         }
@@ -334,7 +334,6 @@ namespace OpenSkies.Tests
             var buttons = new List<HudButton>(settings.profiles);
             buttons.AddRange(settings.sensitivities);
             buttons.AddRange(settings.options);
-            buttons.Add(settings.close);
             foreach (var button in buttons)
             {
                 Rect r = WorldRect(button);
