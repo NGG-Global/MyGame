@@ -16,8 +16,15 @@ drag is required** to open, navigate or dismiss a HUD system: a tap on SYSTEMS o
 the arc and keeps it, a tap on a segment acts or fans its options out, and a tap
 outside collapses whatever is open (the tap is consumed). The continuous gestures of
 this document remain for flight controls, camera look, the map, the cockpit
-instruments and as the alternative way through the arc, the lever, the band and the
-sheet. One `DisclosureCoordinator` keeps the branch of expanded interfaces.
+instruments, the band and the sheet. One `DisclosureCoordinator` keeps the branch of
+expanded interfaces.
+
+**Since milestone 2 the systems arc is the tap-first systems wheel**
+(`docs/TAP_DISCLOSURE_DESIGN.md`, "The systems wheel"): tap SYSTEMS, tap an action, tap
+its option (FLAPS shows the aircraft's detents). The rows below marked *comparison* (the
+handle pull, the rest for a sub-arc, the slide into the flap lever) are now a
+development-only comparison (`FlightSession.pullGestureComparison`, F4), never in a
+release build.
 
 Status: implemented in code with EditMode and PlayMode tests; compiled offline
 against stand-ins for the Unity API; **not yet compiled by CI, not yet run in the
@@ -28,10 +35,10 @@ below is a first proposal to be tuned on a phone (`docs/GESTURE_TEST_PLAN.md`).
 
 | Gesture | Where | Peek | Manipulate | Armed | Release | Fallback |
 |---|---|---|---|---|---|---|
-| **Pull the systems handle** | The 168 × 96 handle left of the throttle, above BRAKE (where SYSTEMS was) | Past 2 % of the screen height the arc starts unfolding | By 9 % it is fully unfolded; the thumb slides onto a segment, which lifts | A selectable segment under the thumb (cyan, dark label) | Does what the segment says; the arc folds | HUD profile button, keyboard keys, cockpit switches |
-| **Continue into the flap lever** | From the FLAPS segment, the same finger | Resting 0.18 s on FLAPS (or pulling 30 units beyond the band) folds the arc and puts a vertical lever under the thumb, the current detent at the finger | Down extends, up retracts, with detent snapping and hysteresis; the knob is held by its stops | The previewed detent differs from the aircraft's | Sets that detent through the gate; nothing if unchanged | Release on FLAPS without the lever: one detent down (wrapping to UP); `[` `]` keys; cockpit lever |
-| **Rest while the arc is open** | On a segment, 0.5 s without moving | | A sub-arc unfolds centred on the rested segment: LIGHTS opens LDG LIGHT and NAV LIGHTS; NAV opens the destinations (airfield, then each landmark); ASSIST opens the assistance profiles. The current choice is marked | A sub-arc item under the thumb | Chooses it (the same request the selector or MENU › GUIDE makes) | Cockpit switches, L and N keys, MENU › GUIDE, the assistance selector |
-| **Tap the handle** | | | | | The arc opens and stays, every system on it; tap a segment to act or fan its options out, tap the handle again or outside to fold (`docs/TAP_DISCLOSURE_DESIGN.md`) | |
+| **Pull the systems handle** (*comparison*) | The 168 × 96 handle left of the throttle, above BRAKE (where SYSTEMS was) | Past 2 % of the screen height the arc starts unfolding | By 9 % it is fully unfolded; the thumb slides onto a segment, which lifts | A selectable segment under the thumb (cyan, dark label) | Does what the segment says; the arc folds | HUD profile button, keyboard keys, cockpit switches |
+| **Continue into the flap lever** (*comparison*) | From the FLAPS segment, the same finger | Resting 0.18 s on FLAPS (or pulling 30 units beyond the band) folds the arc and puts a vertical lever under the thumb, the current detent at the finger | Down extends, up retracts, with detent snapping and hysteresis; the knob is held by its stops | The previewed detent differs from the aircraft's | Sets that detent through the gate; nothing if unchanged | Release on FLAPS without the lever: one detent down (wrapping to UP); `[` `]` keys; cockpit lever |
+| **Rest while the arc is open** (*comparison*) | On a segment, 0.5 s without moving | | A sub-arc unfolds centred on the rested segment: LIGHTS opens LDG LIGHT and NAV LIGHTS; NAV opens the destinations (airfield, then each landmark); ASSIST opens the assistance profiles. The current choice is marked | A sub-arc item under the thumb | Chooses it (the same request the selector or MENU › GUIDE makes) | Cockpit switches, L and N keys, MENU › GUIDE, the assistance selector |
+| **Tap the handle** (primary) | | | | | The wheel opens and stays, every system on it; tap a segment to act or focus its options, tap an option to apply it; the handle goes back one level, outside folds (`docs/TAP_DISCLOSURE_DESIGN.md`) | |
 | **Long press** (0.45 s, still) | The handle, a flight value, a guide, a warning banner | A thin ring fills under the finger from 20 % of the hold | | | An explanation plate appears next to the element and stays while held; lifting hides it | Coaching explanations, this document |
 | **Pull the HUD band** | The band over the flight data strip (top left) | Past 2 % the density ladder appears with the committed stop at the finger | Down is more HUD, up is less: Cinematic, Smart, Detailed, 110 units apart with hysteresis; the HUD itself shows the previewed level | The previewed level differs from the committed one | Commits the profile; the ladder fades | HUD profile button, H key |
 | **Drag the sky** (chase view) | Open world outside every control and target | | The camera orbits the aircraft with the finger (120° per screen height), within limits | | Springs back to the chase position in 0.45 s (at once with reduced motion) | None needed: a look is never a state |
@@ -206,14 +213,14 @@ along and across the band). Labels stay on every control.
 | Where | What |
 |---|---|
 | `InteractionSurface.settings` (`GestureSettings`) | Tap, double-tap, long-press and dwell times; tap, drag and pull distances (fractions of the screen height), pull hysteresis; swipe distance, time, velocity and direction tolerance; second-finger window, two-finger tap time, pinch minimum change |
-| `SystemsArcView.settings` (`SystemsArcSettings`) | Inner and outer radius, outer ring gap and thickness, selection inner radius, first slot angle, slot step, segment gap, end tolerance, folded angle, selectable-from progress, hint time, unfold, fold and hover times |
+| `SystemsArcView.settings` (`SystemsArcSettings`) | The preferred inner and outer radius, outer ring gap and thickness, selection inner radius, first slot angle, slot step, segment gap, end tolerance, folded angle, selectable-from progress, hint time, unfold, fold and hover times; the fit to the screen (on, clearance, margin, largest step, thinnest band, shortest segment). The session fits a copy to the screen (`SystemsWheelLayout`) |
 | `FlapsLeverView.settings` (`FlapsLeverSettings`) | Detent spacing and hysteresis, over-travel, cancel and un-cancel distances, settle time |
 | `HudDensityLadder.settings` (`HudDensitySettings`) | Step distance and hysteresis |
 | `FlightSession.gestureSettings` (`GestureSession.Settings`) | Lever handover rest time and overreach, look degrees and zoom metres per screen height, hint limit and spacing, hold ring start |
 | `Assets/_Game/Settings/HUD/InteractionConfiguration.asset` (`InteractionConfiguration`, M14) | One asset the scene builder creates and `FlightSession.interactionConfiguration` references: `gestures`, `arc`, `lever`, `density`, `rotary`, `mapView`, `sheet`, `entry`; the views keep their own settings for standalone tests. Motion tokens (`HudStyle.UnfoldSeconds`, `FoldSeconds`, `HoverSeconds`, `SettleSeconds`, `ReturnSeconds`, `EmergeSeconds`, `SheetSettleSeconds`) are design tokens, in code |
 | `GameOptions` (M14) | Gesture speed, camera gesture sensitivity, hints |
 | `CameraRig` | Chase look limits, return time, chase distance limits |
-| `FlightSession.interactionMode` | Gesture-first (default) or legacy; also F4, a tap on the gesture inspector, and the `OpenSkies.Dev.InteractionMode` preference |
+| `FlightSession.interactionMode`, `pullGestureComparison` | Gesture-first (default) or legacy; the pull comparison (development builds only); F4 and a tap on the gesture inspector cycle tap wheel, pull, legacy; the `OpenSkies.Dev.InteractionMode` and `OpenSkies.Dev.PullComparison` preferences |
 
 Detent labels come from `AircraftConfiguration.flapDetentDegrees` through
 `AircraftSystems`; the explanation speeds come from the aircraft's envelope and the

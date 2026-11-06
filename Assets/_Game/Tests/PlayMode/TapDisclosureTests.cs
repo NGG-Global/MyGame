@@ -165,23 +165,14 @@ namespace OpenSkies.Tests
 
         Vector2 ArcPoint(int slot, float radius) => HandleCentre + GestureMath.FromAngle(Gestures.Arc.SlotAngle(slot)) * radius;
 
-        Vector2 OuterPoint(int option)
-        {
-            var s = Gestures.Arc.Settings;
-            return HandleCentre + GestureMath.FromAngle(Gestures.Arc.OuterAngle(option)) * ((s.OuterRingInner + s.OuterRingOuter) * 0.5f);
-        }
+        /// <summary>The middle of the wheel's band (fitted to the screen).</summary>
+        float Mid => (Gestures.Arc.Settings.innerRadius + Gestures.Arc.Settings.outerRadius) * 0.5f;
 
-        int SlotOf(ContextAction action)
-        {
-            int slot = 0;
-            for (int a = 0; a < ContextActions.Count; a++)
-            {
-                if ((_session.AvailableActions & (1 << a)) == 0) continue;
-                if ((ContextAction)a == action) return slot;
-                slot++;
-            }
-            return -1;
-        }
+        /// <summary>A focused option on the band.</summary>
+        Vector2 OptionPoint(int option) => HandleCentre + GestureMath.FromAngle(Gestures.Arc.OptionAngle(option)) * Mid;
+
+        /// <summary>The wheel's slot of an action (the switch panel sits after FLAPS).</summary>
+        int SlotOf(ContextAction action) => Gestures.SlotOf(action);
 
         /// <summary>A tap on the handle hotspot (press and release in place).</summary>
         IEnumerator TapHandle(int id)
@@ -231,7 +222,8 @@ namespace OpenSkies.Tests
             Assert.IsTrue(_gestureHud.arc.TakesTouches);
             Assert.IsTrue(Coordinator.IsActive(Gestures.ArcLayer));
             Assert.AreEqual(1, Coordinator.Depth);
-            Assert.IsTrue(Gestures.Arc.OuterRevealed, "every reachable system is on the open arc, the lights too");
+            Assert.IsFalse(Gestures.Arc.OuterRevealed, "no outer ring: the switches have a segment of their own");
+            Assert.That(Gestures.SwitchesSlot, Is.GreaterThanOrEqualTo(0), "every system is on the wheel");
             Assert.AreEqual(0, _touch.Ownership.Count, "the tap released its pointer");
 
             yield return TapHandle(101);
@@ -249,31 +241,29 @@ namespace OpenSkies.Tests
             int slot = SlotOf(ContextAction.Navigation);
             Assert.That(slot, Is.GreaterThanOrEqualTo(0));
             yield return OpenArcByTap();
-            yield return TapArc(102, ArcPoint(slot, 230f));
+            yield return TapArc(102, ArcPoint(slot, Mid));
             Assert.AreEqual(PlayerOverride.Show, _session.Disclosure.GetOverride(HudElement.NavigationGuide), "the same request the NAV button makes");
             Assert.IsFalse(Gestures.ArcOpen, "after a choice the arc folds");
             Assert.IsFalse(Coordinator.HasActive);
         }
 
         [UnityTest]
-        public IEnumerator TapOnFlaps_OpensTheDetentSelector_WhichAppliesThroughTheGate_AndClosesOnAnOutsideTap()
+        public IEnumerator TapOnFlaps_FocusesTheWheelOnTheDetents_ADetentAppliesThroughTheGate_AndTheWheelFolds()
         {
             yield return Build();
             int slot = SlotOf(ContextAction.Flaps);
             yield return OpenArcByTap();
-            yield return TapArc(103, ArcPoint(slot, 230f));
-            Assert.IsTrue(_focus.IsShowingSystem(out var system), "FLAPS opens the tappable detent selector");
-            Assert.AreEqual(AircraftSystem.Flaps, system);
-            Assert.IsFalse(Gestures.ArcOpen, "one cluster at a time: the selector replaced the arc");
-            Assert.AreEqual(0, _session.Systems.FlapDetent, "opening the selector changes nothing");
+            yield return TapArc(103, ArcPoint(slot, Mid));
+            Assert.IsTrue(Gestures.Focused, "FLAPS focuses the wheel on its detents (milestone 2: no cockpit card)");
+            Assert.AreEqual(slot, Gestures.FocusedSlot);
+            Assert.IsFalse(_focus.IsOpen, "the cockpit selector is not opened");
+            Assert.AreEqual(_session.Systems.FlapDetentCount, Gestures.Arc.OptionCount, "one option per detent of the aircraft");
+            Assert.AreEqual(2, Coordinator.Depth, "the detents are a child of the wheel");
+            Assert.AreEqual(0, _session.Systems.FlapDetent, "focusing changes nothing");
 
-            _focus.options[2].OnPointerClick(Pointer(104, Vector2.zero));
-            yield return null;
+            yield return TapArc(104, OptionPoint(2));
             Assert.AreEqual(2, _session.Systems.FlapDetent, "a detent tapped: applied through the gate");
-
-            yield return TapSurface(105, Sky);
-            Assert.IsFalse(_focus.IsOpen, "a tap outside the selector closes it");
-            Assert.AreEqual(2, _session.Systems.FlapDetent, "closing applies nothing more");
+            Assert.IsFalse(Gestures.ArcOpen, "the choice is complete: the wheel folds");
             Assert.IsFalse(Coordinator.HasActive);
         }
 
@@ -322,48 +312,50 @@ namespace OpenSkies.Tests
         }
 
         [UnityTest]
-        public IEnumerator TheOpenArcBand_IsInside_TheGapBetweenBandAndRing_IsOutside()
+        public IEnumerator TheOpenWheelBand_IsInside_TheHoleAndBeyondTheBand_AreOutside()
         {
             yield return Build();
             yield return OpenArcByTap();
             var s = Gestures.Arc.Settings;
-            var onBand = ArcPoint(0, (s.innerRadius + s.outerRadius) * 0.5f);
-            Assert.IsFalse(Coordinator.WantsOutsideTap(onBand), "a tap on a segment is inside the arc");
+            var onBand = ArcPoint(0, Mid);
+            Assert.IsFalse(Coordinator.WantsOutsideTap(onBand), "a tap on a segment is inside the wheel");
             Assert.IsTrue(_gestureHud.arcHitArea.IsRaycastLocationValid(onBand, null), "the band takes the press");
-            var onRing = OuterPoint(0);
-            Assert.IsFalse(Coordinator.WantsOutsideTap(onRing), "the lights ring is inside too");
-            Assert.IsTrue(_gestureHud.arcHitArea.IsRaycastLocationValid(onRing, null));
-            var inTheGap = ArcPoint(0, (s.outerRadius + s.OuterRingInner) * 0.5f);
-            Assert.IsFalse(_gestureHud.arcHitArea.IsRaycastLocationValid(inTheGap, null), "the gap between band and ring is not a target");
-            Assert.IsTrue(Coordinator.WantsOutsideTap(inTheGap), "so a tap there is outside");
-            yield return TapSurface(109, inTheGap);
-            Assert.IsFalse(Gestures.ArcOpen, "and folds the arc");
+            var beyond = ArcPoint(0, s.outerRadius + 24f);
+            Assert.IsFalse(_gestureHud.arcHitArea.IsRaycastLocationValid(beyond, null), "beyond the band is not a target");
+            Assert.IsTrue(Coordinator.WantsOutsideTap(beyond), "so a tap there is outside");
+            var hole = ArcPoint(1, s.innerRadius - 24f);
+            Assert.IsFalse(_gestureHud.arcHitArea.IsRaycastLocationValid(hole, null), "the hole between the handle and the band is not a target");
+            yield return TapSurface(109, beyond);
+            Assert.IsFalse(Gestures.ArcOpen, "and folds the wheel");
         }
 
         // ---- Nesting and switching clusters --------------------------------------------------------
 
         [UnityTest]
-        public IEnumerator TapOnAssist_FansOutItsOptions_TapAgainReturnsToTheArc_TapOutsideFoldsEverything()
+        public IEnumerator TapOnAssist_FocusesItsOptions_TheHandleGoesBack_TapOutsideFoldsEverything()
         {
             yield return Build();
             int slot = SlotOf(ContextAction.Assistance);
             Assert.That(slot, Is.GreaterThanOrEqualTo(0), "the flight settings give ASSIST its options");
             yield return OpenArcByTap();
-            yield return TapArc(110, ArcPoint(slot, 230f));
+            yield return TapArc(110, ArcPoint(slot, Mid));
             Assert.IsTrue(Gestures.ArcOpen);
-            Assert.IsTrue(Gestures.SubArcOpen, "the options fanned out; the arc stays");
+            Assert.IsTrue(Gestures.SubArcOpen, "the options took the band; the wheel stays");
+            Assert.IsTrue(Gestures.Focused);
             Assert.AreEqual(slot, Gestures.OpenSubArcParent);
-            Assert.AreEqual(2, Coordinator.Depth, "the sub-arc is a child of the arc");
+            Assert.AreEqual(2, Coordinator.Depth, "the options are a child of the wheel");
             Assert.IsTrue(Coordinator.IsActive(Gestures.SubArcLayer));
             Assert.IsFalse(_settings.IsOpen, "opening the options opens no card");
+            Assert.IsTrue(_gestureHud.ShowsBack, "the hub says where the player is");
+            Assert.AreEqual(GestureSession.WheelLabel(ContextAction.Assistance), _gestureHud.handleLabel.text, "the hub carries the action's name");
 
-            yield return TapArc(111, ArcPoint(slot, 230f));
-            Assert.IsTrue(Gestures.ArcOpen, "the open action again: back to the arc");
+            yield return TapHandle(111);
+            Assert.IsTrue(Gestures.ArcOpen, "the handle goes back one level: to the wheel");
             Assert.IsFalse(Gestures.SubArcOpen);
             Assert.AreEqual(1, Coordinator.Depth);
-            Assert.IsTrue(Gestures.Arc.OuterRevealed, "the lights ring is back on the outer ring");
+            Assert.IsFalse(_gestureHud.ShowsBack);
 
-            yield return TapArc(112, ArcPoint(slot, 230f));
+            yield return TapArc(112, ArcPoint(slot, Mid));
             Assert.IsTrue(Gestures.SubArcOpen);
             yield return TapSurface(113, Sky);
             Assert.IsFalse(Gestures.ArcOpen, "outside everything: the whole branch folds");
@@ -377,9 +369,9 @@ namespace OpenSkies.Tests
             yield return Build();
             int slot = SlotOf(ContextAction.Assistance);
             yield return OpenArcByTap();
-            yield return TapArc(114, ArcPoint(slot, 230f));
+            yield return TapArc(114, ArcPoint(slot, Mid));
             Assert.IsTrue(Gestures.SubArcOpen);
-            yield return TapArc(115, OuterPoint(0)); // the first option is the action itself: the settings card
+            yield return TapArc(115, OptionPoint(0)); // the first option is the action itself: the settings card
             Assert.IsTrue(_settings.IsOpen, "the flight settings opened");
             Assert.IsFalse(Gestures.ArcOpen, "and replaced the arc: one cluster at a time");
             Assert.AreEqual(1, Coordinator.Depth);
@@ -399,8 +391,8 @@ namespace OpenSkies.Tests
             yield return Build();
             int slot = SlotOf(ContextAction.Assistance);
             yield return OpenArcByTap();
-            yield return TapArc(117, ArcPoint(slot, 230f));
-            yield return TapArc(118, OuterPoint(2)); // SETTINGS, ASSISTED, STANDARD, MANUAL: the third is STANDARD
+            yield return TapArc(117, ArcPoint(slot, Mid));
+            yield return TapArc(118, OptionPoint(2)); // SETTINGS, ASSISTED, STANDARD, MANUAL: the third is STANDARD
             Assert.AreEqual(FlightAssistProfile.Standard, _session.AssistProfile);
             Assert.IsFalse(Gestures.ArcOpen);
             Assert.IsFalse(_settings.IsOpen);
@@ -448,7 +440,7 @@ namespace OpenSkies.Tests
         public IEnumerator TheArcHitArea_NeverCoversAFlightControl_AndTakesNothingWhenFolded()
         {
             yield return Build();
-            var slotPoint = ArcPoint(0, 230f);
+            var slotPoint = ArcPoint(0, Mid);
             Assert.IsFalse(_gestureHud.arcHitArea.IsRaycastLocationValid(slotPoint, null), "folded: a press on the band's place goes through");
             yield return OpenArcByTap();
             Assert.IsTrue(_gestureHud.arcHitArea.IsRaycastLocationValid(slotPoint, null));
@@ -607,7 +599,7 @@ namespace OpenSkies.Tests
             yield return Build();
             int slot = SlotOf(ContextAction.Assistance);
             yield return OpenArcByTap();
-            yield return TapArc(160, ArcPoint(slot, 230f));
+            yield return TapArc(160, ArcPoint(slot, Mid));
             Assert.IsTrue(Gestures.SubArcOpen);
             int version = _session.Systems.Version;
             _surface.SendMessage("OnApplicationFocus", false);
@@ -638,45 +630,66 @@ namespace OpenSkies.Tests
             Assert.AreEqual(0, Coordinator.Depth);
         }
 
-        // ---- The continuous path remains ----------------------------------------------------------
+        // ---- The pull is the development comparison; a slide on the open wheel is tolerated ------------
 
         [UnityTest]
-        public IEnumerator ThePullStillWorks_AndASlideOnTheOpenArcChooses()
+        public IEnumerator ThePull_IsOnlyTheDevelopmentComparison_AndASlideOnTheOpenWheelChooses()
         {
             yield return Build();
             int slot = SlotOf(ContextAction.Navigation);
-            // A pull from the folded handle, as before.
+            Assert.IsFalse(Gestures.PullGestures, "tap-first by default");
+
+            // A pull from the folded handle unfolds nothing; released away from the handle it is nothing at all.
             var p = Pointer(170, HandleCentre);
             _gestureHud.handleHotspot.OnPointerDown(p);
             yield return null;
             p.position = HandleCentre + new Vector2(0f, 60f);
             _gestureHud.handleHotspot.OnDrag(p);
             yield return null;
-            p.position = ArcPoint(slot, 230f);
+            p.position = ArcPoint(slot, Mid);
             _gestureHud.handleHotspot.OnDrag(p);
             yield return null;
-            Assert.AreEqual(GestureSession.Doing.ArcPull, Gestures.Current);
-            Assert.IsFalse(Gestures.ArcOpen, "a pull is not the open menu");
-            Assert.IsTrue(Gestures.Arc.IsArmed);
+            Assert.AreEqual(GestureSession.Doing.Nothing, Gestures.Current, "no pull to unfold in the tap-first wheel");
+            Assert.IsFalse(Gestures.ArcOpen);
             _gestureHud.handleHotspot.OnPointerUp(p);
             yield return null;
-            Assert.AreEqual(PlayerOverride.Show, _session.Disclosure.GetOverride(HudElement.NavigationGuide));
+            Assert.IsFalse(Gestures.ArcOpen);
+            Assert.AreEqual(PlayerOverride.None, _session.Disclosure.GetOverride(HudElement.NavigationGuide), "nothing chosen");
 
-            // A slide that starts on the open arc and releases on a segment chooses it too.
+            // A slide that starts on the open wheel and is released on a segment chooses it, as a tap there would.
             yield return OpenArcByTap();
-            var q = Pointer(171, ArcPoint(0, 230f));
+            var q = Pointer(171, ArcPoint(0, Mid));
             _gestureHud.arcHotspot.OnPointerDown(q);
             yield return null;
-            q.position = ArcPoint(slot, 230f);
+            q.position = ArcPoint(slot, Mid);
             _gestureHud.arcHotspot.OnDrag(q);
             yield return null;
             Assert.AreEqual(GestureSession.Doing.ArcPull, Gestures.Current);
-            Assert.IsTrue(Gestures.ArcOpen, "the menu stays unfolded under the slide");
+            Assert.IsTrue(Gestures.ArcOpen, "the wheel stays unfolded under the slide");
             Assert.AreEqual(1f, _gestureHud.arc.ShownUnfold, 1e-3f);
             _gestureHud.arcHotspot.OnPointerUp(q);
             yield return null;
-            Assert.AreEqual(PlayerOverride.None, _session.Disclosure.GetOverride(HudElement.NavigationGuide), "toggled back: the slide chose NAV");
-            Assert.IsFalse(Gestures.ArcOpen, "and the menu folded after the choice");
+            Assert.AreEqual(PlayerOverride.Show, _session.Disclosure.GetOverride(HudElement.NavigationGuide), "the slide chose NAV");
+            Assert.IsFalse(Gestures.ArcOpen, "and the wheel folded after the choice");
+
+            // With the comparison on, the pull of M13/M14 works as before.
+            _session.SetPullGestureComparison(true);
+            Assert.IsTrue(Gestures.PullGestures);
+            var r = Pointer(172, HandleCentre);
+            _gestureHud.handleHotspot.OnPointerDown(r);
+            yield return null;
+            r.position = HandleCentre + new Vector2(0f, 60f);
+            _gestureHud.handleHotspot.OnDrag(r);
+            yield return null;
+            r.position = ArcPoint(slot, Mid);
+            _gestureHud.handleHotspot.OnDrag(r);
+            yield return null;
+            Assert.AreEqual(GestureSession.Doing.ArcPull, Gestures.Current);
+            Assert.IsTrue(Gestures.Arc.IsArmed);
+            _gestureHud.handleHotspot.OnPointerUp(r);
+            yield return null;
+            Assert.AreEqual(PlayerOverride.None, _session.Disclosure.GetOverride(HudElement.NavigationGuide), "the pull toggled the guide back");
+            _session.SetPullGestureComparison(false);
         }
     }
 }

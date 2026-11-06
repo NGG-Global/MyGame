@@ -78,6 +78,8 @@ namespace OpenSkies.Gameplay
         public InteractionConfiguration interactionConfiguration;
         [Tooltip("Development: the interface at start. F4 or a tap on the gesture inspector switches; remembered with the HUD preferences.")]
         public InteractionMode interactionMode = InteractionMode.GestureFirst;
+        [Tooltip("Development comparison: the M13/M14 pull gestures on the systems handle instead of the tap-first wheel (F4 cycles: tap wheel, pull, legacy rail).")]
+        public bool pullGestureComparison;
         [Tooltip("Development: append each completed or cancelled gesture to interaction-diary.csv in the app's data folder (development builds only).")]
         public bool recordInteractionDiary;
         public GestureSession.Settings gestureSettings = new GestureSession.Settings();
@@ -329,7 +331,12 @@ namespace OpenSkies.Gameplay
                 _gestures.SetReducedMotion(reduced);
                 if (rememberHudPreferences) interactionMode = HudPreferences.LoadInteractionMode(interactionMode);
                 _gestures.SetGestureFirst(interactionMode == InteractionMode.GestureFirst);
+                // The pull gestures remain only as a development comparison: never in a release build.
+                _gestures.SetPullComparisonAllowed(Debug.isDebugBuild);
+                if (rememberHudPreferences) pullGestureComparison = HudPreferences.LoadPullComparison(pullGestureComparison);
+                _gestures.SetPullGestures(pullGestureComparison);
                 _gestures.ModeChanged += OnInteractionModeChanged;
+                _gestures.PullGesturesChanged += OnPullComparisonChanged;
                 _gestures.PauseRequested += RaisePauseRequested;
                 _diary = new InteractionDiary { RecordToFile = recordInteractionDiary };
                 interactionSurface.GestureRaised += OnDiaryGesture;
@@ -384,6 +391,19 @@ namespace OpenSkies.Gameplay
 
         /// <summary>Development: the gesture-first interface or the legacy rail. Presentation only; flight input is unaffected.</summary>
         public void SetInteractionMode(InteractionMode mode) => _gestures?.SetGestureFirst(mode == InteractionMode.GestureFirst);
+
+        void OnPullComparisonChanged(bool on)
+        {
+            pullGestureComparison = on;
+            if (rememberHudPreferences) HudPreferences.SavePullComparison(on);
+        }
+
+        /// <summary>Development comparison: the M13/M14 pull gestures on the handle instead of the tap-first wheel. Presentation only.</summary>
+        public void SetPullGestureComparison(bool on)
+        {
+            pullGestureComparison = on;
+            _gestures?.SetPullGestures(on);
+        }
 
         /// <summary>
         /// The player's gesture options: speed scales the holds, rests and pulls of the
@@ -441,6 +461,7 @@ namespace OpenSkies.Gameplay
             if (_gestures != null)
             {
                 _gestures.ModeChanged -= OnInteractionModeChanged;
+                _gestures.PullGesturesChanged -= OnPullComparisonChanged;
                 _gestures.PauseRequested -= RaisePauseRequested;
                 _gestures.Dispose();
             }
@@ -671,6 +692,12 @@ namespace OpenSkies.Gameplay
             if (outcome == SystemChangeGate.Outcome.Applied) SystemChanged?.Invoke(change);
             return outcome;
         }
+
+        /// <summary>A hazardous change waiting for its confirmation (within the gate's window), if any.</summary>
+        public bool TryGetPendingSystemChange(out SystemChange change) => _gate.HasPending(Time.unscaledTime, out change);
+
+        /// <summary>Drops a change waiting for its confirmation (the selector or the wheel that asked for it closed). Nothing is applied.</summary>
+        public void ClearPendingSystemChange() => _gate.Clear();
 
         /// <summary>
         /// The player's motion preference for every panel this session owns (HUD fades,

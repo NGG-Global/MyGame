@@ -50,7 +50,10 @@ namespace OpenSkies.UI
         public Color gripOpen = new Color(0.16f, 0.2f, 0.24f, 0.7f);
 
         bool _gestureFirst = true, _reducedMotion, _initialized;
+        bool _held, _open, _back;
         float _opacity = 1f;
+
+        public const string SystemsLabel = "SYSTEMS";
 
         public bool GestureFirst => _gestureFirst;
         public bool ReducedMotion => _reducedMotion;
@@ -112,12 +115,52 @@ namespace OpenSkies.UI
         /// <summary>The grip answers the thumb: brighter while held, lifted while the arc is open.</summary>
         public void SetHandleState(bool held, bool open)
         {
-            if (handleGrip != null) handleGrip.color = held ? gripHeld : (open ? gripOpen : gripIdle);
-            if (handleChevron != null)
+            _held = held;
+            _open = open;
+            ApplyHandle();
+        }
+
+        /// <summary>The handle is the wheel's hub, so it says where the player is.</summary>
+        public bool ShowsBack => _back;
+
+        /// <summary>
+        /// The hub: while an action's options are shown the handle carries that action's name
+        /// and a chevron pointing back (a tap goes back to the wheel); otherwise SYSTEMS.
+        /// <paramref name="label"/> is a fixed string (null: SYSTEMS).
+        /// </summary>
+        public void SetHub(string label, bool back)
+        {
+            _back = back;
+            if (handleLabel != null)
             {
-                var c = handleChevron.color;
-                c.a = open ? 0f : (held ? 0.9f : 0.5f);
-                handleChevron.color = c;
+                string text = back && label != null ? label : SystemsLabel;
+                if (!ReferenceEquals(handleLabel.text, text)) handleLabel.text = text;
+            }
+            ApplyHandle();
+        }
+
+        void ApplyHandle()
+        {
+            if (handleGrip != null) handleGrip.color = _held ? gripHeld : (_open ? gripOpen : gripIdle);
+            if (handleChevron == null) return;
+            var c = handleChevron.color;
+            c.a = _back ? 0.9f : (_open ? 0f : (_held ? 0.9f : 0.5f));
+            handleChevron.color = c;
+            var rect = handleChevron.rectTransform;
+            if (_back)
+            {
+                // Pointing left, at the left end of the grip: back.
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.anchoredPosition = new Vector2(20f, 4f);
+                rect.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            }
+            else
+            {
+                rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+                rect.pivot = new Vector2(0.5f, 1f);
+                rect.anchoredPosition = new Vector2(0f, -4f);
+                rect.localRotation = Quaternion.identity;
             }
         }
 

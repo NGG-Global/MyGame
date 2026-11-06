@@ -397,12 +397,38 @@ namespace OpenSkies.Editor
         {
             const string path = "Assets/_Game/Settings/HUD/InteractionConfiguration.asset";
             var existing = AssetDatabase.LoadAssetAtPath<InteractionConfiguration>(path);
-            if (existing != null) return existing;
+            if (existing != null)
+            {
+                MigrateWheelGeometry(existing, path);
+                return existing;
+            }
             EditorFolders.Ensure("Assets/_Game/Settings/HUD");
             var asset = ScriptableObject.CreateInstance<InteractionConfiguration>();
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
             return asset;
+        }
+
+        /// <summary>
+        /// The tap-first systems wheel (docs/TAP_DISCLOSURE_DESIGN.md, milestone 2) prefers a larger band
+        /// and a narrower end tolerance than the M13 arc; it is fitted to the screen from them at runtime.
+        /// An asset still holding the untouched M13 defaults (band 170-290, end tolerance 10) is moved to
+        /// the new preferred values once; any value the owner tuned is left alone.
+        /// </summary>
+        static void MigrateWheelGeometry(InteractionConfiguration configuration, string path)
+        {
+            var arc = configuration.arc;
+            if (arc == null) return;
+            bool m13Defaults = Mathf.Approximately(arc.innerRadius, 170f) && Mathf.Approximately(arc.outerRadius, 290f)
+                               && Mathf.Approximately(arc.endTolerance, 10f);
+            if (!m13Defaults) return;
+            var preferred = new SystemsArcSettings();
+            arc.innerRadius = preferred.innerRadius;
+            arc.outerRadius = preferred.outerRadius;
+            arc.endTolerance = preferred.endTolerance;
+            EditorUtility.SetDirty(configuration);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[OpenSkies] {path}: systems wheel geometry moved from the M13 defaults to the milestone 2 preferred values");
         }
 
         static MissionConfiguration LoadOrCreateMissionConfiguration()

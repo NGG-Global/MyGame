@@ -114,7 +114,7 @@ namespace OpenSkies.UI
         };
 
         public const string GestureReferenceText =
-            "PULL the systems handle: the arc unfolds · slide onto an action, RELEASE to choose · REST on FLAPS for the lever, on NAV or ASSIST for their options\n"
+            "TAP SYSTEMS: the wheel opens · TAP an action, or its setting (FLAPS, SWITCHES, NAV, ASSIST) · TAP the handle to go back, outside to close\n"
             + "HOLD a value, a banner or an instrument: what it means · DRAG around the heading indicator or altimeter: set the bug or the subscale (centre cancels)\n"
             + "PULL the HUD band down or up: more or less HUD · DRAG the sky: look around · PINCH: zoom · DOUBLE TAP: switch view · TWO FINGERS: pause\n"
             + "FLICK a cockpit switch up or down · DRAG the cockpit flap lever · PULL the pause sheet up for settings · SWIPE the entry screen between experiences";

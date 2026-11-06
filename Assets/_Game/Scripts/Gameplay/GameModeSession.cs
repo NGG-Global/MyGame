@@ -245,7 +245,7 @@ namespace OpenSkies.Gameplay
                 if (hud.cameraButton != null) highlights.SetTarget(CoachHighlight.Camera, (RectTransform)hud.cameraButton.transform);
                 if (hud.resetButton != null) highlights.SetTarget(CoachHighlight.Reset, (RectTransform)hud.resetButton.transform);
             }
-            // FLAPS: the systems handle in the gesture-first interface (pull it, slide to FLAPS), the rail slot in the legacy one.
+            // FLAPS: the systems handle in the gesture-first interface (tap it, then FLAPS), the rail slot in the legacy one.
             var gestureHud = flight.gestureHud;
             var contextual = flight.contextualHud;
             if (flight.CurrentInteractionMode == InteractionMode.GestureFirst && gestureHud != null && gestureHud.handleHotspot != null)

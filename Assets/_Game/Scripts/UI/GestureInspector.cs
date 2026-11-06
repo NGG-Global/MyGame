@@ -31,6 +31,8 @@ namespace OpenSkies.UI
         public struct Report
         {
             public bool GestureFirst;
+            /// <summary>The pull comparison (M13/M14) instead of the tap-first wheel.</summary>
+            public bool PullGestures;
             /// <summary>Pointer ownership, described by the session ("#0>Joystick  #1>Gestures").</summary>
             public string Ownership;
             public string Route;
@@ -56,7 +58,7 @@ namespace OpenSkies.UI
             _nextRefresh = Time.unscaledTime + refreshSeconds;
 
             var b = _builder.Clear();
-            b.Append("UI ").Append(report.GestureFirst ? "GESTURE-FIRST" : "LEGACY").Append("   [tap: switch]");
+            b.Append("UI ").Append(report.GestureFirst ? (report.PullGestures ? "PULL (comparison)" : "TAP WHEEL") : "LEGACY RAIL").Append("   [tap: switch]");
             b.Append("\nOWN ").Append(string.IsNullOrEmpty(report.Ownership) ? "none" : report.Ownership);
 
             if (surface != null)

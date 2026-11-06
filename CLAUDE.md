@@ -119,6 +119,18 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
   warnings are never registered. A new transient surface is registered with a screen
   hit test and a collapse callback, never with a scrim handler of its own; a panel
   whose presses would bubble to a scrim handler carries a catch-all `HudButton`.
+- The systems wheel is tap-first (`docs/TAP_DISCLOSURE_DESIGN.md`, milestone 2): tap
+  SYSTEMS, tap an action, tap its option; the handle goes back one level, an outside tap
+  folds everything. An action with options focuses the wheel (its options take the band,
+  its name is on the hub); FLAPS shows the aircraft's own detents. Every option applies
+  through `FlightSession.RequestSystemChange` (a hazardous one waits for its second tap;
+  leaving the focus drops it). The wheel's geometry is fitted to the screen by
+  `SystemsWheelLayout` (pure, EditMode-tested) on a copy of the settings, never the asset;
+  it must stay clear of the flight controls, the handle, the warning banners and the top
+  bar, with segments of at least 96 units. The M13/M14 pull gestures on the handle are a
+  development-only comparison (`FlightSession.pullGestureComparison`, F4 cycles; never in
+  a release build). Keep six primary segments at most: a seventh does not fit at 4:3 with
+  full-size targets (group related systems as options instead, as the switch panel does).
 - Visuals (M15): the project renders in **Linear** colour space with HDR and a global
   post-processing volume; the URP asset and the profile are made by `RenderPipelineSetup`
   (change it, not the assets). The aircraft, the terrain, the scenery and their textures
