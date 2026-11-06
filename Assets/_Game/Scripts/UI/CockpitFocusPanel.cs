@@ -13,10 +13,12 @@ namespace OpenSkies.UI
     /// pauses anything, and only raises requests; the session decides and applies
     /// them to the authoritative aircraft systems.
     ///
-    /// Dismissal: the close button, a tap on the enlarged instrument, a tap on an
-    /// empty part of the cockpit, tapping the same cockpit item again, or a
-    /// camera change. A hidden instrument stops rendering (its face is
-    /// deactivated once it has faded out), so only the cockpit copy remains.
+    /// Dismissal follows the tap-first contract (docs/TAP_DISCLOSURE_DESIGN.md): a tap
+    /// outside the card (consumed by the interaction surface, so nothing in the cockpit
+    /// behind it reacts), a tap on the enlarged instrument, tapping the trigger again,
+    /// or a camera change. There is no close button. A hidden instrument stops
+    /// rendering (its face is deactivated once it has faded out), so only the cockpit
+    /// copy remains.
     /// </summary>
     public sealed class CockpitFocusPanel : MonoBehaviour
     {
@@ -34,7 +36,6 @@ namespace OpenSkies.UI
         public Text instrumentHint;
         public RectTransform faceHost;
         public InstrumentFace[] faces = new InstrumentFace[InstrumentCount];
-        public HudButton instrumentClose;
         [Tooltip("Over the enlarged face: drags, pinches and double taps go to the interaction surface (route Instrument).")]
         public GestureHotspot faceHotspot;
         [Tooltip("A thin ring around the face that brightens while the player adjusts the instrument.")]
@@ -52,7 +53,6 @@ namespace OpenSkies.UI
         public Text systemState;
         public HudButton[] options = new HudButton[MaxOptions];
         public Text confirmation;
-        public HudButton systemClose;
 
         [Header("Layout and motion")]
         public HudMotionSettings motion = new HudMotionSettings();
@@ -109,6 +109,9 @@ namespace OpenSkies.UI
         /// <summary>The enlarged face being shown, or null.</summary>
         public InstrumentFace ActiveFace => _mode == Mode.Instrument ? faces[(int)_instrument] : null;
 
+        /// <summary>The card that is open now (for the disclosure coordinator's hit test), or null.</summary>
+        public RectTransform OpenCard => _mode == Mode.Instrument ? instrumentCard : (_mode == Mode.System ? systemCard : null);
+
         public void SetReducedMotion(bool reduced) => _reducedMotion = reduced;
 
         void Awake() => EnsureInitialized();
@@ -122,9 +125,7 @@ namespace OpenSkies.UI
             if (manipulationRing != null && manipulationRing.sprite == null) manipulationRing.sprite = HudSprites.Ring;
             if (instrumentGroup != null) _instrumentFade = new HudFade(instrumentGroup, interactive: true);
             if (systemGroup != null) _systemFade = new HudFade(systemGroup, interactive: true);
-            if (instrumentClose != null) instrumentClose.Clicked += RaiseClose;
             if (instrumentTapToClose != null) instrumentTapToClose.Clicked += RaiseClose;
-            if (systemClose != null) systemClose.Clicked += RaiseClose;
             for (int i = 0; i < options.Length; i++)
             {
                 if (options[i] == null) continue;

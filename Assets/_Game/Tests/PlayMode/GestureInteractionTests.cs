@@ -99,6 +99,9 @@ namespace OpenSkies.Tests
             _session.homeRunway = new RunwayInfo(Vector3.zero, 0f, 2000f, 30f);
             _session.SetControlSource(new ScriptedControls());
             sessionGo.SetActive(true);
+            // These tests exercise the M13/M14 pull gestures, which remain as the development comparison
+            // (docs/TAP_DISCLOSURE_DESIGN.md, milestone 2); the tap-first wheel has its own tests.
+            _session.SetPullGestureComparison(true);
             _gestureHud.SetReducedMotion(true);
             Canvas.ForceUpdateCanvases();
 
@@ -127,17 +130,8 @@ namespace OpenSkies.Tests
             return HandleCentre + GestureMath.FromAngle(model.SlotAngle(slot)) * radius;
         }
 
-        int SlotOf(ContextAction action)
-        {
-            int slot = 0;
-            for (int a = 0; a < ContextActions.Count; a++)
-            {
-                if ((_session.AvailableActions & (1 << a)) == 0) continue;
-                if ((ContextAction)a == action) return slot;
-                slot++;
-            }
-            return -1;
-        }
+        /// <summary>The wheel's slot of an action (the switch panel sits after FLAPS).</summary>
+        int SlotOf(ContextAction action) => _session.Gestures.SlotOf(action);
 
         /// <summary>Presses on the handle and drags along a path of screen points, a frame between each.</summary>
         IEnumerator PullHandle(int pointerId, params Vector2[] path)
@@ -210,6 +204,7 @@ namespace OpenSkies.Tests
         public IEnumerator Legacy_RoutesNothingButTheCockpit_AndShowsTheRail()
         {
             yield return Build();
+            Assert.IsTrue(_session.Gestures.PullGestures, "the comparison is on in this fixture (a development build or the Editor)");
             Assert.IsFalse(_hud.LegacyRailEnabled);
             Assert.IsFalse(_hud.systemsGroup.blocksRaycasts, "SYSTEMS is off in the gesture-first interface");
             Assert.IsTrue(_gestureHud.handleGroup.blocksRaycasts);

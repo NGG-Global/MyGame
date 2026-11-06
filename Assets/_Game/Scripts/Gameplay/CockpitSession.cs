@@ -4,6 +4,7 @@ using OpenSkies.CameraSystems;
 using OpenSkies.Cockpit;
 using OpenSkies.FlightInput.TouchControls;
 using OpenSkies.FlightState;
+using OpenSkies.Gestures;
 using OpenSkies.Missions;
 using OpenSkies.UI;
 using UnityEngine;
@@ -71,6 +72,24 @@ namespace OpenSkies.Gameplay
 
         GestureHints _hints;
         public void SetHints(GestureHints hints) => _hints = hints;
+
+        DisclosureCoordinator _disclosure;
+        int _panelLayer = DisclosureCoordinator.None;
+
+        /// <summary>
+        /// The focus panel is a transient interface: registered with the coordinator so a tap
+        /// outside its card (consumed before it reaches the cockpit) or another cluster closes it.
+        /// </summary>
+        public void SetDisclosure(DisclosureCoordinator coordinator)
+        {
+            if (_disclosure != null) _disclosure.Unregister(_panelLayer);
+            _disclosure = coordinator;
+            _panelLayer = _disclosure != null && _panel != null ? _disclosure.Register("Cockpit panel", IsOnPanel, CollapsePanel) : DisclosureCoordinator.None;
+        }
+
+        bool IsOnPanel(Vector2 screenPoint) => _panel != null && _panel.IsOpen && ScreenRects.Contains(_panel.OpenCard, screenPoint);
+
+        void CollapsePanel(DisclosureCollapseReason reason) => Close();
 
         public CockpitSession(AircraftSystems systems, SystemChangeGate gate, CockpitRig rig, CockpitInteractionManager interaction,
             CockpitFocusPanel panel, CockpitViewControls viewControls, AircraftLightsView lights, CameraRig camera, PointerOwnership ownership,
@@ -144,6 +163,7 @@ namespace OpenSkies.Gameplay
                 _panel.OptionChosen -= OnOptionChosen;
             }
             if (_viewControls != null) _viewControls.LookForwardRequested -= LookForward;
+            if (_disclosure != null) _disclosure.Unregister(_panelLayer);
         }
 
         public bool IsPanelOpen => _panel != null && _panel.IsOpen;
@@ -256,6 +276,7 @@ namespace OpenSkies.Gameplay
                 else _panel.ShowInstrument(kind, CockpitItems.DisplayName(item), CockpitItems.AccessibilityHint(item));
             }
             else _panel.ShowInstrument(kind, CockpitItems.DisplayName(item), CockpitItems.AccessibilityHint(item));
+            _disclosure?.Open(_panelLayer);
             PanelOpened?.Invoke();
         }
 
@@ -271,14 +292,17 @@ namespace OpenSkies.Gameplay
             _shownConfirmation = -1;
             _panel.ShowSystem(system, CockpitItems.DisplayName(item), CockpitItems.AccessibilityHint(item), Options(system), _systems.PositionCount(system));
             RefreshSystemPanel();
+            _disclosure?.Open(_panelLayer);
             PanelOpened?.Invoke();
         }
 
+        /// <summary>Closes the panel; a pending hazardous confirmation is dropped with it (nothing is ever applied by closing).</summary>
         public void Close()
         {
             _gate.Clear();
             _shownConfirmation = -1;
             if (_panel != null) _panel.Close();
+            _disclosure?.NotifyClosed(_panelLayer);
         }
 
         /// <summary>A new flight: panels closed, pending confirmations dropped. The view direction is kept.</summary>

@@ -6,7 +6,8 @@ Differentiator: touch-first UX with progressive disclosure. Detail lives in
 `docs/TOUCH_CONTROLS.md`, `docs/CONTEXTUAL_UI.md`, `docs/COCKPIT.md`,
 `docs/FLIGHT_ASSISTANCE.md`, `docs/ONBOARDING_DESIGN.md`, `docs/VISUAL_STYLE_GUIDE.md`,
 `docs/GESTURE_INTERACTION.md`, `docs/COCKPIT_DIRECT_MANIPULATION.md`,
-`docs/GESTURE_NAVIGATION.md`, `docs/MOBILE_PERFORMANCE_REPORT.md` and `docs/ROADMAP.md`.
+`docs/GESTURE_NAVIGATION.md`, `docs/TAP_DISCLOSURE_DESIGN.md`, `docs/MOBILE_PERFORMANCE_REPORT.md`
+and `docs/ROADMAP.md`.
 Read them before changing design, architecture, physics, input, assistance, the HUD,
 the cockpit, gestures, game modes, tutorials, visuals, audio, settings or performance.
 
@@ -106,6 +107,30 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
   in `PlayerProgress`; the interaction diary is local, development-only, and never
   sends anything anywhere. See `docs/COCKPIT_DIRECT_MANIPULATION.md` and
   `docs/GESTURE_NAVIGATION.md`.
+- Tap-first disclosure (`docs/TAP_DISCLOSURE_DESIGN.md`): every transient interface
+  (the arc and its options, the focus panel, the flight settings, the coaching
+  explanation, the pause sheet and its settings, the settings screen) registers with the
+  one `DisclosureCoordinator` (`OpenSkies.Gestures`, owned by the surface,
+  `FlightSession.Coordinator`) and tells it when it opens or closes itself. It decides
+  what an outside tap collapses; the surface consumes that tap on the `Dismiss` route.
+  `DisclosureController` keeps deciding eligibility; the coordinator only manages what
+  the player expanded. No X-shaped close controls; no transient that needs a drag to
+  open or close; paused interfaces stay through outside taps (resume is deliberate);
+  warnings are never registered. A new transient surface is registered with a screen
+  hit test and a collapse callback, never with a scrim handler of its own; a panel
+  whose presses would bubble to a scrim handler carries a catch-all `HudButton`.
+- The systems wheel is tap-first (`docs/TAP_DISCLOSURE_DESIGN.md`, milestone 2): tap
+  SYSTEMS, tap an action, tap its option; the handle goes back one level, an outside tap
+  folds everything. An action with options focuses the wheel (its options take the band,
+  its name is on the hub); FLAPS shows the aircraft's own detents. Every option applies
+  through `FlightSession.RequestSystemChange` (a hazardous one waits for its second tap;
+  leaving the focus drops it). The wheel's geometry is fitted to the screen by
+  `SystemsWheelLayout` (pure, EditMode-tested) on a copy of the settings, never the asset;
+  it must stay clear of the flight controls, the handle, the warning banners and the top
+  bar, with segments of at least 96 units. The M13/M14 pull gestures on the handle are a
+  development-only comparison (`FlightSession.pullGestureComparison`, F4 cycles; never in
+  a release build). Keep six primary segments at most: a seventh does not fit at 4:3 with
+  full-size targets (group related systems as options instead, as the switch panel does).
 - Visuals (M15): the project renders in **Linear** colour space with HDR and a global
   post-processing volume; the URP asset and the profile are made by `RenderPipelineSetup`
   (change it, not the assets). The aircraft, the terrain, the scenery and their textures

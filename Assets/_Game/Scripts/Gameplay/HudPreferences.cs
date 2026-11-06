@@ -32,6 +32,17 @@ namespace OpenSkies.Gameplay
             PlayerPrefs.Save();
         }
 
+        const string PullComparisonKey = "OpenSkies.Dev.PullComparison";
+
+        /// <summary>Development: the M13/M14 pull gestures instead of the tap-first wheel (comparison only).</summary>
+        public static bool LoadPullComparison(bool fallback) => PlayerPrefs.GetInt(PullComparisonKey, fallback ? 1 : 0) == 1;
+
+        public static void SavePullComparison(bool on)
+        {
+            PlayerPrefs.SetInt(PullComparisonKey, on ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+
         public static CameraMode LoadCameraMode(CameraMode fallback)
         {
             int value = PlayerPrefs.GetInt(CameraModeKey, (int)fallback);

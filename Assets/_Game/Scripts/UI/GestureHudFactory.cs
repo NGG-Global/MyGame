@@ -8,10 +8,12 @@ namespace OpenSkies.UI
     /// Builds the gesture-first HUD in code (scene builder and tests), in canvas
     /// units for the 1920 × 1080 reference inside the safe area:
     /// - The systems handle where SYSTEMS used to be (bottom right, left of the
-    ///   throttle, above BRAKE): a 168 × 96 touch area with a quiet grip.
+    ///   throttle, above BRAKE): a 168 × 96 touch area with a quiet grip; the wheel's hub.
     /// - The HUD band over the flight data strip (top left).
-    /// - The arc centred on the handle; the flap lever, the density ladder and the
-    ///   explanation plate, hidden until a gesture calls for them.
+    /// - The systems wheel centred on the handle (segments with a symbol, a label and a
+    ///   state line; a focused action's options on the same band; the pull comparison's
+    ///   outer ring), fitted to the screen at runtime by the session; the flap lever, the
+    ///   density ladder and the explanation plate, hidden until a gesture calls for them.
     /// - The development inspector, top right under the disclosure inspector.
     /// Everything is built inactive and wired before Awake runs.
     /// </summary>
@@ -38,7 +40,7 @@ namespace OpenSkies.UI
             var hud = rootGo.AddComponent<GestureHud>();
             hud.root = root;
 
-            hud.arc = BuildArc(root, font);
+            hud.arc = BuildArc(root, font, surface, hud);
             hud.lever = BuildLever(root, font);
             hud.ladder = BuildLadder(root, font);
             BuildHandle(root, font, surface, hud);
@@ -104,7 +106,7 @@ namespace OpenSkies.UI
 
         // ---- Arc ----------------------------------------------------------------------------------
 
-        static SystemsArcView BuildArc(RectTransform root, Font font)
+        static SystemsArcView BuildArc(RectTransform root, Font font, InteractionSurface surface, GestureHud hud)
         {
             var rect = NewRect("SystemsArc", root);
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 0f);
@@ -117,25 +119,63 @@ namespace OpenSkies.UI
             view.group.blocksRaycasts = false;
             view.group.interactable = false;
 
+            // Primary segments: the band, the symbol, the label, the state line and the engaged mark.
             for (int i = 0; i < SystemsArcModel.MaxItems; i++)
             {
                 view.innerSegments[i] = Segment("Inner" + i, rect);
+                var icon = NewRect("InnerIcon" + i, rect);
+                icon.anchorMin = icon.anchorMax = icon.pivot = new Vector2(0.5f, 0.5f);
+                icon.sizeDelta = new Vector2(IconSize, IconSize);
+                view.innerIcons[i] = AddImage(icon, HudStyle.TextPrimary);
+                view.innerIcons[i].preserveAspect = true;
+                view.innerIcons[i].enabled = false;
                 view.innerLabels[i] = SegmentLabel("InnerLabel" + i, rect, font);
+                view.innerStates[i] = SegmentState("InnerState" + i, rect, font);
                 var mark = NewRect("Mark" + i, rect);
                 mark.sizeDelta = new Vector2(10f, 10f);
                 view.innerMarks[i] = AddImage(mark, HudStyle.Selected);
                 view.innerMarks[i].enabled = false;
             }
+            // A focused action's options on the same band, over the primary segments as they fold away.
+            for (int i = 0; i < SystemsArcModel.MaxItems; i++)
+            {
+                view.optionSegments[i] = Segment("Option" + i, rect);
+                view.optionLabels[i] = SegmentLabel("OptionLabel" + i, rect, font);
+                view.optionLabels[i].horizontalOverflow = HorizontalWrapMode.Wrap;
+                view.optionStates[i] = SegmentState("OptionState" + i, rect, font);
+                var mark = NewRect("OptionMark" + i, rect);
+                mark.sizeDelta = new Vector2(10f, 10f);
+                view.optionMarks[i] = AddImage(mark, HudStyle.Selected);
+                view.optionMarks[i].enabled = false;
+            }
+            // The outer ring: the pull comparison's sub-arc only.
             for (int i = 0; i < SystemsArcModel.MaxItems; i++)
             {
                 view.outerSegments[i] = Segment("Outer" + i, rect);
                 view.outerLabels[i] = SegmentLabel("OuterLabel" + i, rect, font);
             }
-            var caption = NewText("Caption", rect, font, HudStyle.CaptionSize, TextAnchor.MiddleRight, HudStyle.TextQuiet);
-            caption.rectTransform.anchoredPosition = new Vector2(-60f, -72f);
-            caption.rectTransform.sizeDelta = new Vector2(420f, 28f);
+            // Beside the wheel; the session places it in the free space left of the band once the wheel is fitted.
+            var caption = NewText("Caption", rect, font, HudStyle.CaptionSize, TextAnchor.MiddleRight, HudStyle.TextSecondary);
             caption.rectTransform.pivot = new Vector2(1f, 0.5f);
+            caption.rectTransform.anchoredPosition = new Vector2(-(view.settings.outerRadius + HudStyle.Gap), 0f);
+            caption.rectTransform.sizeDelta = new Vector2(300f, 84f);
+            caption.horizontalOverflow = HorizontalWrapMode.Wrap;
             view.caption = caption;
+
+            // The hit area, last so it is over the segments: a square around the handle, shaped at runtime to the
+            // band (and the outer ring when shown) by the session, and raycast-blocked by the arc's group until it opens.
+            var hit = NewRect("ArcHitArea", rect);
+            hit.anchorMin = hit.anchorMax = hit.pivot = new Vector2(0.5f, 0.5f);
+            hit.anchoredPosition = Vector2.zero;
+            float reach = view.settings.OuterRingOuter * 2f;
+            hit.sizeDelta = new Vector2(reach, reach);
+            var shape = hit.gameObject.AddComponent<HotspotShape>();
+            shape.raycastTarget = true;
+            var hotspot = hit.gameObject.AddComponent<GestureHotspot>();
+            hotspot.surface = surface;
+            hotspot.route = InteractionRoute.SystemsHandle;
+            hud.arcHitArea = shape;
+            hud.arcHotspot = hotspot;
             return view;
         }
 
@@ -153,11 +193,24 @@ namespace OpenSkies.UI
         {
             var text = NewText(name, parent, font, HudStyle.LabelSize, TextAnchor.MiddleCenter, HudStyle.TextPrimary);
             text.rectTransform.anchorMin = text.rectTransform.anchorMax = text.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            text.rectTransform.sizeDelta = new Vector2(120f, 48f);
+            text.rectTransform.sizeDelta = new Vector2(112f, 48f);
             text.fontStyle = FontStyle.Bold;
             text.enabled = false;
             return text;
         }
+
+        /// <summary>The state line under a segment's label (10°, SET, ON).</summary>
+        static Text SegmentState(string name, RectTransform parent, Font font)
+        {
+            var text = NewText(name, parent, font, HudStyle.CaptionSize, TextAnchor.MiddleCenter, HudStyle.TextSecondary);
+            text.rectTransform.anchorMin = text.rectTransform.anchorMax = text.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            text.rectTransform.sizeDelta = new Vector2(112f, 24f);
+            text.enabled = false;
+            return text;
+        }
+
+        /// <summary>Size of a segment's symbol, canvas units.</summary>
+        public const float IconSize = 32f;
 
         // ---- Lever --------------------------------------------------------------------------------
 

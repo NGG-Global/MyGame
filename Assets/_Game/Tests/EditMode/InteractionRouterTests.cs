@@ -6,9 +6,10 @@ namespace OpenSkies.Tests
     public class InteractionRouterTests
     {
         static RouteContext Context(InteractionRoute requested = InteractionRoute.None, bool gestureFirst = true, bool cockpit = false,
-            bool blocked = false, bool onTarget = false) => new RouteContext
+            bool blocked = false, bool onTarget = false, bool outside = false) => new RouteContext
         {
             Requested = requested, GestureFirst = gestureFirst, CockpitView = cockpit, Blocked = blocked, OnTarget = onTarget,
+            OutsideActiveDisclosure = outside,
         };
 
         [Test]
@@ -48,6 +49,33 @@ namespace OpenSkies.Tests
             Assert.AreEqual(InteractionRoute.None, InteractionRouter.Decide(Context(blocked: true)));
             Assert.AreEqual(InteractionRoute.None, InteractionRouter.Decide(Context(InteractionRoute.SystemsHandle, blocked: true)));
             Assert.AreEqual(InteractionRoute.None, InteractionRouter.Decide(Context(cockpit: true, blocked: true)));
+        }
+
+        [Test]
+        public void OutsideAnExpandedInterface_TheOpenSurfaceIsConsumed_InEveryViewAndInterface()
+        {
+            Assert.AreEqual(InteractionRoute.Dismiss, InteractionRouter.Decide(Context(outside: true)), "the sky: no free look under an open panel");
+            Assert.AreEqual(InteractionRoute.Dismiss, InteractionRouter.Decide(Context(cockpit: true, outside: true)), "the cockpit: no switch under an open panel");
+            Assert.AreEqual(InteractionRoute.Dismiss, InteractionRouter.Decide(Context(onTarget: true, outside: true)), "an explainable value: the dismissal wins");
+            Assert.AreEqual(InteractionRoute.Dismiss, InteractionRouter.Decide(Context(gestureFirst: false, cockpit: true, outside: true)), "the legacy interface too");
+        }
+
+        [Test]
+        public void OutsideAnExpandedInterface_HotspotsAndOverlaysKeepTheirRoutes()
+        {
+            Assert.AreEqual(InteractionRoute.SystemsHandle, InteractionRouter.Decide(Context(InteractionRoute.SystemsHandle, outside: true)), "another trigger replaces the cluster");
+            Assert.AreEqual(InteractionRoute.HudBand, InteractionRouter.Decide(Context(InteractionRoute.HudBand, outside: true)));
+            Assert.AreEqual(InteractionRoute.Instrument, InteractionRouter.Decide(Context(InteractionRoute.Instrument, outside: true)));
+            Assert.AreEqual(InteractionRoute.Sheet, InteractionRouter.Decide(Context(InteractionRoute.Sheet, blocked: true, outside: true)));
+            Assert.AreEqual(InteractionRoute.None, InteractionRouter.Decide(Context(blocked: true, outside: true)), "a frozen flight routes nothing; the scrims take the touches");
+        }
+
+        [Test]
+        public void DismissRoute_ListensForTapsOnly()
+        {
+            Assert.AreEqual(GestureMask.Tap, InteractionRouter.MaskFor(InteractionRoute.Dismiss), "a drag or a hold outside an open panel does nothing at all");
+            Assert.IsTrue(InteractionRouter.IsRecognized(InteractionRoute.Dismiss));
+            Assert.AreEqual((int)InteractionRoute.Dismiss + 1, InteractionRouter.RouteCount);
         }
 
         [Test]

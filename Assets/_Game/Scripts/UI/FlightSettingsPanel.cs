@@ -31,6 +31,8 @@ namespace OpenSkies.UI
     /// sensitivity, and the selected profile's options, with large buttons in the
     /// free column (the same place as the cockpit focus panel, never both). It
     /// never pauses the game and only raises requests; the session applies them.
+    /// No close button: a tap outside the card or on ASSIST again collapses it
+    /// (docs/TAP_DISCLOSURE_DESIGN.md).
     /// </summary>
     public sealed class FlightSettingsPanel : MonoBehaviour
     {
@@ -42,7 +44,6 @@ namespace OpenSkies.UI
         public Text title;
         public Text description;
         public Text sensitivityLabel;
-        public HudButton close;
         [Tooltip("Index = FlightAssistProfile.")]
         public HudButton[] profiles = new HudButton[FlightAssistProfiles.Count];
         [Tooltip("Index = ControlSensitivity.")]
@@ -89,7 +90,6 @@ namespace OpenSkies.UI
             _initialized = true;
             RoundCard(card);
             if (group != null) _fade = new HudFade(group, interactive: true);
-            if (close != null) close.Clicked += () => CloseRequested?.Invoke();
             for (int i = 0; i < profiles.Length; i++)
             {
                 if (profiles[i] == null) continue;
