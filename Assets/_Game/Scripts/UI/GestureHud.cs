@@ -28,6 +28,11 @@ namespace OpenSkies.UI
         public GestureHotspot bandHotspot;
         public CanvasGroup bandGroup;
 
+        [Tooltip("Over the open arc: a press on its band goes to the surface on the handle's route (taps choose, slides select).")]
+        public GestureHotspot arcHotspot;
+        [Tooltip("Shapes the arc hotspot to the band and the outer ring, so it never covers the throttle or the brake.")]
+        public HotspotShape arcHitArea;
+
         [Header("Controls")]
         public SystemsArcView arc;
         public FlapsLeverView lever;

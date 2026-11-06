@@ -38,7 +38,7 @@ namespace OpenSkies.UI
             var hud = rootGo.AddComponent<GestureHud>();
             hud.root = root;
 
-            hud.arc = BuildArc(root, font);
+            hud.arc = BuildArc(root, font, surface, hud);
             hud.lever = BuildLever(root, font);
             hud.ladder = BuildLadder(root, font);
             BuildHandle(root, font, surface, hud);
@@ -104,7 +104,7 @@ namespace OpenSkies.UI
 
         // ---- Arc ----------------------------------------------------------------------------------
 
-        static SystemsArcView BuildArc(RectTransform root, Font font)
+        static SystemsArcView BuildArc(RectTransform root, Font font, InteractionSurface surface, GestureHud hud)
         {
             var rect = NewRect("SystemsArc", root);
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 0f);
@@ -136,6 +136,21 @@ namespace OpenSkies.UI
             caption.rectTransform.sizeDelta = new Vector2(420f, 28f);
             caption.rectTransform.pivot = new Vector2(1f, 0.5f);
             view.caption = caption;
+
+            // The hit area, last so it is over the segments: a square around the handle, shaped at runtime to the
+            // band (and the outer ring when shown) by the session, and raycast-blocked by the arc's group until it opens.
+            var hit = NewRect("ArcHitArea", rect);
+            hit.anchorMin = hit.anchorMax = hit.pivot = new Vector2(0.5f, 0.5f);
+            hit.anchoredPosition = Vector2.zero;
+            float reach = view.settings.OuterRingOuter * 2f;
+            hit.sizeDelta = new Vector2(reach, reach);
+            var shape = hit.gameObject.AddComponent<HotspotShape>();
+            shape.raycastTarget = true;
+            var hotspot = hit.gameObject.AddComponent<GestureHotspot>();
+            hotspot.surface = surface;
+            hotspot.route = InteractionRoute.SystemsHandle;
+            hud.arcHitArea = shape;
+            hud.arcHotspot = hotspot;
             return view;
         }
 

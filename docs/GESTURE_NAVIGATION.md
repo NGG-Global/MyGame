@@ -39,9 +39,12 @@ A sheet from the bottom edge with two stops (`SheetModel`, pure C#):
   motion). A flick never skips a stop, however fast: from the second stop a pull down
   reaches the first, and only a finger below the first stop can dismiss.
 - **Pull down past 55 % of the first stop** and release: dismissed, which resumes.
-- **Tap the dim** above the sheet (the scrim): resume. A tap on the grip jumps to
-  the other stop. **Esc** or the back button: from the second stop back to the
-  first, then resume; with the full settings screen open, that closes first (M12).
+- **Tap the dim** above the sheet (the scrim): at the second stop the settings fold
+  back to the first stop; at the first stop nothing happens, so resuming stays a
+  deliberate action (RESUME, MENU, Esc, the pull down; `docs/TAP_DISCLOSURE_DESIGN.md`).
+  A tap on the grip jumps to the other stop. **Esc** or the back button: from the
+  second stop back to the first, then resume; with the full settings screen open,
+  that closes first (M12).
 - The depth (`SheetModel.Depth`, 0 at the first stop, 1 at the second) fades the
   settings in and dims the heading, so the second stop is visible before it is
   reached: disclosure proportional to the pull.

@@ -10,16 +10,18 @@ namespace OpenSkies.UI
     /// and is dragged between two stops. The first stop holds the flight's choices
     /// (RESUME, RESTART, CHANGE MODE and one mode-specific action); pulling higher
     /// reveals the settings embedded in the sheet. It tracks the finger, settles on a
-    /// stop with one soft overshoot, and is dismissed by dragging it down, tapping the
-    /// dimmed world, or RESUME. Draws what <see cref="SheetModel"/> says; the session
-    /// decides what the buttons do and when the flight is frozen.
+    /// stop with one soft overshoot, and is dismissed by dragging it down or RESUME.
+    /// A tap on the dimmed world collapses the settings back to the first stop and does
+    /// nothing at the first stop: resuming is a deliberate action
+    /// (docs/TAP_DISCLOSURE_DESIGN.md). Draws what <see cref="SheetModel"/> says; the
+    /// session decides what the buttons do and when the flight is frozen.
     /// </summary>
     public sealed class PauseSheet : MonoBehaviour
     {
         public const int MaxButtons = 4;
 
         public CanvasGroup group;
-        [Tooltip("Dims the world above the sheet; a tap on it resumes.")]
+        [Tooltip("Dims the world above the sheet; a tap on it folds the settings back to the first stop, never resumes.")]
         public Image scrim;
         public HudButton scrimButton;
         [Tooltip("The sheet itself, anchored to the bottom of the safe area; its height follows the model.")]
@@ -44,8 +46,10 @@ namespace OpenSkies.UI
 
         /// <summary>A first-stop button was tapped (index in the order given to <see cref="Open"/>).</summary>
         public event Action<int> ButtonClicked;
-        /// <summary>The player dismissed the sheet (drag down, the scrim, or a swipe): resume.</summary>
+        /// <summary>The player dismissed the sheet (drag down or a swipe): resume.</summary>
         public event Action DismissRequested;
+        /// <summary>A tap on the dimmed world at the first stop: consumed, nothing resumes (for hosts and tests).</summary>
+        public event Action OutsideTapped;
         /// <summary>The sheet reached or left the second stop (the settings): the host presents them while it is there.</summary>
         public event Action<bool> SettingsShown;
 
@@ -76,7 +80,7 @@ namespace OpenSkies.UI
             _model = new SheetModel(sheetSettings);
             if (surface != null && surface.sprite == null) HudStyle.Round(surface, HudStyle.PanelRadius);
             if (gripBar != null && gripBar.sprite == null) HudStyle.Round(gripBar, 4f);
-            if (scrimButton != null) scrimButton.Clicked += () => { if (_open) DismissRequested?.Invoke(); };
+            if (scrimButton != null) scrimButton.Clicked += OnScrimTapped;
             for (int i = 0; i < buttons.Length; i++)
             {
                 if (buttons[i] == null) continue;
@@ -135,6 +139,14 @@ namespace OpenSkies.UI
             if (settings != null) settings.Close();
             SetSettingsShown(false);
             Apply();
+        }
+
+        /// <summary>The tap-first contract: outside the expanded settings collapses them to the paused sheet; outside the sheet itself does nothing.</summary>
+        void OnScrimTapped()
+        {
+            if (!_open || _model == null) return;
+            if (_model.Stop == SheetModel.SecondStop || _settingsShown) _model.GoTo(SheetModel.FirstStop);
+            else OutsideTapped?.Invoke();
         }
 
         /// <summary>Jumps to a stop (SETTINGS from a keyboard, or a tap on the grip).</summary>

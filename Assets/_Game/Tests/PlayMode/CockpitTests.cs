@@ -211,7 +211,7 @@ namespace OpenSkies.Tests
             Assert.AreEqual(0.2f, _session.aircraft.Controls.Pitch, 1e-4f);
             Assert.AreEqual(1f, Time.timeScale);
 
-            _panel.instrumentClose.OnPointerClick(Pointer(21, Vector2.zero));
+            _panel.instrumentTapToClose.OnPointerClick(Pointer(21, Vector2.zero));
             Assert.IsFalse(_panel.IsOpen);
             yield return new WaitForFixedUpdate();
             Assert.AreEqual(1f, _session.aircraft.Controls.Throttle, "closing changes no flight control");
@@ -439,7 +439,7 @@ namespace OpenSkies.Tests
             Assert.AreEqual(CockpitItem.Altimeter, selection.Selected.item, "the frame follows the selection");
             Assert.IsTrue(ScreenRect(selection.frame).Contains(ScreenPointOf(CockpitItem.Altimeter)));
 
-            _panel.instrumentClose.OnPointerClick(Pointer(22, Vector2.zero));
+            _panel.instrumentTapToClose.OnPointerClick(Pointer(22, Vector2.zero));
             yield return null;
             Assert.IsFalse(selection.IsShown, "closing the panel clears the frame");
 

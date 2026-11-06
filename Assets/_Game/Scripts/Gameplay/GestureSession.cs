@@ -29,6 +29,13 @@ namespace OpenSkies.Gameplay
     /// (every system change passes the gate). Previews never touch committed state:
     /// the flap lever shows a detent the aircraft does not have until release, and the
     /// density preview is a disclosure input, not the saved profile.
+    ///
+    /// Tap-first (docs/TAP_DISCLOSURE_DESIGN.md): a tap on the handle opens the arc as a
+    /// menu that stays; a tap on a segment acts, or fans out its options; a tap on the
+    /// handle again, on the open action, or anywhere outside folds it. The arc and its
+    /// sub-arc are registered with the <see cref="DisclosureCoordinator"/>, which also
+    /// closes them when another cluster opens. The pull remains as the continuous way
+    /// through the same arc.
     /// </summary>
     public sealed class GestureSession : IDisposable
     {
@@ -64,7 +71,7 @@ namespace OpenSkies.Gameplay
         }
 
         const int MaxInner = SystemsArcModel.MaxItems;
-        const int MaxSubOptions = 4;
+        const int MaxSubOptions = 5;
         static readonly AircraftSystem[] OuterSystems = { AircraftSystem.LandingLight, AircraftSystem.NavigationLights };
 
         /// <summary>The options a rested segment fans out: short labels, which one is current, and what choosing one does.</summary>
@@ -84,6 +91,7 @@ namespace OpenSkies.Gameplay
         readonly CameraRig _camera;
         readonly PointerOwnership _ownership;
         readonly HudExplanations _explanations;
+        readonly DisclosureCoordinator _disclosure;
         readonly Settings _settings;
         readonly SystemsArcModel _arc;
         readonly FlapsLeverInteraction _lever;
@@ -93,6 +101,8 @@ namespace OpenSkies.Gameplay
         readonly string[] _flapLabels;
         readonly StringBuilder _ownershipText = new StringBuilder(128);
         int _innerCount;
+        int _arcLayer = DisclosureCoordinator.None, _subArcLayer = DisclosureCoordinator.None;
+        bool _arcOpen;
         Doing _doing;
         bool _gestureFirst = true, _reducedMotion;
         float _flapsHoverSince = float.NegativeInfinity;
@@ -132,6 +142,12 @@ namespace OpenSkies.Gameplay
             ConfigureArc(flight.AvailableActions);
             _surface.TargetResolver = FindTarget;
             _surface.GestureRaised += OnGesture;
+
+            // The arc is a transient interface: the coordinator closes it on an outside tap or when another cluster opens.
+            _disclosure = surface.Disclosure;
+            _arcLayer = _disclosure.Register("Systems arc", IsOnArcBand, CollapseArc);
+            _subArcLayer = _disclosure.Register("Systems sub-arc", IsOnOuterRing, CollapseSubArc, true, _arcLayer);
+            if (_hud != null && _hud.arcHitArea != null) _hud.arcHitArea.Filter = ArcHitFilter;
             if (_hud != null && _hud.inspector != null) _hud.inspector.ModeToggleRequested += ToggleMode;
 
             // Gesture-first until told otherwise: the handle and arc are on, the rail is off.
@@ -144,11 +160,22 @@ namespace OpenSkies.Gameplay
         {
             _surface.GestureRaised -= OnGesture;
             _surface.TargetResolver = null;
+            _disclosure.Unregister(_subArcLayer);
+            _disclosure.Unregister(_arcLayer);
+            if (_hud != null && _hud.arcHitArea != null) _hud.arcHitArea.Filter = null;
             if (_hud != null && _hud.inspector != null) _hud.inspector.ModeToggleRequested -= ToggleMode;
         }
 
         public Doing Current => _doing;
         public bool GestureFirst => _gestureFirst;
+        /// <summary>The arc stands open as a tappable menu (no finger needed).</summary>
+        public bool ArcOpen => _arcOpen;
+        /// <summary>The options of one action are fanned out on the outer ring of the open arc.</summary>
+        public bool SubArcOpen => _arcOpen && _arc.OuterRevealed && _arc.OuterParent != SystemsArcModel.NoItem;
+        public DisclosureCoordinator Disclosure => _disclosure;
+        /// <summary>The arc's id with the coordinator (tests, inspectors).</summary>
+        public int ArcLayer => _arcLayer;
+        public int SubArcLayer => _subArcLayer;
         public SystemsArcModel Arc => _arc;
         public FlapsLeverModel Lever => _lever.Model;
         public HudDensityModel Density => _density;
@@ -157,13 +184,15 @@ namespace OpenSkies.Gameplay
         public HudProfile PreviewProfile => _density.Preview;
         public int HintsShown => _hintsShown;
         /// <summary>The sub-arc is open from this inner segment (its options), or -1 (none, or the free lights ring).</summary>
-        public int OpenSubArcParent => _doing == Doing.ArcPull && _arc.OuterRevealed ? _arc.OuterParent : SystemsArcModel.NoItem;
+        public int OpenSubArcParent => (_doing == Doing.ArcPull || _arcOpen) && _arc.OuterRevealed ? _arc.OuterParent : SystemsArcModel.NoItem;
 
         /// <summary>
-        /// Gives an action a second level: resting on its segment fans its options out on
-        /// the outer ring (NAV: destinations; ASSIST: profiles). Labels are fixed strings;
-        /// <paramref name="current"/> marks the engaged option; <paramref name="choose"/>
-        /// runs on release. At most four options.
+        /// Gives an action a second level: tapping or resting on its segment fans its options
+        /// out on the outer ring (NAV: the guide and the destinations; ASSIST: the settings and
+        /// the profiles). By convention the first option is the action itself, so the tap path
+        /// loses nothing the rail offers. Labels are fixed strings; <paramref name="current"/>
+        /// marks the engaged option; <paramref name="choose"/> runs when one is chosen. At
+        /// most five options.
         /// </summary>
         public void RegisterSubOptions(ContextAction action, string[] labels, Func<int> current, Action<int> choose)
         {
@@ -186,6 +215,7 @@ namespace OpenSkies.Gameplay
         {
             if (_gestureFirst == on) return;
             _gestureFirst = on;
+            CloseArc();
             EndGesture();
             _surface.CancelAll();
             _surface.GestureFirst = on;
@@ -213,6 +243,7 @@ namespace OpenSkies.Gameplay
         /// <summary>A new flight: every transient control folds away.</summary>
         public void OnReset()
         {
+            CloseArc();
             EndGesture();
             _surface.CancelAll();
         }
@@ -249,6 +280,7 @@ namespace OpenSkies.Gameplay
             _surface.CockpitView = view == ViewMode.Cockpit;
             _surface.Blocked = blocked;
             if (blocked && _doing != Doing.Nothing) EndGesture();
+            if (blocked && _arcOpen) CloseArc(DisclosureCollapseReason.Blocked);
 
             RefreshArcEmphasis(disclosure, systems);
             if (_doing == Doing.Lever) _lever.Sync();
@@ -256,7 +288,7 @@ namespace OpenSkies.Gameplay
 
             if (_hud != null)
             {
-                if (_hud.arc != null) _hud.arc.Present(_arc, _doing == Doing.ArcPull);
+                if (_hud.arc != null) _hud.arc.Present(_arc, _doing == Doing.ArcPull, _arcOpen);
                 if (_hud.ladder != null && _doing == Doing.DensityPull) _hud.ladder.Present(_density);
                 PresentHoldRing();
                 if (_hud.inspector != null) PresentInspector(profile);
@@ -284,14 +316,14 @@ namespace OpenSkies.Gameplay
         }
 
         /// <summary>
-        /// The first time the phase of flight offers an action, the pull is shown: a cue at
-        /// the handle (the hint policy, remembered once performed) or, without one, the arc
-        /// showing itself briefly. Pulling is learnt by seeing.
+        /// The first time the phase of flight offers an action, the handle is pointed out: a
+        /// cue at the handle (the hint policy, remembered once the arc has been opened) or,
+        /// without one, the arc showing itself briefly. Opening is learnt by seeing.
         /// </summary>
         void OfferHandleHint(DisclosureController disclosure)
         {
             if (!_gestureFirst || _everPulled || _blocked || disclosure == null || _hud == null || _hud.arc == null) return;
-            if (_doing != Doing.Nothing) return;
+            if (_doing != Doing.Nothing || _arcOpen) return;
             bool offered = false;
             for (int i = 0; i < _innerCount && !offered; i++)
                 offered = disclosure.IsActionVisible(_innerActions[i]) && disclosure.GetActionReason(_innerActions[i]) == DisclosureReason.Phase;
@@ -299,7 +331,7 @@ namespace OpenSkies.Gameplay
             if (_hints != null && _hints.HasView)
             {
                 if (_hints.HasLearned(GestureId.PullSystems)) return;
-                _hints.Offer(GestureId.PullSystems, _hud.HandleCentre, Vector2.up, 140f, "Pull SYSTEMS for flaps and more", _hud.Bounds, Time.unscaledTime);
+                _hints.Offer(GestureId.PullSystems, _hud.HandleCentre, Vector2.up, 40f, "Tap SYSTEMS for flaps and more", _hud.Bounds, Time.unscaledTime);
                 return;
             }
             if (_hintsShown >= _settings.handleHintLimit || Time.unscaledTime - _lastHintTime < _settings.handleHintSpacingSeconds) return;
@@ -355,7 +387,7 @@ namespace OpenSkies.Gameplay
                 }
             _report.GestureFirst = _gestureFirst;
             _report.Ownership = _ownershipText.ToString();
-            _report.Mode = _doing.ToString();
+            _report.Mode = _doing == Doing.Nothing && _arcOpen ? (SubArcOpen ? "ArcOpen+SubArc" : "ArcOpen") : _doing.ToString();
             _report.HudProfile = profile.ToString();
             _report.PreviewProfile = HasPreviewProfile ? _density.Preview.ToString() : null;
             _report.Diary = _diary != null ? _diary.Summary() : null;
@@ -432,12 +464,9 @@ namespace OpenSkies.Gameplay
                     if (e.Type == GestureEventType.Dwell && _doing == Doing.ArcPull && !_arc.OuterRevealed) OpenSecondLevel();
                     break;
                 case GestureKind.Tap:
-                    if (e.Type == GestureEventType.Completed && _hud != null && _hud.arc != null)
-                    {
-                        _arc.Begin();
-                        _hud.arc.ShowHint();
-                        HudButton.Report(UiFeedback.Tap);
-                    }
+                    if (e.Type != GestureEventType.Completed || _hud == null || _hud.arc == null) break;
+                    if (_arcOpen) OnArcTap(e.Position);
+                    else OpenArc();
                     break;
                 case GestureKind.LongPress:
                     OnLongPress(e, HudExplanations.HandleId, _hud != null && _hud.handleHotspot != null ? (RectTransform)_hud.handleHotspot.transform : null);
@@ -450,20 +479,173 @@ namespace OpenSkies.Gameplay
         {
             if (_arc.HasHovered && !_arc.HoveredIsOuter)
             {
-                var options = _subOptions[(int)_innerActions[_arc.HoveredIndex]];
-                if (options == null) return; // a segment without options: resting does nothing (and never selects)
-                int current = options.Current != null ? options.Current() : -1;
-                for (int i = 0; i < options.Labels.Length; i++)
-                    _arc.OuterItem(i) = new ArcItem { Label = options.Labels[i], Emphasis = i == current ? ArcEmphasis.Engaged : ArcEmphasis.Full, Available = true };
-                _arc.RevealSubArc(_arc.HoveredIndex, options.Labels.Length);
-                HudButton.Report(UiFeedback.Tick);
+                OpenSubArc(_arc.HoveredIndex);
                 return;
             }
             if (_arc.HasHovered) return;
+            if (_arcOpen)
+            {
+                CloseSubArc(); // the open arc already shows the lights ring; resting on nothing only returns to it
+                return;
+            }
             ConfigureLightsRing();
             _arc.RevealOuter(true);
             HudButton.Report(UiFeedback.Tick);
         }
+
+        /// <summary>The options of an inner segment fan out on the outer ring (a child of the open arc for the coordinator).</summary>
+        bool OpenSubArc(int index)
+        {
+            var options = _subOptions[(int)_innerActions[index]];
+            if (options == null) return false; // a segment without options: resting does nothing (and never selects)
+            int current = options.Current != null ? options.Current() : -1;
+            for (int i = 0; i < options.Labels.Length; i++)
+                _arc.OuterItem(i) = new ArcItem { Label = options.Labels[i], Emphasis = i == current ? ArcEmphasis.Engaged : ArcEmphasis.Full, Available = true };
+            _arc.RevealSubArc(index, options.Labels.Length);
+            if (_arcOpen && _arc.OuterRevealed) _disclosure.Open(_subArcLayer);
+            HudButton.Report(UiFeedback.Tick);
+            return true;
+        }
+
+        // ---- Tap-first arc ----------------------------------------------------------------------
+
+        /// <summary>A tap on the handle: the arc opens and stays, with every reachable system on it (the lights ring too).</summary>
+        public void OpenArc()
+        {
+            if (_arcOpen || _hud == null || _hud.arc == null || !_gestureFirst || _blocked) return;
+            EndGesture();
+            _arcOpen = true;
+            _everPulled = true;
+            _hints?.Learned(GestureId.PullSystems, Time.unscaledTime);
+            _arc.Begin();
+            _arc.Update(Vector2.zero, 1f); // unfolded, nothing under a finger
+            ConfigureLightsRing();
+            _arc.RevealOuter(true);
+            _hud.arc.SetTakesTouches(true);
+            _hud.SetHandleState(false, true);
+            _disclosure.Open(_arcLayer);
+            HudButton.Report(UiFeedback.Tap);
+        }
+
+        /// <summary>The arc folds (the trigger again, a choice made, an outside tap, a reset). Nothing is applied.</summary>
+        public void CloseArc(DisclosureCollapseReason reason = DisclosureCollapseReason.Trigger)
+        {
+            if (!_arcOpen) return;
+            _arcOpen = false;
+            if (_doing == Doing.ArcPull)
+            {
+                // A finger sliding on the arc when it was closed from elsewhere: its gesture ends without choosing.
+                _surface.Channel(InteractionRoute.SystemsHandle)?.Cancel();
+                EndGesture();
+            }
+            _arc.RevealOuter(false);
+            _arc.Update(Vector2.zero, 0f);
+            if (_hud != null)
+            {
+                _hud.arc?.SetTakesTouches(false);
+                _hud.arc?.Fold();
+                _hud.SetHandleState(false, false);
+            }
+            _disclosure.Close(_arcLayer, reason); // also closes the sub-arc; no-op when the coordinator closed it first
+        }
+
+        /// <summary>The coordinator collapsed the arc (outside tap, another cluster, focus loss).</summary>
+        void CollapseArc(DisclosureCollapseReason reason) => CloseArc(reason);
+
+        /// <summary>Back from an action's options to the arc, which shows the lights ring again.</summary>
+        void CloseSubArc()
+        {
+            bool wasOpen = _arc.OuterRevealed && _arc.OuterParent != SystemsArcModel.NoItem;
+            _arc.RevealOuter(false);
+            if (_arcOpen)
+            {
+                ConfigureLightsRing();
+                _arc.RevealOuter(true);
+            }
+            if (wasOpen) _disclosure.Close(_subArcLayer, DisclosureCollapseReason.ParentTap);
+        }
+
+        void CollapseSubArc(DisclosureCollapseReason reason)
+        {
+            if (!_arcOpen) return;
+            _arc.RevealOuter(false);
+            ConfigureLightsRing();
+            _arc.RevealOuter(true);
+        }
+
+        /// <summary>A tap on the open arc: a segment acts or fans out, the handle folds the arc, the open action folds its options.</summary>
+        void OnArcTap(Vector2 screenPoint)
+        {
+            if (_hud == null) return;
+            Vector2 fromAnchor = _hud.ToLocal(screenPoint) - _hud.HandleCentre;
+            _arc.Update(fromAnchor, 1f);
+            bool hovered = _arc.HasHovered, armed = _arc.IsArmed, outer = _arc.HoveredIsOuter;
+            int index = _arc.HoveredIndex;
+            _arc.Update(Vector2.zero, 1f); // nothing stays lifted after a tap
+            if (hovered)
+            {
+                if (!armed) { HudButton.Report(UiFeedback.Tap); return; } // not available now: the arc stays
+                ChooseByTap(outer, index);
+                return;
+            }
+            if (fromAnchor.magnitude < _arc.Settings.selectionInnerRadius)
+            {
+                CloseArc(DisclosureCollapseReason.Trigger); // the trigger again
+                HudButton.Report(UiFeedback.Tap);
+                return;
+            }
+            if (SubArcOpen) CloseSubArc(); // the band on nothing while options are out: back to the arc
+        }
+
+        void ChooseByTap(bool outer, int index)
+        {
+            if (!outer)
+            {
+                if (_arc.OuterRevealed && _arc.OuterParent == index)
+                {
+                    CloseSubArc(); // the open action again: back to the arc
+                    HudButton.Report(UiFeedback.Tap);
+                    return;
+                }
+                if (HasSubOptions(_innerActions[index]))
+                {
+                    if (SubArcOpen) CloseSubArc();
+                    OpenSubArc(index);
+                    return;
+                }
+                PerformInner(index);
+                CloseArc(DisclosureCollapseReason.Owner);
+                return;
+            }
+            if (_arc.OuterParent >= 0) ChooseSubOption(_arc.OuterParent, index);
+            else ToggleOuter(index);
+            CloseArc(DisclosureCollapseReason.Owner);
+        }
+
+        /// <summary>A screen point on the open arc's band (for the coordinator: a tap there is inside, not outside).</summary>
+        bool IsOnArcBand(Vector2 screenPoint)
+        {
+            if (!_arcOpen || _hud == null) return false;
+            Vector2 v = _hud.ToLocal(screenPoint) - _hud.HandleCentre;
+            float r = v.magnitude;
+            var s = _arc.Settings;
+            if (r < s.innerRadius || r > s.outerRadius) return false;
+            return _arc.SlotAt(GestureMath.AngleDegrees(v), _arc.InnerCount) != SystemsArcModel.NoItem;
+        }
+
+        /// <summary>A screen point on the open arc's outer ring (the lights, or an action's options).</summary>
+        bool IsOnOuterRing(Vector2 screenPoint)
+        {
+            if (!_arcOpen || _hud == null || !_arc.OuterRevealed) return false;
+            Vector2 v = _hud.ToLocal(screenPoint) - _hud.HandleCentre;
+            float r = v.magnitude;
+            var s = _arc.Settings;
+            if (r < s.OuterRingInner || r > s.OuterRingOuter) return false;
+            return _arc.OuterAt(GestureMath.AngleDegrees(v)) != SystemsArcModel.NoItem;
+        }
+
+        /// <summary>The arc's hotspot shape: presses land only on the band and the outer ring, never on the controls around them.</summary>
+        bool ArcHitFilter(Vector2 screenPoint, Camera eventCamera) => IsOnArcBand(screenPoint) || IsOnOuterRing(screenPoint);
 
         void ConfigureLightsRing()
         {
@@ -478,7 +660,7 @@ namespace OpenSkies.Gameplay
             _doing = Doing.ArcPull;
             _everPulled = true;
             _hints?.Learned(GestureId.PullSystems, Time.unscaledTime);
-            _arc.Begin();
+            if (!_arcOpen) _arc.Begin(); // from the open arc the finger slides over what is already there
             _lastHovered = SystemsArcModel.NoItem;
             _lastArmed = false;
             _flapsHoverSince = float.NegativeInfinity;
@@ -489,7 +671,7 @@ namespace OpenSkies.Gameplay
         {
             if (_hud == null) return;
             Vector2 fromAnchor = _hud.ToLocal(e.Position) - _hud.HandleCentre;
-            _arc.Update(fromAnchor, e.Progress);
+            _arc.Update(fromAnchor, _arcOpen ? 1f : e.Progress);
             channel?.SetTargetArmed(_arc.IsArmed);
 
             bool onFlaps = _arc.HasHovered && !_arc.HoveredIsOuter && _innerActions[_arc.HoveredIndex] == ContextAction.Flaps;
@@ -514,6 +696,14 @@ namespace OpenSkies.Gameplay
         void HandOverToLever(in GestureEvent e, GestureRecognizer channel)
         {
             if (!_lever.Available || _hud == null) return;
+            if (_arcOpen)
+            {
+                // The lever takes over from the open arc: the menu is done; the slide carries on into the lever.
+                _arcOpen = false;
+                _arc.RevealOuter(false);
+                _hud.arc.SetTakesTouches(false);
+                _disclosure.Close(_arcLayer, DisclosureCollapseReason.Owner);
+            }
             _doing = Doing.Lever;
             _lever.Begin(e.Position);
             _hints?.Learned(GestureId.DragLever, Time.unscaledTime);
@@ -542,13 +732,16 @@ namespace OpenSkies.Gameplay
                 }
                 return;
             }
+            bool chose = false;
             if (_doing == Doing.ArcPull && _arc.IsArmed)
             {
+                chose = true;
                 if (!_arc.HoveredIsOuter) PerformInner(_arc.HoveredIndex);
                 else if (_arc.OuterParent >= 0) ChooseSubOption(_arc.OuterParent, _arc.HoveredIndex);
                 else ToggleOuter(_arc.HoveredIndex);
             }
             EndGesture();
+            if (chose) CloseArc(DisclosureCollapseReason.Owner); // a slide on the open arc that chose: the menu folds
         }
 
         void ChooseSubOption(int parent, int option)
@@ -561,19 +754,9 @@ namespace OpenSkies.Gameplay
 
         void PerformInner(int index)
         {
-            var action = _innerActions[index];
-            if (action == ContextAction.Flaps)
-            {
-                // Released on FLAPS without the lever: one detent further down, wrapping to UP (the keyboard's rhythm).
-                var systems = _flight.Systems;
-                if (systems != null)
-                {
-                    var outcome = _flight.RequestSystemChange(new SystemChange(AircraftSystem.Flaps, (systems.FlapDetent + 1) % systems.FlapDetentCount));
-                    HudButton.Report(outcome == SystemChangeGate.Outcome.Applied ? UiFeedback.Confirm : UiFeedback.Tap);
-                }
-                return;
-            }
-            _flight.PerformContextAction(action);
+            // FLAPS, tapped or released on without the lever, opens the same tappable detent selector as the
+            // cockpit lever (the session steps one detent instead when there is no selector), like the rail.
+            _flight.PerformContextAction(_innerActions[index]);
             HudButton.Report(UiFeedback.Confirm);
         }
 
@@ -635,6 +818,10 @@ namespace OpenSkies.Gameplay
                 case GestureKind.LongPress:
                     if (target >= 0) OnLongPress(e, target, TargetRect(target));
                     break;
+                case GestureKind.Tap:
+                    // The band opens nothing by a tap, so a tap on it counts as a tap outside whatever is expanded.
+                    if (e.Type == GestureEventType.Completed) _disclosure.OutsideTap(e.Position);
+                    break;
             }
         }
 
@@ -678,6 +865,7 @@ namespace OpenSkies.Gameplay
         void OnTarget(in GestureEvent e, int target)
         {
             if (e.Kind == GestureKind.LongPress && target >= 0) OnLongPress(e, target, TargetRect(target));
+            else if (e.Kind == GestureKind.Tap && e.Type == GestureEventType.Completed) _disclosure.OutsideTap(e.Position);
         }
 
         void OnLongPress(in GestureEvent e, int target, RectTransform rect)
@@ -709,10 +897,11 @@ namespace OpenSkies.Gameplay
         {
             if (_hud != null)
             {
-                if (_hud.arc != null && (_doing == Doing.ArcPull || _doing == Doing.Lever)) _hud.arc.Fold();
+                bool onArc = _doing == Doing.ArcPull || _doing == Doing.Lever;
+                if (_hud.arc != null && onArc && !_arcOpen) _hud.arc.Fold(); // the open menu stays after a slide that chose nothing
                 if (_hud.ladder != null && _doing == Doing.DensityPull) _hud.ladder.Hide();
                 if (_hud.plate != null && _doing == Doing.Explain) _hud.plate.Hide();
-                if (_doing == Doing.ArcPull || _doing == Doing.Lever) _hud.SetHandleState(false, false);
+                if (onArc) _hud.SetHandleState(false, _arcOpen);
             }
             if (_doing == Doing.Look && _camera != null) _camera.ReleaseChaseLook(_reducedMotion);
             if (_doing == Doing.Lever) _lever.Cancel();
@@ -764,11 +953,6 @@ namespace OpenSkies.Gameplay
             return null;
         }
 
-        static bool Contains(RectTransform rect, Vector2 screenPoint)
-        {
-            var canvas = rect.GetComponentInParent<Canvas>();
-            var camera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
-            return RectTransformUtility.RectangleContainsScreenPoint(rect, screenPoint, camera);
-        }
+        static bool Contains(RectTransform rect, Vector2 screenPoint) => ScreenRects.Contains(rect, screenPoint);
     }
 }

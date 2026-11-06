@@ -147,8 +147,10 @@ screen and safe area: the instrument card is the largest square that fits (up to
 or two, at least 120 × 96 units each. It never pauses the game and never covers a
 flight control; warnings draw over it.
 
-Dismissal: the close button, tapping the enlarged instrument, tapping nothing in
-the cockpit, tapping the same cockpit item again, or any camera change. A
+Dismissal (`docs/TAP_DISCLOSURE_DESIGN.md`): a tap outside the card, which the
+interaction surface consumes so nothing in the cockpit behind it reacts (the same
+item again included), tapping the enlarged instrument, or any camera change. There
+is no close button. A
 dismissed instrument fades out and its face is deactivated, so only the cockpit
 copy is drawn. Since M14 the instrument emerges from its place on the panel
 (`CockpitFocusPanel.ShowInstrument` with the origin's screen point and scale,
