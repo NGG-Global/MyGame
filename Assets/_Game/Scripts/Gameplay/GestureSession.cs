@@ -145,7 +145,7 @@ namespace OpenSkies.Gameplay
 
             // The arc is a transient interface: the coordinator closes it on an outside tap or when another cluster opens.
             _disclosure = surface.Disclosure;
-            _arcLayer = _disclosure.Register("Systems arc", IsOnArcBand, CollapseArc);
+            _arcLayer = _disclosure.Register("Systems arc", IsOnArc, CollapseArc);
             _subArcLayer = _disclosure.Register("Systems sub-arc", IsOnOuterRing, CollapseSubArc, true, _arcLayer);
             if (_hud != null && _hud.arcHitArea != null) _hud.arcHitArea.Filter = ArcHitFilter;
             if (_hud != null && _hud.inspector != null) _hud.inspector.ModeToggleRequested += ToggleMode;
@@ -644,8 +644,11 @@ namespace OpenSkies.Gameplay
             return _arc.OuterAt(GestureMath.AngleDegrees(v)) != SystemsArcModel.NoItem;
         }
 
+        /// <summary>The open arc as one surface for the coordinator: its band and its outer ring, the same shape its hotspot takes presses on.</summary>
+        bool IsOnArc(Vector2 screenPoint) => IsOnArcBand(screenPoint) || IsOnOuterRing(screenPoint);
+
         /// <summary>The arc's hotspot shape: presses land only on the band and the outer ring, never on the controls around them.</summary>
-        bool ArcHitFilter(Vector2 screenPoint, Camera eventCamera) => IsOnArcBand(screenPoint) || IsOnOuterRing(screenPoint);
+        bool ArcHitFilter(Vector2 screenPoint, Camera eventCamera) => IsOnArc(screenPoint);
 
         void ConfigureLightsRing()
         {

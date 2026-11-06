@@ -124,7 +124,7 @@ overscroll and clamp steps, and a settle is interruptible. PlayMode
 `PauseSheetTests` (real `FlightSession`, synthetic pointers): a two-finger tap on
 the sky pauses and raises the sheet at the first stop; joystick and throttle
 together never pause; pulling up reveals the settings and pulling down dismisses;
-the scrim tap and RESUME resume with the flight controls working again; the sheet's
+a scrim tap never resumes and RESUME does, with the flight controls working again; the sheet's
 buttons change mode and restart like the card; reduced motion puts the sheet at
 its stop at once; the sheet fits the screen and its buttons are touch targets.
 PlayMode `EntryStationsTests`: opens on the recommended station with the showcase
