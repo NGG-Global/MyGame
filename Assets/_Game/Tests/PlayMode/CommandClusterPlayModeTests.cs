@@ -282,10 +282,11 @@ namespace OpenSkies.Tests
             _touch.joystick.OnDrag(stick);
             lever.position += new Vector2(0f, 230f);
             _touch.throttle.OnDrag(lever);
-            yield return null;
+            // The stick is smoothed over a few physics steps (JoystickMath.Smooth): let it settle before comparing.
+            yield return new WaitForSeconds(0.5f);
             yield return new WaitForFixedUpdate();
+            var pilotBefore = _session.PilotControls; // what the aircraft gets, sampled before anything reads the router itself
             var before = _session.Router.Read(1f);
-            var pilotBefore = _session.PilotControls;
             Assert.That(before.Pitch, Is.GreaterThan(0.5f), "precondition: the stick is held back");
             Assert.That(before.Throttle, Is.GreaterThan(0.3f), "precondition: the throttle is up");
             Assert.That(pilotBefore.Pitch, Is.GreaterThan(0.1f), "precondition: the aircraft gets the stick");
