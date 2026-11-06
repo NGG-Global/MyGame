@@ -206,16 +206,16 @@ namespace OpenSkies.Tests
         }
 
         [UnityTest]
-        public IEnumerator ScrimTapAndResumeButton_Resume_AndTheFlightControlsWorkAgain()
+        public IEnumerator ScrimTapNeverResumes_TheResumeButtonDoes_AndTheFlightControlsWorkAgain()
         {
             yield return Build();
             yield return TwoFingerTapTheSky();
             _sheet.scrimButton.OnPointerClick(new PointerEventData(EventSystem.current));
             yield return null;
-            Assert.IsFalse(_modes.IsPaused, "a tap on the dimmed world resumes");
+            Assert.IsTrue(_modes.IsPaused, "a tap on the dimmed world is consumed: resuming is deliberate (docs/TAP_DISCLOSURE_DESIGN.md)");
+            Assert.IsTrue(_sheet.IsOpen);
+            Assert.AreEqual(0f, Time.timeScale);
 
-            yield return TwoFingerTapTheSky();
-            Assert.IsTrue(_modes.IsPaused);
             _sheet.buttons[0].OnPointerClick(new PointerEventData(EventSystem.current)); // RESUME
             yield return null;
             Assert.IsFalse(_modes.IsPaused);

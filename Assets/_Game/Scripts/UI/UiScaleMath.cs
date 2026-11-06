@@ -7,7 +7,7 @@ namespace OpenSkies.UI
     /// height (1080 reference units), so a scale s leaves 1080/s units of height and
     /// aspect × 1080/s of width; elements keep their sizes in units, so a larger
     /// scale means less room. The limits come from the layout's tightest places:
-    /// the action rail under the top bar, the SKIP/MENU column over the throttle,
+    /// the action rail under the top bar, the open command panel over the throttle,
     /// and the warning column between the joystick region and the rail.
     /// Plain C#, EditMode-tested; a PlayMode test checks the layout at the limit.
     /// </summary>
@@ -25,11 +25,11 @@ namespace OpenSkies.UI
             public float JoystickRegionRight;
             /// <summary>Top of the throttle's touch area above the bottom edge.</summary>
             public float ThrottleTop;
-            /// <summary>Lowest point of the top-right session buttons (MENU, SKIP) below the top edge.</summary>
+            /// <summary>Lowest point of the top-right command cluster (its open options panel) below the top edge.</summary>
             public float SessionColumnBottom;
             /// <summary>Top of the highest action rail slot above the bottom edge.</summary>
             public float RailTop;
-            /// <summary>Lowest point of the top bar (HUD profile, RESET, CAM) below the top edge.</summary>
+            /// <summary>Lowest point of the top bar (the command cluster's primary row) below the top edge.</summary>
             public float TopBarBottom;
             /// <summary>From the right edge to the left edge of the rail.</summary>
             public float RailLeftInset;
@@ -45,9 +45,9 @@ namespace OpenSkies.UI
         {
             JoystickRegionRight = joystickRegionRight,
             ThrottleTop = throttleTop,
-            SessionColumnBottom = -MissionUiFactory.SkipPosition.y + MissionUiFactory.SessionButtonSize.y,
+            SessionColumnBottom = CommandClusterLayout.ColumnBottom,
             RailTop = ContextualHudFactory.RailBase.y + ContextualHud.RailSlotCount * ContextualHudFactory.RailStep + ContextualHudFactory.RailButtonSize.y,
-            TopBarBottom = ContextualHudFactory.TopMargin + HudStyle.MinTouchTarget,
+            TopBarBottom = CommandClusterLayout.RowBottom,
             RailLeftInset = ContextualHudFactory.RailLeftInset,
             WarningWidth = ContextualHudFactory.WarningSize.x,
             WarningColumn = ContextualHudFactory.WarningColumn,

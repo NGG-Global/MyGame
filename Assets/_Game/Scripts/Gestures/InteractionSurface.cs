@@ -21,6 +21,10 @@ namespace OpenSkies.Gestures
     ///   so a finger on the joystick or throttle can never reach a gesture, and
     ///   focus loss, pauses and lost releases cancel gestures like any flight control.
     ///
+    /// - Dismiss: a transient interface is expanded (the <see cref="DisclosureCoordinator"/>
+    ///   knows which) and the press is outside it: the pointer is consumed here, a tap
+    ///   collapses the branch, and nothing underneath reacts.
+    ///
     /// It raises <see cref="GestureRaised"/>; it never produces flight input and
     /// never changes anything itself.
     /// </summary>
@@ -55,6 +59,7 @@ namespace OpenSkies.Gestures
         readonly GestureRecognizer[] _channels = new GestureRecognizer[RouteCount];
         readonly int[] _channelTargets = new int[RouteCount];
         PointerOwnership _ownership;
+        DisclosureCoordinator _disclosure;
         IPointerDownHandler _cockpitDown;
         IDragHandler _cockpitDrag;
         IPointerUpHandler _cockpitUp;
@@ -63,6 +68,13 @@ namespace OpenSkies.Gestures
         public string OwnerName => "Gestures";
         public int ActivePointers => _pointerCount;
         public PointerOwnership Ownership => _ownership;
+
+        /// <summary>
+        /// The one coordinator of expanded transient interfaces: owners register with it;
+        /// the surface asks it whether a press is outside the active branch and hands it the
+        /// collapsing tap. Created on first use, so it exists before Awake for the sessions.
+        /// </summary>
+        public DisclosureCoordinator Disclosure => _disclosure ?? (_disclosure = new DisclosureCoordinator());
 
         /// <summary>Share the touch controls' ownership table (one table for every touch consumer).</summary>
         public void Initialize(PointerOwnership ownership) => _ownership = ownership;
@@ -105,7 +117,9 @@ namespace OpenSkies.Gestures
 
         void OnApplicationFocus(bool hasFocus)
         {
-            if (!hasFocus) CancelAll();
+            if (hasFocus) return;
+            CancelAll();
+            _disclosure?.OnFocusLost();
         }
 
         void OnApplicationPause(bool paused)
@@ -144,6 +158,7 @@ namespace OpenSkies.Gestures
         {
             if (!_initialized) return;
             TryRebuildChannels();
+            _disclosure?.Tick(Time.unscaledDeltaTime);
             float now = Time.unscaledTime;
             for (int r = 0; r < RouteCount; r++)
             {
@@ -169,8 +184,10 @@ namespace OpenSkies.Gestures
             if (_ownership.IsOwned(id) || IndexOf(id) >= 0) return; // a flight control or HUD element has it
             if (_pointerCount >= MaxPointers) return;
 
+            // A press on the open surface while something is expanded and it lands outside: the dismissing tap.
+            bool outside = requested == InteractionRoute.None && !Blocked && _disclosure != null && _disclosure.WantsOutsideTap(eventData.position);
             int target = NoTarget;
-            if (GestureFirst && TargetResolver != null && (requested == InteractionRoute.None || requested == InteractionRoute.HudBand))
+            if (!outside && GestureFirst && TargetResolver != null && (requested == InteractionRoute.None || requested == InteractionRoute.HudBand))
                 target = TargetResolver(eventData.position);
             var route = InteractionRouter.Decide(new RouteContext
             {
@@ -179,6 +196,7 @@ namespace OpenSkies.Gestures
                 CockpitView = CockpitView,
                 Blocked = Blocked,
                 OnTarget = target != NoTarget && requested == InteractionRoute.None,
+                OutsideActiveDisclosure = outside,
             });
             if (route == InteractionRoute.None) return;
 
@@ -273,6 +291,9 @@ namespace OpenSkies.Gestures
             int target = _channelTargets[(int)route];
             while (channel.TryDequeue(out var e))
             {
+                // The dismissing tap acts here, so no session wiring can forget it; anything else on that pointer does nothing.
+                if (route == InteractionRoute.Dismiss && e.Kind == GestureKind.Tap && e.Type == GestureEventType.Completed)
+                    _disclosure?.OutsideTap(e.Position);
                 GestureRaised?.Invoke(route, e, target);
                 if (e.Type == GestureEventType.Completed || e.Type == GestureEventType.Cancelled)
                     _channelTargets[(int)route] = NoTarget;

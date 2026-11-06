@@ -94,7 +94,7 @@ namespace OpenSkies.Tests
             _touch = TouchControlsFactory.Build(safeArea, font);
             _touch.visibility = TouchControlsVisibility.Always;
             _panel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset, _surface);
-            var viewControls = CockpitFocusPanelFactory.BuildViewControls(safeArea, font);
+            var viewControls = CommandClusterFactory.BuildLookForward(safeArea, font);
             var hud = ContextualHudFactory.Build(safeArea, font);
             hud.SetMotionPreference(MotionPreference.Reduced);
             _gestureHud = GestureHudFactory.Build(safeArea, font, _surface);

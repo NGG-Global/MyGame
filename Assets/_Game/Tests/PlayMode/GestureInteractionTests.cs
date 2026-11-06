@@ -35,6 +35,7 @@ namespace OpenSkies.Tests
         TouchFlightControls _touch;
         ContextualHud _hud;
         GestureHud _gestureHud;
+        CommandCluster _cluster;
         InteractionSurface _surface;
         CameraRig _camera;
         float _width;
@@ -83,6 +84,7 @@ namespace OpenSkies.Tests
             _hud = ContextualHudFactory.Build(safeArea, font);
             _hud.SetMotionPreference(MotionPreference.Reduced);
             _gestureHud = GestureHudFactory.Build(safeArea, font, _surface);
+            _cluster = CommandClusterFactory.Build(safeArea, font);
 
             var sessionGo = new GameObject("FlightSession");
             sessionGo.SetActive(false);
@@ -95,10 +97,14 @@ namespace OpenSkies.Tests
             _session.contextualHud = _hud;
             _session.interactionSurface = _surface;
             _session.gestureHud = _gestureHud;
+            _session.commandCluster = _cluster;
             _session.rememberHudPreferences = false;
             _session.homeRunway = new RunwayInfo(Vector3.zero, 0f, 2000f, 30f);
             _session.SetControlSource(new ScriptedControls());
             sessionGo.SetActive(true);
+            // These tests exercise the M13/M14 pull gestures, which remain as the development comparison
+            // (docs/TAP_DISCLOSURE_DESIGN.md, milestone 2); the tap-first wheel has its own tests.
+            _session.SetPullGestureComparison(true);
             _gestureHud.SetReducedMotion(true);
             Canvas.ForceUpdateCanvases();
 
@@ -127,17 +133,8 @@ namespace OpenSkies.Tests
             return HandleCentre + GestureMath.FromAngle(model.SlotAngle(slot)) * radius;
         }
 
-        int SlotOf(ContextAction action)
-        {
-            int slot = 0;
-            for (int a = 0; a < ContextActions.Count; a++)
-            {
-                if ((_session.AvailableActions & (1 << a)) == 0) continue;
-                if ((ContextAction)a == action) return slot;
-                slot++;
-            }
-            return -1;
-        }
+        /// <summary>The wheel's slot of an action (the switch panel sits after FLAPS).</summary>
+        int SlotOf(ContextAction action) => _session.Gestures.SlotOf(action);
 
         /// <summary>Presses on the handle and drags along a path of screen points, a frame between each.</summary>
         IEnumerator PullHandle(int pointerId, params Vector2[] path)
@@ -210,6 +207,7 @@ namespace OpenSkies.Tests
         public IEnumerator Legacy_RoutesNothingButTheCockpit_AndShowsTheRail()
         {
             yield return Build();
+            Assert.IsTrue(_session.Gestures.PullGestures, "the comparison is on in this fixture (a development build or the Editor)");
             Assert.IsFalse(_hud.LegacyRailEnabled);
             Assert.IsFalse(_hud.systemsGroup.blocksRaycasts, "SYSTEMS is off in the gesture-first interface");
             Assert.IsTrue(_gestureHud.handleGroup.blocksRaycasts);
@@ -419,12 +417,16 @@ namespace OpenSkies.Tests
         }
 
         [UnityTest]
-        public IEnumerator ProfileButton_StillCyclesTheProfile()
+        public IEnumerator CommandClusterSelector_IsTheTapTwinOfTheBand()
         {
             yield return Build();
-            _hud.profileButton.OnPointerClick(new PointerEventData(EventSystem.current));
+            var tap = new PointerEventData(EventSystem.current);
+            _cluster.optionsButton.OnPointerClick(tap);
+            _cluster.hudRow.OnPointerClick(tap);
+            _cluster.profileButtons[CommandClusterModel.IndexOf(HudProfile.Detailed)].OnPointerClick(tap);
             yield return null;
-            Assert.AreEqual(HudProfile.Detailed, _session.ActiveHudProfile, "the conventional fallback works beside the gesture");
+            Assert.AreEqual(HudProfile.Detailed, _session.ActiveHudProfile, "the tappable selector works beside the gesture");
+            Assert.IsFalse(_session.Commands.IsOpen);
         }
 
         // ---- Camera -------------------------------------------------------------------------------

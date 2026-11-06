@@ -76,6 +76,12 @@ namespace OpenSkies.UI
             var scrim = root.gameObject.AddComponent<Image>();
             scrim.color = new Color(0f, 0f, 0f, 0.55f);
             scrim.raycastTarget = true; // takes every touch around the panel
+            // A tap on the dimmed world collapses the settings to the pause menu or the entry screen underneath.
+            var scrimButton = root.gameObject.AddComponent<HudButton>();
+            scrimButton.background = null;
+            scrimButton.pressScale = 1f;
+            scrimButton.feedback = UiFeedback.None;
+            screen.scrimButton = scrimButton;
 
             var panel = NewRect("Panel", root);
             panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
@@ -83,6 +89,12 @@ namespace OpenSkies.UI
             var background = panel.gameObject.AddComponent<Image>();
             background.color = HudStyle.PanelSurface;
             background.raycastTarget = true;
+            // The panel swallows the presses between its rows: uGUI events bubble to the parent otherwise,
+            // and the scrim's tap handler would close the settings from a tap on the panel itself.
+            var panelCatch = panel.gameObject.AddComponent<HudButton>();
+            panelCatch.background = null;
+            panelCatch.pressScale = 1f;
+            panelCatch.feedback = UiFeedback.None;
             screen.panel = panel;
 
             screen.title = NewText("Title", panel, font, HudStyle.TitleSize, TextAnchor.MiddleLeft, HudStyle.TextPrimary);

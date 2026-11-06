@@ -375,6 +375,24 @@ namespace OpenSkies.Awareness
             return true;
         }
 
+        /// <summary>
+        /// The switch panel on the systems wheel (landing light, navigation lights, engine;
+        /// docs/TAP_DISCLOSURE_DESIGN.md) is relevant where a pilot reaches for those switches:
+        /// parked (engine, lights before taxi) and around the runway (the landing light for the
+        /// take-off and the landing). Pure.
+        /// </summary>
+        public static bool SwitchPanelRelevant(FlightPhase phase) =>
+            phase == FlightPhase.Parked || phase == FlightPhase.TakeoffRoll || phase == FlightPhase.InitialClimb
+            || phase == FlightPhase.Approach || phase == FlightPhase.Landing;
+
+        /// <summary>
+        /// How the switch panel is drawn on the wheel, by the same rules as the actions: in full
+        /// in the Detailed profile and, in Smart, where it is relevant; quiet otherwise. It is
+        /// never hidden: every system stays reachable by hand.
+        /// </summary>
+        public static Prominence SwitchPanelProminence(HudProfile profile, FlightPhase phase) =>
+            profile == HudProfile.Detailed || (profile == HudProfile.Smart && SwitchPanelRelevant(phase)) ? Prominence.Full : Prominence.Quiet;
+
         /// <summary>The Smart profile's action table (docs/CONTEXTUAL_UI.md).</summary>
         bool IsRelevant(ContextAction action, in DisclosureInput input)
         {

@@ -22,8 +22,9 @@ namespace OpenSkies.Gameplay
     /// the player's profile) and hands them to the aircraft, then
     /// updates flight awareness (phase of flight, warnings) from the latest
     /// telemetry. Each frame it handles session commands (reset, camera, systems,
-    /// HUD profile), decides HUD disclosure, runs the cockpit and feeds the HUD
-    /// and touch controls. Layers only meet here.
+    /// HUD profile, from the keys and the top-right command cluster), decides HUD
+    /// disclosure, runs the cockpit and feeds the HUD and touch controls. Layers only
+    /// meet here.
     ///
     /// <see cref="Systems"/> is the one authoritative state of the aircraft's
     /// switches and levers; every change (cockpit, contextual HUD, keyboard) goes
@@ -37,6 +38,10 @@ namespace OpenSkies.Gameplay
         public CameraRig cameraRig;
         public HudPresenter hud;
         public TouchFlightControls touchControls;
+
+        [Header("Command cluster")]
+        [Tooltip("Top right: camera, options (HUD profile, RESET, SETTINGS, SKIP TUTORIAL), pause and LOOK FWD.")]
+        public CommandCluster commandCluster;
 
         [Header("Contextual HUD")]
         public ContextualHud contextualHud;
@@ -61,7 +66,7 @@ namespace OpenSkies.Gameplay
         public CockpitRig cockpit;
         public CockpitInteractionManager cockpitInteraction;
         public CockpitFocusPanel focusPanel;
-        [Tooltip("LOOK FWD and other cockpit view controls in the top bar.")]
+        [Tooltip("LOOK FWD (the command cluster's contextual camera option). Taken from the command cluster when empty.")]
         public CockpitViewControls cockpitViewControls;
         public AircraftLightsView aircraftLights;
         [Tooltip("The airframe's moving parts (propeller, control surfaces, flaps, nosewheel); optional.")]
@@ -78,6 +83,8 @@ namespace OpenSkies.Gameplay
         public InteractionConfiguration interactionConfiguration;
         [Tooltip("Development: the interface at start. F4 or a tap on the gesture inspector switches; remembered with the HUD preferences.")]
         public InteractionMode interactionMode = InteractionMode.GestureFirst;
+        [Tooltip("Development comparison: the M13/M14 pull gestures on the systems handle instead of the tap-first wheel (F4 cycles: tap wheel, pull, legacy rail).")]
+        public bool pullGestureComparison;
         [Tooltip("Development: append each completed or cancelled gesture to interaction-diary.csv in the app's data folder (development builds only).")]
         public bool recordInteractionDiary;
         public GestureSession.Settings gestureSettings = new GestureSession.Settings();
@@ -86,6 +93,9 @@ namespace OpenSkies.Gameplay
         const float MetresPerNauticalMile = 1852f;
 
         IFlightControlSource _controls;
+        DisclosureCoordinator _coordinator;
+        int _flightSettingsLayer = DisclosureCoordinator.None;
+        CommandClusterSession _commands;
         GestureSession _gestures;
         GestureHints _hints;
         bool _hintsEnabled = true;
@@ -172,6 +182,14 @@ namespace OpenSkies.Gameplay
         };
 
         public FlightInputRouter Router => _router;
+        /// <summary>
+        /// The one coordinator of expanded transient interfaces (the arc, the panels, the pause
+        /// sheet, the settings): who is open, which tap collapses what. The surface consumes the
+        /// collapsing tap. Eligibility stays with <see cref="Disclosure"/> (the flight context).
+        /// </summary>
+        public DisclosureCoordinator Coordinator => _coordinator;
+        /// <summary>The top-right command cluster (null without one): camera, HUD profile, RESET, pause and the session actions.</summary>
+        public CommandClusterSession Commands => _commands;
         /// <summary>The authoritative switch and lever positions of the aircraft.</summary>
         public AircraftSystems Systems => _systems;
         public CockpitSession Cockpit => _cockpit;
@@ -238,6 +256,7 @@ namespace OpenSkies.Gameplay
 
         void Awake()
         {
+            if (cockpitViewControls == null && commandCluster != null) cockpitViewControls = commandCluster.lookForward;
             _devices = new KeyboardGamepadInputProvider();
             _router = new FlightInputRouter();
             _router.AddProvider(_devices);
@@ -264,12 +283,24 @@ namespace OpenSkies.Gameplay
             if (cameraRig != null && rememberCameraMode) cameraRig.SetMode(HudPreferences.LoadCameraMode(cameraRig.mode));
             _savedFieldOfView = cameraRig != null ? cameraRig.cockpitFieldOfView : 0f;
 
+            // One coordinator for everything the player expands; the surface owns it when there is one, so it can consume outside taps.
+            _coordinator = interactionSurface != null ? interactionSurface.Disclosure : new DisclosureCoordinator();
+            _coordinator.TransitionSeconds = contextualHud != null && contextualHud.ReducedMotion ? 0f : HudStyle.FadeSeconds;
+            if (flightSettings != null)
+                _flightSettingsLayer = _coordinator.Register("Flight settings", IsOnFlightSettings, CollapseFlightSettings);
+            if (commandCluster != null)
+            {
+                commandCluster.SetReducedMotion(contextualHud != null && contextualHud.ReducedMotion);
+                _commands = new CommandClusterSession(this, commandCluster, _coordinator);
+            }
+
             // The flap lever interaction is shared by the systems arc and the cockpit's lever: one model, one view, one commit path.
             _leverInteraction = new FlapsLeverInteraction(this, gestureHud != null ? gestureHud.lever : null, gestureHud);
             if (cockpit != null || cockpitInteraction != null || focusPanel != null || cockpitViewControls != null || aircraftLights != null)
             {
                 _cockpit = new CockpitSession(_systems, _gate, cockpit, cockpitInteraction, focusPanel, cockpitViewControls, aircraftLights, cameraRig,
                     touchControls != null ? touchControls.Ownership : null, AirspeedMarkingsFor(aircraftConfiguration, config.warnings), _instruments, _leverInteraction);
+                _cockpit.SetDisclosure(_coordinator);
                 _cockpit.screenHeightOverride = interactionSurface != null ? interactionSurface.screenHeightOverride : 0f;
                 _cockpit.PanelOpened += CloseFlightSettings; // one panel at a time in the free column
                 _cockpit.PauseRequested += RaisePauseRequested;
@@ -314,17 +345,24 @@ namespace OpenSkies.Gameplay
                 _gestures.SetReducedMotion(reduced);
                 if (rememberHudPreferences) interactionMode = HudPreferences.LoadInteractionMode(interactionMode);
                 _gestures.SetGestureFirst(interactionMode == InteractionMode.GestureFirst);
+                // The pull gestures remain only as a development comparison: never in a release build.
+                _gestures.SetPullComparisonAllowed(Debug.isDebugBuild);
+                if (rememberHudPreferences) pullGestureComparison = HudPreferences.LoadPullComparison(pullGestureComparison);
+                _gestures.SetPullGestures(pullGestureComparison);
                 _gestures.ModeChanged += OnInteractionModeChanged;
+                _gestures.PullGesturesChanged += OnPullComparisonChanged;
                 _gestures.PauseRequested += RaisePauseRequested;
                 _diary = new InteractionDiary { RecordToFile = recordInteractionDiary };
                 interactionSurface.GestureRaised += OnDiaryGesture;
                 _gestures.SetDiary(_diary);
                 if (flightSettings != null)
                 {
-                    var profileLabels = new string[FlightAssistProfiles.Count];
-                    for (int i = 0; i < profileLabels.Length; i++) profileLabels[i] = FlightAssistProfiles.Label((FlightAssistProfile)i);
-                    _gestures.RegisterSubOptions(ContextAction.Assistance, profileLabels, () => (int)_flight.Profile,
-                        i => { if (FlightAssistProfiles.IsValid(i)) SetAssistProfile((FlightAssistProfile)i); });
+                    // ASSIST's options: the settings card itself first (the action), then the profiles.
+                    var profileLabels = new string[FlightAssistProfiles.Count + 1];
+                    profileLabels[0] = "SETTINGS";
+                    for (int i = 0; i < FlightAssistProfiles.Count; i++) profileLabels[i + 1] = FlightAssistProfiles.Label((FlightAssistProfile)i);
+                    _gestures.RegisterSubOptions(ContextAction.Assistance, profileLabels, () => (int)_flight.Profile + 1,
+                        i => { if (i == 0) ToggleFlightSettings(); else if (FlightAssistProfiles.IsValid(i - 1)) SetAssistProfile((FlightAssistProfile)(i - 1)); });
                 }
                 if (focusPanel != null)
                 {
@@ -367,6 +405,19 @@ namespace OpenSkies.Gameplay
 
         /// <summary>Development: the gesture-first interface or the legacy rail. Presentation only; flight input is unaffected.</summary>
         public void SetInteractionMode(InteractionMode mode) => _gestures?.SetGestureFirst(mode == InteractionMode.GestureFirst);
+
+        void OnPullComparisonChanged(bool on)
+        {
+            pullGestureComparison = on;
+            if (rememberHudPreferences) HudPreferences.SavePullComparison(on);
+        }
+
+        /// <summary>Development comparison: the M13/M14 pull gestures on the handle instead of the tap-first wheel. Presentation only.</summary>
+        public void SetPullGestureComparison(bool on)
+        {
+            pullGestureComparison = on;
+            _gestures?.SetPullGestures(on);
+        }
 
         /// <summary>
         /// The player's gesture options: speed scales the holds, rests and pulls of the
@@ -419,11 +470,13 @@ namespace OpenSkies.Gameplay
                 _cockpit.Dispose();
             }
             _manipulation?.Dispose();
+            _commands?.Dispose();
             if (interactionSurface != null) interactionSurface.GestureRaised -= OnDiaryGesture;
             _diary?.Flush();
             if (_gestures != null)
             {
                 _gestures.ModeChanged -= OnInteractionModeChanged;
+                _gestures.PullGesturesChanged -= OnPullComparisonChanged;
                 _gestures.PauseRequested -= RaisePauseRequested;
                 _gestures.Dispose();
             }
@@ -445,16 +498,10 @@ namespace OpenSkies.Gameplay
 
         void OnEnable()
         {
-            if (hud != null)
-            {
-                hud.CameraToggleRequested += ToggleCamera;
-                hud.ResetRequested += ResetFlight;
-            }
             if (contextualHud != null)
             {
                 contextualHud.ActionRequested += OnContextAction;
                 contextualHud.SystemsToggleRequested += ToggleSystemsRail;
-                contextualHud.ProfileCycleRequested += CycleHudProfile;
             }
             if (flightSettings != null)
             {
@@ -467,16 +514,10 @@ namespace OpenSkies.Gameplay
 
         void OnDisable()
         {
-            if (hud != null)
-            {
-                hud.CameraToggleRequested -= ToggleCamera;
-                hud.ResetRequested -= ResetFlight;
-            }
             if (contextualHud != null)
             {
                 contextualHud.ActionRequested -= OnContextAction;
                 contextualHud.SystemsToggleRequested -= ToggleSystemsRail;
-                contextualHud.ProfileCycleRequested -= CycleHudProfile;
             }
             if (flightSettings != null)
             {
@@ -521,11 +562,7 @@ namespace OpenSkies.Gameplay
 
             var t = Telemetry;
             if (airframeView != null && aircraft != null) airframeView.Present(t, aircraft.Controls, Time.deltaTime);
-            if (hud != null)
-            {
-                hud.Present(t);
-                hud.ShowView(CurrentView == ViewMode.Cockpit);
-            }
+            if (hud != null) hud.Present(t);
             if (touchControls != null)
             {
                 touchControls.ShowThrottle(aircraft != null ? aircraft.Controls.Throttle : _router.Throttle);
@@ -534,6 +571,7 @@ namespace OpenSkies.Gameplay
             }
             // Gestures first: they may preview a HUD profile for this frame's disclosure.
             _gestures?.Update(CurrentView, Time.timeScale <= 0f, _hudProfile, _disclosure, _systems);
+            _commands?.Update(Time.timeScale <= 0f);
             _hints?.Tick(Time.unscaledTime);
             UpdateDisclosure(t, Time.deltaTime);
             _cockpit?.Update(t, _runway, CurrentView);
@@ -592,23 +630,37 @@ namespace OpenSkies.Gameplay
             SaveFlightSettings();
         }
 
-        /// <summary>Opens or closes the flight settings (ASSIST on the rail). Opening closes the cockpit panel.</summary>
+        /// <summary>
+        /// Opens or closes the flight settings (ASSIST on the rail or the arc: the trigger again
+        /// closes). Opening closes the cockpit panel. A tap outside the card closes it too, through
+        /// the coordinator; there is no close button.
+        /// </summary>
         public void ToggleFlightSettings()
         {
             if (flightSettings == null) return;
             if (flightSettings.IsOpen)
             {
-                flightSettings.Close();
+                CloseFlightSettings();
                 return;
             }
             _cockpit?.Close();
             flightSettings.Open(CurrentFlightSettings);
+            _coordinator.Open(_flightSettingsLayer);
         }
 
         public void CloseFlightSettings()
         {
-            if (flightSettings != null) flightSettings.Close();
+            if (flightSettings == null) return;
+            flightSettings.Close();
+            _coordinator?.NotifyClosed(_flightSettingsLayer);
         }
+
+        bool IsOnFlightSettings(Vector2 screenPoint) => flightSettings != null && flightSettings.IsOpen && ScreenRects.Contains(flightSettings.card, screenPoint);
+
+        void CollapseFlightSettings(DisclosureCollapseReason reason) => CloseFlightSettings();
+
+        /// <summary>Every expanded interface of the flight folds (a modal takes over, a mode ends). Nothing is applied.</summary>
+        public void CollapseTransients(DisclosureCollapseReason reason) => _coordinator?.CollapseAll(reason);
 
         void SaveFlightSettings()
         {
@@ -641,6 +693,12 @@ namespace OpenSkies.Gameplay
             return outcome;
         }
 
+        /// <summary>A hazardous change waiting for its confirmation (within the gate's window), if any.</summary>
+        public bool TryGetPendingSystemChange(out SystemChange change) => _gate.HasPending(Time.unscaledTime, out change);
+
+        /// <summary>Drops a change waiting for its confirmation (the selector or the wheel that asked for it closed). Nothing is applied.</summary>
+        public void ClearPendingSystemChange() => _gate.Clear();
+
         /// <summary>
         /// The player's motion preference for every panel this session owns (HUD fades,
         /// cockpit panel, view controls, flight settings, flying tips). Presentation only.
@@ -652,10 +710,12 @@ namespace OpenSkies.Gameplay
             bool reduced = contextualHud.ReducedMotion;
             if (focusPanel != null) focusPanel.SetReducedMotion(reduced);
             if (cockpitViewControls != null) cockpitViewControls.SetReducedMotion(reduced);
+            if (commandCluster != null) commandCluster.SetReducedMotion(reduced);
             if (flightSettings != null) flightSettings.SetReducedMotion(reduced);
             if (guidanceLine != null) guidanceLine.SetReducedMotion(reduced);
             _gestures?.SetReducedMotion(reduced);
             _manipulation?.SetReducedMotion(reduced);
+            if (_coordinator != null) _coordinator.TransitionSeconds = reduced ? 0f : HudStyle.FadeSeconds;
         }
 
         /// <summary>The player's HUD opacity on the HUD this session owns. Flight controls stay findable (see TouchFlightControls).</summary>
@@ -663,7 +723,7 @@ namespace OpenSkies.Gameplay
         {
             if (contextualHud != null) contextualHud.SetOpacity(opacity);
             if (gestureHud != null) gestureHud.SetOpacity(opacity);
-            if (hud != null) hud.SetOpacity(opacity);
+            if (commandCluster != null) commandCluster.SetOpacity(opacity);
             if (touchControls != null) touchControls.SetOpacityScale(opacity);
             if (cockpitViewControls != null) cockpitViewControls.SetOpacity(opacity);
         }
@@ -808,6 +868,7 @@ namespace OpenSkies.Gameplay
             _gestures?.OnReset();
             _manipulation?.OnReset();
             _leverInteraction?.Cancel();
+            _coordinator?.Reset(); // whatever was expanded folds; nothing waits for a confirmation
             if (cameraRig != null) cameraRig.SnapToTarget();
             FlightRestarted?.Invoke();
         }
@@ -820,7 +881,7 @@ namespace OpenSkies.Gameplay
             if (rememberHudPreferences) HudPreferences.SaveProfile(profile);
         }
 
-        /// <summary>Smart, then Detailed, then Cinematic.</summary>
+        /// <summary>Smart, then Detailed, then Cinematic (the H key; on screen the command cluster chooses directly).</summary>
         public void CycleHudProfile() => SetHudProfile(NextProfile(_hudProfile));
 
         public static HudProfile NextProfile(HudProfile profile) =>

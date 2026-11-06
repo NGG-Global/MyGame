@@ -46,6 +46,11 @@ namespace OpenSkies.UI
             surfaceImage.color = HudStyle.PanelSurface;
             surfaceImage.raycastTarget = true; // touches on the sheet never reach the world
             sheetView.surface = surfaceImage;
+            // ...and never bubble up to the scrim's tap handler either (uGUI looks for a handler up the hierarchy).
+            var sheetCatch = sheet.gameObject.AddComponent<HudButton>();
+            sheetCatch.background = null;
+            sheetCatch.pressScale = 1f;
+            sheetCatch.feedback = UiFeedback.None;
 
             // The grip band across the top: the drag hotspot, with a short bar as the affordance.
             var grip = NewRect("Grip", sheet);

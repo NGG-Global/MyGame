@@ -68,7 +68,7 @@ namespace OpenSkies.UI
         }
 
         public string HandleTitle => "SYSTEMS";
-        public string HandleText => "Pull up to unfold the aircraft systems. Slide onto one and release. Rest a moment for the lights.";
+        public string HandleText => "Tap to open the aircraft systems. Tap one to use it or to see its settings; tap outside to close.";
 
         public string ElementTitle(HudElement element) => _elementTitles[(int)element];
         public string ElementText(HudElement element) => _elementTexts[(int)element];

@@ -20,7 +20,7 @@ namespace OpenSkies.UI
         public Image accent;
         public Text label;
         public Text message;
-        [Tooltip("\"?\" when an explanation is available, \"×\" while it is shown.")]
+        [Tooltip("\"?\" when an explanation is available, \"–\" while it is shown (tap the message again, or outside it, to fold it).")]
         public Text detailGlyph;
         public HudMotionSettings motion = new HudMotionSettings();
 
@@ -29,6 +29,9 @@ namespace OpenSkies.UI
         public Color hintColor = HudStyle.Selected;
         public Color successColor = HudStyle.Active;
         public Color safetyColor = HudStyle.Caution;
+
+        const string DetailGlyph = "?";
+        const string DetailShownGlyph = "–"; // never an X: the message is its own trigger
 
         HudFade _fade;
         bool _reducedMotion, _initialized;
@@ -70,7 +73,7 @@ namespace OpenSkies.UI
             {
                 SetText(label, cue.Label);
                 SetText(message, cue.Text);
-                SetText(detailGlyph, cue.HasDetail ? (cue.ShowingDetail ? "×" : "?") : string.Empty);
+                SetText(detailGlyph, cue.HasDetail ? (cue.ShowingDetail ? DetailShownGlyph : DetailGlyph) : string.Empty);
                 if (cue.Tone != _shownTone)
                 {
                     _shownTone = cue.Tone;
