@@ -47,6 +47,7 @@ namespace OpenSkies.Tests
             var aircraft = TestAircraftFactory.CreateAircraft(_root.transform, new Vector3(0f, 0f, -500f), out var telemetry);
 
             ContextualHud hud = null;
+            FlightInfoCluster info = null;
             if (withHud)
             {
                 new GameObject("EventSystem", typeof(EventSystem)).transform.SetParent(_root.transform);
@@ -62,6 +63,7 @@ namespace OpenSkies.Tests
                 safeArea.offsetMin = safeArea.offsetMax = Vector2.zero;
                 hud = ContextualHudFactory.Build(safeArea, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
                 hud.motionPreference = MotionPreference.Full;
+                info = FlightInfoClusterFactory.Build(safeArea, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
             }
 
             var sessionGo = new GameObject("FlightSession");
@@ -71,6 +73,7 @@ namespace OpenSkies.Tests
             session.aircraft = aircraft;
             session.telemetry = telemetry;
             session.contextualHud = hud;
+            session.flightInfo = info;
             session.rememberHudPreferences = false; // tests never write player preferences
             session.homeRunway = new RunwayInfo(Vector3.zero, 0f, 2000f, 30f);
             if (controls != null) session.SetControlSource(controls);
@@ -127,13 +130,15 @@ namespace OpenSkies.Tests
             var session = CreateSession(controls, withHud: true);
             session.SetHudProfile(HudProfile.Smart);
             yield return new WaitForSeconds(2f);
-            var airspeed = session.contextualHud.dataItems[(int)HudElement.Airspeed];
-            Assert.AreEqual(0f, airspeed.alpha, 1e-3f, "nothing to read while parked");
+            var info = session.FlightInfo;
+            Assert.AreEqual(0, info.Model.CapsuleCount, "nothing to read while parked: the capsule is just its trigger");
 
             controls.Throttle = 1f;
             yield return new WaitForSeconds(4f);
             Assert.AreEqual(FlightPhase.TakeoffRoll, session.PhaseEstimator.Phase);
-            Assert.AreEqual(1f, airspeed.alpha, 1e-3f, "airspeed shown for the take-off roll");
+            Assert.AreEqual(HudElement.Airspeed, info.Model.CapsuleElement(0), "airspeed shown for the take-off roll, first in the capsule");
+            Assert.IsTrue(session.flightInfo.cells[0].gameObject.activeInHierarchy);
+            Assert.AreEqual(FlightInfoLevel.Collapsed, info.Level, "shown in the capsule, not by opening the cluster");
         }
 
         [UnityTest]

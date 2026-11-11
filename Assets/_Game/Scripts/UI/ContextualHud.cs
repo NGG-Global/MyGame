@@ -1,52 +1,25 @@
 using System;
 using OpenSkies.Awareness;
-using OpenSkies.FlightState;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace OpenSkies.UI
 {
     /// <summary>
-    /// Presents the contextual HUD decided by <see cref="DisclosureController"/>:
-    /// flight data, approach and navigation guides, warning banners and the
-    /// contextual action rail. It only reads state and raises requests; it never
-    /// changes the flight, and it never moves anything: every element has one
-    /// fixed home and disclosure only fades it in or out.
+    /// Presents the parts of the contextual HUD decided by <see cref="DisclosureController"/>
+    /// that are not the flight information: the warning banners, and the contextual action
+    /// rail with SYSTEMS (the legacy interface). The flight data and the approach and
+    /// navigation guides are the top-left flight information cluster
+    /// (<see cref="FlightInfoCluster"/>, docs/TAP_DISCLOSURE_DESIGN.md, milestone 4). It only
+    /// reads state and raises requests; it never changes the flight, and it never moves
+    /// anything: every element has one fixed home and disclosure only fades it in or out.
     ///
-    /// Built in code by <see cref="ContextualHudFactory"/>. Value text is cached
-    /// per number, so steady flight allocates nothing.
+    /// Built in code by <see cref="ContextualHudFactory"/>; steady flight allocates nothing.
     /// </summary>
     public sealed class ContextualHud : MonoBehaviour
     {
-        /// <summary>Flight data items are the first HUD elements: Airspeed to Groundspeed.</summary>
-        public const int DataItemCount = 5;
         public const int WarningSlotCount = FlightWarnings.Count;
         public const int RailSlotCount = ContextActions.Count;
-
-        [Header("Flight data (index = HudElement)")]
-        public CanvasGroup[] dataItems = new CanvasGroup[DataItemCount];
-        public Text[] dataValues = new Text[DataItemCount];
-
-        [Header("Approach guide")]
-        public CanvasGroup approachGuide;
-        public Text approachRunway;
-        public Text approachDistance;
-        public Text approachHeight;
-        public Image[] papiLights = new Image[ApproachGuidance.PapiLights];
-        [Tooltip("Shows where the extended centreline is: steer towards it.")]
-        public RectTransform lateralMarker;
-        [Tooltip("Marker travel either side of centre at full deflection, canvas units.")]
-        public float lateralHalfTravel = 70f;
-
-        [Header("Navigation guide")]
-        public CanvasGroup navigationGuide;
-        [Tooltip("Points towards the destination (the airfield or a mission checkpoint) relative to the nose.")]
-        public RectTransform navigationArrow;
-        public Text navigationDistance;
-        [Tooltip("Destination name, e.g. AIRFIELD or LIGHTHOUSE.")]
-        public Text navigationLabel;
-        [Tooltip("Course to steer to the destination, degrees.")]
-        public Text navigationBearing;
 
         [Header("Warnings, most urgent first")]
         public CanvasGroup[] warningSlots = new CanvasGroup[WarningSlotCount];
@@ -54,10 +27,6 @@ namespace OpenSkies.UI
         public Text[] warningLabels = new Text[WarningSlotCount];
         [Tooltip("Severity symbol on each banner (octagon: warning, triangle: caution), so severity is never colour alone.")]
         public Image[] warningIcons = new Image[WarningSlotCount];
-
-        [Header("Legibility")]
-        [Tooltip("Faint plates behind the flight data and guides (rounded at runtime).")]
-        public Image[] backings = new Image[0];
 
         [Header("Action rail and HUD buttons")]
         [Tooltip("Fixed slots, bottom up. Each available action keeps one slot for the whole session.")]
@@ -73,46 +42,21 @@ namespace OpenSkies.UI
         [Header("Look and motion")]
         public HudMotionSettings motion = new HudMotionSettings();
         public MotionPreference motionPreference = MotionPreference.FollowSystem;
-        [Tooltip("Opacity of receded (quiet) information in stable flight.")]
-        [Range(0.1f, 1f)] public float quietAlpha = 0.55f;
-        [Tooltip("Numbers refresh at this interval, s.")]
-        public float valueRefreshSeconds = 0.1f;
-        public Color valueColor = HudStyle.TextPrimary;
-        public Color alertValueColor = HudStyle.AlertValue;
         public Color warningColor = HudStyle.Warning;
         public Color cautionColor = HudStyle.Caution;
         public Color warningTextColor = Color.white;
         public Color cautionTextColor = HudStyle.TextOnAccent;
-        public Color papiWhite = new Color(1f, 1f, 1f, 0.95f);
-        public Color papiRed = new Color(0.92f, 0.16f, 0.12f, 0.95f);
-        public Color papiOff = new Color(1f, 1f, 1f, 0.2f);
 
         public event Action<ContextAction> ActionRequested;
         public event Action SystemsToggleRequested;
 
         const int NoValue = int.MinValue;
 
-        static readonly NumberStrings Integers = new NumberStrings(0, 999, v => v.ToString());
-        static readonly NumberStrings Altitudes = new NumberStrings(-100, 6000, v => (v * 10).ToString());     // tens of feet
-        static readonly NumberStrings VerticalSpeeds = new NumberStrings(-200, 200, v => NumberStrings.Signed(v * 50)); // 50 fpm steps
-        static readonly NumberStrings Headings = new NumberStrings(1, 360, NumberStrings.Heading);
-        static readonly NumberStrings NauticalMiles = new NumberStrings(0, 999, v => NumberStrings.Tenths(v) + " NM");
-        static readonly NumberStrings HeightsFeet = new NumberStrings(0, 500, v => (v * 10).ToString() + " FT");  // tens of feet
-        static readonly NumberStrings Runways = new NumberStrings(1, 36, v => "RWY " + v.ToString("00"));
-        static readonly NumberStrings Bearings = new NumberStrings(1, 360, v => NumberStrings.Heading(v) + "°");
-
-        HudFade[] _dataFades;
-        HudFade _approachFade, _navigationFade;
         HudFade[] _warningFades;
         HudFade[] _railFades;
         readonly ContextAction[] _slotAction = new ContextAction[RailSlotCount];
         readonly bool[] _slotUsed = new bool[RailSlotCount];
-        readonly int[] _shownValue = new int[DataItemCount];
-        readonly int[] _shownAlert = new int[DataItemCount];
         readonly int[] _slotWarning = new int[WarningSlotCount];
-        int _shownRunway = NoValue, _shownApproachDistance = NoValue, _shownApproachHeight = NoValue, _shownNavDistance = NoValue;
-        int _shownPapi = NoValue, _shownLateral = NoValue, _shownArrow = NoValue, _shownBearing = NoValue;
-        float _nextValueRefresh;
         float _opacity = 1f;
         bool _initialized, _actionsConfigured, _reducedMotion;
         bool _legacyRail = true;
@@ -125,8 +69,8 @@ namespace OpenSkies.UI
         public int WarningInSlot(int slot) => slot >= 0 && slot < WarningSlotCount && _slotWarning[slot] != NoValue ? _slotWarning[slot] : -1;
 
         /// <summary>
-        /// Shows or hides SYSTEMS and the rail. The flight data, the guides and the warnings
-        /// are unaffected: they belong to both interfaces.
+        /// Shows or hides SYSTEMS and the rail. The warnings (and the flight information
+        /// cluster) are unaffected: they belong to both interfaces.
         /// </summary>
         public void SetLegacyRailEnabled(bool enabled)
         {
@@ -139,7 +83,7 @@ namespace OpenSkies.UI
                 systemsGroup.interactable = enabled;
             }
         }
-        /// <summary>The player's HUD opacity (routine information and buttons; warnings are never dimmed).</summary>
+        /// <summary>The player's HUD opacity (the buttons; warnings are never dimmed).</summary>
         public float Opacity => _opacity;
 
         /// <summary>The action shown in a rail slot, if the slot is in use.</summary>
@@ -191,16 +135,13 @@ namespace OpenSkies.UI
         }
 
         /// <summary>
-        /// Dims routine information (flight data, guides) and the HUD buttons to the
-        /// player's opacity, 0.6-1. Warning banners always stay at full strength.
+        /// Dims the HUD buttons (the rail, SYSTEMS) to the player's opacity, 0.6-1. Warning
+        /// banners always stay at full strength. The flight information cluster has its own.
         /// </summary>
         public void SetOpacity(float opacity)
         {
             EnsureInitialized();
             _opacity = Mathf.Clamp(opacity, 0.2f, 1f);
-            for (int i = 0; i < DataItemCount; i++) _dataFades[i]?.SetOpacityScale(_opacity);
-            _approachFade?.SetOpacityScale(_opacity);
-            _navigationFade?.SetOpacityScale(_opacity);
             for (int i = 0; i < RailSlotCount; i++) _railFades[i]?.SetOpacityScale(_opacity);
             if (systemsGroup != null) systemsGroup.alpha = _legacyRail ? _opacity : 0f;
         }
@@ -218,16 +159,6 @@ namespace OpenSkies.UI
         {
             if (_initialized) return;
             _initialized = true;
-
-            _dataFades = new HudFade[DataItemCount];
-            for (int i = 0; i < DataItemCount; i++)
-            {
-                if (dataItems[i] != null) _dataFades[i] = new HudFade(dataItems[i], interactive: false);
-                _shownValue[i] = NoValue;
-                _shownAlert[i] = NoValue;
-            }
-            if (approachGuide != null) _approachFade = new HudFade(approachGuide, interactive: false);
-            if (navigationGuide != null) _navigationFade = new HudFade(navigationGuide, interactive: false);
 
             _warningFades = new HudFade[WarningSlotCount];
             for (int i = 0; i < WarningSlotCount; i++)
@@ -257,43 +188,20 @@ namespace OpenSkies.UI
         /// <summary>Runtime-generated sprites cannot be stored in a scene, so they are assigned here.</summary>
         void AssignSprites()
         {
-            for (int k = 0; k < papiLights.Length; k++) SetSprite(papiLights[k], HudSprites.Disc, sliced: false);
-            if (lateralMarker != null) SetSprite(lateralMarker.GetComponent<Image>(), HudSprites.Disc, sliced: false);
-            if (navigationArrow != null) SetSprite(navigationArrow.GetComponent<Image>(), HudSprites.Arrow, sliced: false);
             for (int k = 0; k < warningBackgrounds.Length; k++)
                 if (warningBackgrounds[k] != null && warningBackgrounds[k].sprite == null) HudStyle.Round(warningBackgrounds[k], HudStyle.BannerRadius);
-            for (int k = 0; k < backings.Length; k++)
-                if (backings[k] != null && backings[k].sprite == null) HudStyle.Round(backings[k], HudStyle.BannerRadius);
         }
 
-        static void SetSprite(Image image, Sprite sprite, bool sliced)
-        {
-            if (image == null || image.sprite != null) return;
-            image.sprite = sprite;
-            image.type = sliced ? Image.Type.Sliced : Image.Type.Simple;
-        }
-
-        /// <summary>Updates targets and text with the airfield as the destination. Call once per frame.</summary>
-        public void Present(in FlightTelemetry telemetry, in RunwayRelation runway, DisclosureController disclosure,
-            FlightWarningMonitor warnings, HudProfile profile) =>
-            Present(telemetry, runway, NavigationMath.FromRunway(runway, telemetry.HeadingDegrees), disclosure, warnings, profile);
-
-        /// <summary>Updates targets and text. Call once per frame; animation runs in LateUpdate.</summary>
-        public void Present(in FlightTelemetry telemetry, in RunwayRelation runway, in NavigationRelation navigation,
-            DisclosureController disclosure, FlightWarningMonitor warnings, HudProfile profile)
+        /// <summary>
+        /// Updates the banners (most urgent first) and the rail from the disclosure controller's
+        /// decisions. Call once per frame; animation runs in LateUpdate.
+        /// </summary>
+        public void Present(DisclosureController disclosure, FlightWarningMonitor warnings, HudProfile profile)
         {
             if (disclosure == null) return;
             EnsureInitialized();
-
             float fade = motion.FadeSeconds(_reducedMotion);
             float slide = motion.Slide(_reducedMotion);
-            bool refresh = Time.unscaledTime >= _nextValueRefresh;
-            if (refresh) _nextValueRefresh = Time.unscaledTime + valueRefreshSeconds;
-            int warningMask = warnings != null ? warnings.ActiveMask : 0;
-
-            PresentFlightData(telemetry, disclosure, warningMask, fade, slide, refresh);
-            PresentApproachGuide(runway, disclosure, fade, slide, refresh);
-            PresentNavigationGuide(navigation, disclosure, fade, slide, refresh);
             PresentWarnings(warnings, fade);
             PresentRail(disclosure, profile, fade, slide);
         }
@@ -302,148 +210,8 @@ namespace OpenSkies.UI
         {
             if (!_initialized) return;
             float dt = Time.unscaledDeltaTime;
-            for (int i = 0; i < _dataFades.Length; i++) _dataFades[i]?.Tick(dt);
-            _approachFade?.Tick(dt);
-            _navigationFade?.Tick(dt);
             for (int i = 0; i < _warningFades.Length; i++) _warningFades[i]?.Tick(dt);
             for (int i = 0; i < _railFades.Length; i++) _railFades[i]?.Tick(dt);
-        }
-
-        // ---- Flight data ------------------------------------------------------------
-
-        void PresentFlightData(in FlightTelemetry t, DisclosureController disclosure, int warningMask, float fade, float slide, bool refresh)
-        {
-            for (int i = 0; i < DataItemCount; i++)
-            {
-                var itemFade = _dataFades[i];
-                if (itemFade == null) continue;
-                var element = (HudElement)i;
-                itemFade.SetTarget(AlphaFor(disclosure.GetProminence(element)), fade, slide);
-                if (!itemFade.IsShown || dataValues[i] == null) continue;
-
-                if (refresh || _shownValue[i] == NoValue) ShowValue(i, t);
-                int alert = (warningMask & DisclosureController.RelatedWarnings(element)) != 0 ? 1 : 0;
-                if (alert != _shownAlert[i])
-                {
-                    _shownAlert[i] = alert;
-                    dataValues[i].color = alert == 1 ? alertValueColor : valueColor;
-                }
-            }
-        }
-
-        void ShowValue(int index, in FlightTelemetry t)
-        {
-            int quantised;
-            NumberStrings strings;
-            switch ((HudElement)index)
-            {
-                case HudElement.Airspeed:
-                    quantised = Mathf.Clamp(Mathf.RoundToInt(SoftLogic.Finite(t.IndicatedAirspeedKnots, 0f)), 0, 999);
-                    strings = Integers;
-                    break;
-                case HudElement.Altitude:
-                    quantised = Mathf.RoundToInt(Mathf.Clamp(SoftLogic.Finite(t.AltitudeFeet, 0f), -99999f, 99999f) / 10f);
-                    strings = Altitudes;
-                    break;
-                case HudElement.VerticalSpeed:
-                    quantised = Mathf.RoundToInt(Mathf.Clamp(SoftLogic.Finite(t.VerticalSpeedFeetPerMinute, 0f), -99999f, 99999f) / 50f);
-                    strings = VerticalSpeeds;
-                    break;
-                case HudElement.Heading:
-                    quantised = Mathf.RoundToInt(SoftLogic.Finite(t.HeadingDegrees, 0f)) % 360;
-                    if (quantised <= 0) quantised += 360; // compass cards show north as 360
-                    strings = Headings;
-                    break;
-                default:
-                    quantised = Mathf.Clamp(Mathf.RoundToInt(SoftLogic.Finite(t.GroundspeedKnots, 0f)), 0, 999);
-                    strings = Integers;
-                    break;
-            }
-            if (quantised == _shownValue[index]) return;
-            _shownValue[index] = quantised;
-            dataValues[index].text = strings.Get(quantised);
-        }
-
-        // ---- Guides -----------------------------------------------------------------
-
-        void PresentApproachGuide(in RunwayRelation runway, DisclosureController disclosure, float fade, float slide, bool refresh)
-        {
-            if (_approachFade == null) return;
-            _approachFade.SetTarget(AlphaFor(disclosure.GetProminence(HudElement.ApproachGuide)), fade, slide);
-            if (!_approachFade.IsShown || !runway.Valid || !(refresh || _shownRunway == NoValue)) return;
-
-            if (approachRunway != null && runway.Designator != _shownRunway)
-            {
-                _shownRunway = runway.Designator;
-                approachRunway.text = Runways.Get(runway.Designator);
-            }
-            int tenths = Mathf.Clamp(Mathf.RoundToInt(runway.DistanceToThresholdMetres / 185.2f), 0, 9999);
-            if (approachDistance != null && tenths != _shownApproachDistance)
-            {
-                _shownApproachDistance = tenths;
-                approachDistance.text = NauticalMiles.Get(tenths);
-            }
-            int tens = Mathf.Max(0, Mathf.RoundToInt(runway.HeightAboveThresholdMetres * FlightUnits.FeetPerMetre / 10f));
-            if (approachHeight != null && tens != _shownApproachHeight)
-            {
-                _shownApproachHeight = tens;
-                approachHeight.text = HeightsFeet.Get(tens);
-            }
-
-            int white = runway.GlidepathValid ? ApproachGuidance.PapiWhiteLights(runway.GlidepathAngleDegrees, disclosure.Settings) : -1;
-            if (white != _shownPapi)
-            {
-                _shownPapi = white;
-                for (int k = 0; k < papiLights.Length; k++)
-                {
-                    if (papiLights[k] == null) continue;
-                    papiLights[k].color = white < 0 ? papiOff : (k < white ? papiWhite : papiRed);
-                }
-            }
-
-            // The marker shows where the centreline is (opposite to the aircraft's offset).
-            float deviation = -ApproachGuidance.LateralDeviation(runway.CrossTrackMetres, disclosure.Settings);
-            int lateral = Mathf.RoundToInt(deviation * lateralHalfTravel);
-            if (lateralMarker != null && lateral != _shownLateral)
-            {
-                _shownLateral = lateral;
-                lateralMarker.anchoredPosition = new Vector2(lateral, 0f);
-            }
-        }
-
-        void PresentNavigationGuide(in NavigationRelation nav, DisclosureController disclosure, float fade, float slide, bool refresh)
-        {
-            if (_navigationFade == null) return;
-            _navigationFade.SetTarget(AlphaFor(disclosure.GetProminence(HudElement.NavigationGuide)), fade, slide);
-            if (!_navigationFade.IsShown || !nav.Valid) return;
-
-            if (navigationArrow != null)
-            {
-                // Whole degrees: the transform (and the canvas batch) changes only when the arrow visibly turns.
-                int relative = Mathf.RoundToInt(SoftLogic.Finite(nav.RelativeBearingDegrees, 0f));
-                if (relative != _shownArrow)
-                {
-                    _shownArrow = relative;
-                    navigationArrow.localRotation = Quaternion.Euler(0f, 0f, -relative); // UI rotation is counter-clockwise
-                }
-            }
-            // Cached names: the label changes only with the destination.
-            if (navigationLabel != null && nav.Target.Name != null && !ReferenceEquals(navigationLabel.text, nav.Target.Name))
-                navigationLabel.text = nav.Target.Name;
-            if (!(refresh || _shownNavDistance == NoValue)) return;
-            int tenths = Mathf.Clamp(Mathf.RoundToInt(nav.DistanceMetres / 185.2f), 0, 9999);
-            if (navigationDistance != null && tenths != _shownNavDistance)
-            {
-                _shownNavDistance = tenths;
-                navigationDistance.text = NauticalMiles.Get(tenths);
-            }
-            int bearing = Mathf.RoundToInt(SoftLogic.Finite(nav.BearingDegrees, 0f)) % 360;
-            if (bearing <= 0) bearing += 360; // compass cards show north as 360
-            if (navigationBearing != null && bearing != _shownBearing)
-            {
-                _shownBearing = bearing;
-                navigationBearing.text = Bearings.Get(bearing);
-            }
         }
 
         // ---- Warnings ---------------------------------------------------------------
@@ -523,9 +291,6 @@ namespace OpenSkies.UI
         }
 
         void OnSystemsClicked() => SystemsToggleRequested?.Invoke();
-
-        float AlphaFor(Prominence prominence) =>
-            prominence == Prominence.Full ? 1f : (prominence == Prominence.Quiet ? quietAlpha : 0f);
 
         public static string ActionLabel(ContextAction action, bool engaged)
         {

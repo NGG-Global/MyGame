@@ -9,7 +9,7 @@ controls.
 
 | Principle | How it is met |
 |---|---|
-| Instruments are the primary information | Six instruments on the panel; in cockpit view the HUD hides its flight data and navigation guide (`cockpitHasInstruments`, design pillar 4). Warnings still appear. |
+| Instruments are the primary information | Six instruments on the panel; in cockpit view the flight information capsule shows no readings and no navigation chip (`cockpitHasInstruments`, design pillar 4), a camera change folds its panel, and the readings stay one tap away on demand (`docs/TAP_DISCLOSURE_DESIGN.md`, milestone 4). Warnings, the approach lights, a mission checkpoint and a guide the player asked for still appear. |
 | No large duplicate overlays | One focus panel at a time, only on request, in the free column; it closes on any camera change. |
 | No precise taps | Every instrument and control has a pick volume larger than its visible part, plus a screen-space tolerance (6 % of the screen height). At the resting view each target is at least about 110 × 150 px on a 1080-px-high screen. |
 | Flight controls always accessible | The cockpit only receives touches no flight control or HUD element took, and never handles a pointer owned in the shared `PointerOwnership` table. Joystick, throttle and brake never move. |

@@ -101,7 +101,8 @@ namespace OpenSkies.Editor
             var aircraft = CreateAircraft(configuration, materials, out var cockpitAnchor, out var cockpit, out var lights, out var airframe);
             var cameraRig = CreateCamera(aircraft.transform, cockpitAnchor);
             var hud = CreateHud(cameraRig.ViewCamera, out var touchControls, out var contextualHud, out var cockpitInteraction, out var focusPanel,
-                out var commandCluster, out var flightSettings, out var guidanceLine, out var missionUi, out var interactionSurface, out var gestureHud);
+                out var commandCluster, out var flightSettings, out var guidanceLine, out var missionUi, out var interactionSurface, out var gestureHud,
+                out var flightInfo);
             var audioManager = CreateAudio();
             cockpitInteraction.cameraRig = cameraRig;
             CreateEventSystem();
@@ -117,6 +118,7 @@ namespace OpenSkies.Editor
             session.commandCluster = commandCluster;
             session.touchControls = touchControls;
             session.contextualHud = contextualHud;
+            session.flightInfo = flightInfo;
             session.cockpit = cockpit;
             session.cockpitInteraction = cockpitInteraction;
             session.focusPanel = focusPanel;
@@ -574,7 +576,7 @@ namespace OpenSkies.Editor
         static HudPresenter CreateHud(Camera viewCamera, out TouchFlightControls touchControls, out ContextualHud contextualHud,
             out CockpitInteractionManager cockpitInteraction, out CockpitFocusPanel focusPanel, out CommandCluster commandCluster,
             out FlightSettingsPanel flightSettings, out GuidanceLine guidanceLine, out MissionUi missionUi,
-            out InteractionSurface interactionSurface, out GestureHud gestureHud)
+            out InteractionSurface interactionSurface, out GestureHud gestureHud, out FlightInfoCluster flightInfo)
         {
             missionUi = new MissionUi();
             var canvasGo = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -608,7 +610,7 @@ namespace OpenSkies.Editor
             cockpitInteraction = cockpitGo.AddComponent<CockpitInteractionManager>();
             cockpitInteraction.surface = null; // routed by the interaction surface, not by its own raycast target
 
-            // Developer telemetry line, top-left below the player flight data and guides. Temporary (see HudPresenter).
+            // Developer telemetry line, top-left below the flight information cluster's open panel. Temporary (see HudPresenter).
             var readout = NewText("DeveloperReadout", safeArea, font, 26, TextAnchor.UpperLeft);
             var readoutRect = readout.rectTransform;
             readoutRect.anchorMin = new Vector2(0f, 1f);
@@ -649,7 +651,7 @@ namespace OpenSkies.Editor
             missionUi.Coach = MissionUiFactory.BuildCoachingPanel(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
             missionUi.Marker = MissionUiFactory.BuildCheckpointMarker(safeArea, font, viewCamera);
 
-            // Contextual HUD (flight data, guides, warnings, action rail, inspector),
+            // Contextual HUD (warnings, the legacy action rail, inspector),
             // built after the touch controls so it draws on top; it overlaps none of them.
             contextualHud = ContextualHudFactory.Build(safeArea, font);
 
@@ -657,6 +659,11 @@ namespace OpenSkies.Editor
             // lever, the density ladder and the explanation plate, over the contextual HUD and under
             // the mission UI (a modal card still dims and blocks everything).
             gestureHud = GestureHudFactory.Build(safeArea, font, interactionSurface);
+
+            // The top-left flight information cluster (the capsule, the panel of readings and guides, the
+            // focused reading; docs/TAP_DISCLOSURE_DESIGN.md, milestone 4), over the gesture HUD so it takes
+            // its own taps over the HUD band, and under the command cluster and the mission UI.
+            flightInfo = FlightInfoClusterFactory.Build(safeArea, font);
 
             // The top-right command cluster (camera, options, pause; LOOK FWD under the camera; the options panel
             // with the HUD profile and the session actions), over the HUDs; then the control highlights over the

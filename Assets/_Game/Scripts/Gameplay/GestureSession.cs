@@ -36,8 +36,10 @@ namespace OpenSkies.Gameplay
     /// The wheel and its focus are registered with the <see cref="DisclosureCoordinator"/>.
     ///
     /// The pull gestures of M13/M14 (pull to unfold, rest for a sub-arc, slide into the flap
-    /// lever) remain only as a development comparison (<see cref="PullGestures"/>). The HUD
-    /// band pull, the world gestures and the long press explanations are unchanged.
+    /// lever) remain only as a development comparison (<see cref="PullGestures"/>), and since
+    /// milestone 4 the HUD band's pull with them: the top left is the flight information
+    /// cluster, whose taps open it. The world gestures and the long press explanations are
+    /// unchanged; a held reading of the cluster resolves through <see cref="FlightInfoCluster.ElementAt"/>.
     /// </summary>
     public sealed class GestureSession : IDisposable
     {
@@ -296,6 +298,7 @@ namespace OpenSkies.Gameplay
         public void SetPullGestures(bool on)
         {
             on = on && _pullAllowed;
+            if (_hud != null) _hud.SetBandEnabled(on); // the HUD band's pull belongs to the same comparison
             if (_pull == on) return;
             _pull = on;
             CloseArc(DisclosureCollapseReason.Owner);
@@ -1423,39 +1426,34 @@ namespace OpenSkies.Gameplay
         /// <summary>The explainable HUD element under a screen point: a flight value, a guide or a warning banner, or -1.</summary>
         int FindTarget(Vector2 screenPoint)
         {
-            if (_contextualHud == null) return -1;
-            for (int k = 0; k < ContextualHud.WarningSlotCount; k++)
+            for (int k = 0; _contextualHud != null && k < ContextualHud.WarningSlotCount; k++)
             {
                 var slot = _contextualHud.warningSlots[k];
                 if (slot == null || slot.alpha < 0.5f) continue;
                 int warning = _contextualHud.WarningInSlot(k);
                 if (warning >= 0 && Contains((RectTransform)slot.transform, screenPoint)) return HudExplanations.WarningBase + warning;
             }
-            for (int i = 0; i < ContextualHud.DataItemCount; i++)
+            // A reading or a guide of the flight information cluster (the capsule's cells, or the open panel's tiles).
+            var info = _flight.flightInfo;
+            if (info != null)
             {
-                var item = _contextualHud.dataItems[i];
-                if (item != null && item.alpha > 0.05f && Contains((RectTransform)item.transform, screenPoint)) return i;
+                var element = info.ElementAt(screenPoint);
+                if (element != FlightInfoModel.NoElement) return (int)element;
             }
-            if (_contextualHud.approachGuide != null && _contextualHud.approachGuide.alpha > 0.05f && Contains((RectTransform)_contextualHud.approachGuide.transform, screenPoint))
-                return (int)HudElement.ApproachGuide;
-            if (_contextualHud.navigationGuide != null && _contextualHud.navigationGuide.alpha > 0.05f && Contains((RectTransform)_contextualHud.navigationGuide.transform, screenPoint))
-                return (int)HudElement.NavigationGuide;
             return -1;
         }
 
         RectTransform TargetRect(int target)
         {
-            if (_contextualHud == null) return null;
             if (target >= HudExplanations.WarningBase && target < HudExplanations.WarningBase + ContextualHud.WarningSlotCount)
             {
+                if (_contextualHud == null) return null;
                 for (int k = 0; k < ContextualHud.WarningSlotCount; k++)
                     if (_contextualHud.WarningInSlot(k) == target - HudExplanations.WarningBase && _contextualHud.warningSlots[k] != null)
                         return (RectTransform)_contextualHud.warningSlots[k].transform;
                 return null;
             }
-            if (target >= 0 && target < ContextualHud.DataItemCount) return _contextualHud.dataItems[target] != null ? (RectTransform)_contextualHud.dataItems[target].transform : null;
-            if (target == (int)HudElement.ApproachGuide) return _contextualHud.approachGuide != null ? (RectTransform)_contextualHud.approachGuide.transform : null;
-            if (target == (int)HudElement.NavigationGuide) return _contextualHud.navigationGuide != null ? (RectTransform)_contextualHud.navigationGuide.transform : null;
+            if (target >= 0 && target < HudElements.Count) return _flight.flightInfo != null ? _flight.flightInfo.RectOf((HudElement)target) : null;
             return null;
         }
 

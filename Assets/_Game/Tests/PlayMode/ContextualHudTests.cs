@@ -14,8 +14,9 @@ namespace OpenSkies.Tests
     /// <summary>
     /// The contextual HUD built by its factory next to the touch controls, driven
     /// by synthetic disclosure states. Proves layout, accessibility of the flight
-    /// controls, warnings in every profile, motion and rail behaviour. It does not
-    /// prove how it looks on a device.
+    /// controls, warnings in every profile, motion and rail behaviour. The flight data
+    /// and the guides are the flight information cluster (FlightInfoPlayModeTests). It
+    /// does not prove how it looks on a device.
     /// </summary>
     public class ContextualHudTests
     {
@@ -78,9 +79,6 @@ namespace OpenSkies.Tests
             Systems = new AircraftSystemsState { HasParkingBrake = true, ParkingBrakeSet = parkingBrake },
         };
 
-        static RunwayRelation OnFinal => RunwayGeometry.Evaluate(new RunwayInfo(Vector3.zero, 0f, 1500f, 30f),
-            new Vector3(20f, 150f, -3500f), 0f, 150f);
-
         [TestCase(1920f)] // 16:9 phone
         [TestCase(1440f)] // 4:3 tablet
         [TestCase(2400f)] // 20:9 phone
@@ -120,7 +118,7 @@ namespace OpenSkies.Tests
                 var phase = (FlightPhase)p;
                 warnings.Update(new FlightTelemetry { StallWarning = !FlightPhases.IsGroundPhase(phase) }, 0.02f);
                 disclosure.Update(Input(phase, profile, warnings.ActiveMask), 0.02f);
-                _hud.Present(default, OnFinal, disclosure, warnings, profile);
+                _hud.Present(disclosure, warnings, profile);
                 yield return null;
 
                 string where = profile + " / " + phase;
@@ -147,23 +145,24 @@ namespace OpenSkies.Tests
             float end = Time.realtimeSinceStartup + 0.5f;
             while (Time.realtimeSinceStartup < end)
             {
-                _hud.Present(stalled, default, disclosure, warnings, HudProfile.Cinematic);
+                _hud.Present(disclosure, warnings, HudProfile.Cinematic);
                 yield return null;
             }
 
             Assert.AreEqual(1f, _hud.warningSlots[0].alpha, 1e-3f, "warning banner shown");
             Assert.AreEqual("STALL", _hud.warningLabels[0].text);
             Assert.IsFalse(_hud.warningSlots[0].blocksRaycasts, "a banner never takes touches");
-            Assert.AreEqual(1f, _hud.dataItems[(int)HudElement.Airspeed].alpha, 1e-3f, "airspeed revealed by the stall warning");
-            Assert.AreEqual(0f, _hud.dataItems[(int)HudElement.Altitude].alpha, 1e-3f, "routine information stays hidden");
-            Assert.AreEqual("48", _hud.dataValues[(int)HudElement.Airspeed].text);
+            Assert.AreEqual(Prominence.Full, disclosure.GetProminence(HudElement.Airspeed), "airspeed revealed by the stall warning (shown by the flight information cluster)");
+            Assert.AreEqual(Prominence.Hidden, disclosure.GetProminence(HudElement.Altitude), "routine information stays hidden");
         }
 
         [Test]
         public void Fade_IsShortEasedAndRisesIntoPlace()
         {
             Build();
-            var group = _hud.dataItems[0];
+            var element = new GameObject("FadedElement", typeof(RectTransform), typeof(CanvasGroup));
+            element.transform.SetParent(_canvas, false);
+            var group = element.GetComponent<CanvasGroup>();
             var fade = new HudFade(group, interactive: false);
             var home = fade.Home;
 
@@ -188,13 +187,14 @@ namespace OpenSkies.Tests
             _hud.SetMotionPreference(MotionPreference.Reduced);
             Assert.IsTrue(_hud.ReducedMotion);
             var disclosure = new DisclosureController();
-            disclosure.Update(Input(FlightPhase.Climb, HudProfile.Smart), 0.02f);
-            var home = ((RectTransform)_hud.dataItems[0].transform).anchoredPosition;
+            disclosure.Update(Input(FlightPhase.Parked, HudProfile.Smart), 0.02f);
+            var slot = _hud.railSlots[_hud.SlotOf(ContextAction.ParkingBrake)];
+            var home = ((RectTransform)slot.transform).anchoredPosition;
 
-            _hud.Present(default, default, disclosure, null, HudProfile.Smart);
+            _hud.Present(disclosure, null, HudProfile.Smart);
 
-            Assert.AreEqual(1f, _hud.dataItems[(int)HudElement.Airspeed].alpha, 1e-5f, "shown at once");
-            Assert.AreEqual(home, ((RectTransform)_hud.dataItems[0].transform).anchoredPosition);
+            Assert.AreEqual(1f, slot.GetComponent<CanvasGroup>().alpha, 1e-5f, "shown at once");
+            Assert.AreEqual(home, ((RectTransform)slot.transform).anchoredPosition, "no rise into place");
         }
 
         [Test]
@@ -209,7 +209,7 @@ namespace OpenSkies.Tests
 
             var disclosure = new DisclosureController();
             disclosure.Update(Input(FlightPhase.Parked, HudProfile.Smart), 0.02f);
-            _hud.Present(default, default, disclosure, null, HudProfile.Smart);
+            _hud.Present(disclosure, null, HudProfile.Smart);
             var group = _hud.railSlots[parkSlot].GetComponent<CanvasGroup>();
             Assert.IsTrue(group.blocksRaycasts, "visible: takes touches while it fades in");
 
@@ -230,7 +230,7 @@ namespace OpenSkies.Tests
             Build();
             var disclosure = new DisclosureController();
             disclosure.Update(Input(FlightPhase.Cruise, HudProfile.Smart), 0.02f);
-            _hud.Present(default, default, disclosure, null, HudProfile.Smart);
+            _hud.Present(disclosure, null, HudProfile.Smart);
             var button = _hud.railSlots[_hud.SlotOf(ContextAction.Navigation)];
             var group = button.GetComponent<CanvasGroup>();
             Assert.IsTrue(group.blocksRaycasts, "navigation offered in cruise");
@@ -239,13 +239,13 @@ namespace OpenSkies.Tests
             for (int i = 0; i < 250; i++) // 5 s on approach: the controller no longer offers navigation
             {
                 disclosure.Update(Input(FlightPhase.Approach, HudProfile.Smart), 0.02f);
-                _hud.Present(default, default, disclosure, null, HudProfile.Smart);
+                _hud.Present(disclosure, null, HudProfile.Smart);
             }
             Assert.IsFalse(disclosure.IsActionVisible(ContextAction.Navigation));
             Assert.IsTrue(group.blocksRaycasts, "still there while pressed");
 
             button.OnPointerUp(new PointerEventData(EventSystem.current) { pointerId = 5 });
-            _hud.Present(default, default, disclosure, null, HudProfile.Smart);
+            _hud.Present(disclosure, null, HudProfile.Smart);
             Assert.IsFalse(group.blocksRaycasts, "released: now it can go");
         }
 
@@ -255,7 +255,7 @@ namespace OpenSkies.Tests
             Build();
             var disclosure = new DisclosureController();
             disclosure.Update(Input(FlightPhase.Parked, HudProfile.Cinematic, parkingBrake: true), 0.02f);
-            _hud.Present(default, default, disclosure, null, HudProfile.Cinematic);
+            _hud.Present(disclosure, null, HudProfile.Cinematic);
             var button = _hud.railSlots[_hud.SlotOf(ContextAction.ParkingBrake)];
             Assert.IsTrue(button.GetComponent<CanvasGroup>().blocksRaycasts);
             Assert.IsTrue(button.Engaged);

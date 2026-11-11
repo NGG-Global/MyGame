@@ -47,7 +47,7 @@ Do not explain the gestures before section A. Explain them before section B.
 | B5 | Start the lever, move to 30°, move sideways to cancel, release. | Flaps unchanged; the cancel state is obvious |
 | B6 | Pull, rest in the open arc for a second: the outer ring. Release on LDG LIGHT. | The ring is found; the light toggles (check the exterior lights in the chase view) |
 | B7 | Tap the handle; hold the handle. | The arc shows itself and folds; the explanation appears while held |
-| B8 | Pull the HUD band down and up; release at different stops; release where you started. | The ladder reads; the HUD previews; the profile changes only on release at a new stop; the HUD button still works |
+| B8 | (Pull comparison only, since UI milestone 4.) Pull the HUD band down and up; release at different stops; release where you started. | The ladder reads; the HUD previews; the profile changes only on release at a new stop; the HUD selector still works |
 | B9 | Drag the sky in the chase view while flying straight; let go. Pinch. Double tap. | The view orbits and springs back; the aircraft does not react; pinch zooms within limits; double tap goes to the cockpit and the cockpit gestures work as before |
 | B10 | Hold a flight value; hold a warning banner when one appears (climb slowly to near a stall). | The plate explains; the banner stays; the stall warning's advice matches the coach's |
 | B11 | Mid-pull, pull down the notification shade, return. Mid-lever, press Home, return. | No stuck arc or lever; nothing applied; the next pull works |

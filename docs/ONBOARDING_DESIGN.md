@@ -162,7 +162,7 @@ let go").
 
 | Aid | Description |
 |---|---|
-| Navigation guide | The existing guide (top left) now shows a destination: an arrow relative to the nose, the destination name, the distance in NM and the course to steer (optional heading guidance). Default: the airfield on request (NAV), unchanged. |
+| Navigation guide | The guide (top left; since UI milestone 4 the flight information cluster's chip and navigation tile) shows a destination: an arrow relative to the nose, the destination name, the distance in NM and the course to steer (optional heading guidance). Default: the airfield on request (NAV), unchanged. |
 | Mission guides | A mission asks the disclosure controller for guides (`DisclosureInput.MissionGuides`) and rail actions (`MissionActions`). They show in every profile and view (the cockpit GPS does not show mission checkpoints); the player can still hide a guide; warnings still win; flight controls are untouched. |
 | Checkpoint marker | A small diamond with the landmark's name and distance over the active landmark, only while it is on screen; no marker on the runway approach. |
 | Landmark lights | The lighthouse lantern and the harbour light flash slowly while they are the active checkpoint: a believable navigation aid. |

@@ -239,6 +239,26 @@ build and result per step.
 | 7 | Change mode from the pause menu several times | No stuck sounds from the previous flight, no duplicated loops. |
 | 8 | Gesture-first: two-finger tap the sky, pull the sheet up and down, press Home at each stop, return | The sheet is where it was; RESUME and the scrim resume; nothing stuck (`docs/GESTURE_TEST_PLAN.md`, E). |
 
+### G. Stage 1 UI: the tap-first clusters (APK checkpoint; phone, then a 4:3 tablet)
+
+The four UI redesign milestones (`docs/TAP_DISCLOSURE_DESIGN.md`). Rebuild the scene first.
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Start in Free Flight, Smart, parked | Top left: only the gauge symbol (the capsule's trigger). Top right: camera, ⋯, pause. No other top-bar buttons. |
+| 2 | Take off and climb | The capsule shows IAS, then IAS, ALT, VS; it widens from its right end, nothing slides. The panel never opens by itself. |
+| 3 | Tap the capsule | The panel opens from the same corner: five readings, the airfield's distance and course. The gauge stays where it was. |
+| 4 | Tap ALT, then VS, then VS again | ALT enlarges with its explanation in the lower row; VS takes its place; VS again goes back to the panel. |
+| 5 | Keep flying with the stick and throttle, then tap the sky | Flying never folds the panel; the tap on the sky folds it and does not move the camera. |
+| 6 | Options ⋯ > HUD > DETAILED, then CINEMATIC | Detailed rests with IAS, ALT, VS in the capsule (never all five across the top); Cinematic with the gauge only. The cluster's open or folded state is never changed by the profile. |
+| 7 | SYSTEMS > NAV, then tap the capsule, then tap the sky | The capsule shows the destination arrow and distance; it is still there after the panel folds. |
+| 8 | Switch to the cockpit view with the panel open | The panel folds; the capsule shows no readings (the instruments do); a tap still opens the readings. |
+| 9 | Approach the runway in Smart | The capsule's chip shows the runway and the four lights; the panel's approach tile adds distance, height and the centreline cue. |
+| 10 | Stall the aircraft with the cluster folded, in Cinematic | The STALL banner appears and the airspeed appears in the capsule in the alert colour; the banner is never covered. |
+| 11 | Open the panel, then tap SYSTEMS, ⋯ or a cockpit instrument | The new cluster replaces the panel; no tap opens two clusters at once. |
+| 12 | Options ⋯ > RESET, once; then again after half a second | The first tap only asks for confirmation; the second resets. A tap outside instead never resets. |
+| 13 | Interface scale 110 % (Settings > Display) on the phone and the tablet | Nothing overlaps the joystick area, the throttle, the brake or a warning; the open panel stays above the joystick area. |
+
 ## 6. Known issues and limitations
 
 - **Unverified in Unity:** nothing has been played, built or tested inside Unity yet
@@ -263,7 +283,8 @@ build and result per step.
 - **Cockpit is a placeholder:** primitive shapes and flat dials (`docs/COCKPIT.md`
   lists the visual assets still to make). Flap values are untuned. On 4:3 tablets
   some cockpit controls sit under the action rail at the resting view.
-- **RESET has no confirmation:** an accidental tap restarts the flight.
+- **RESET** sits behind the command cluster's options and needs a second, deliberate tap (UI
+  milestone 3); the `R` key resets at once.
 - **Placeholder package name** `com.dor.openskies` must be replaced before any
   store upload.
 - **Leftover sample** `ScoreCounter` (Gameplay) is unused; delete when approved.

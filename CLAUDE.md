@@ -147,6 +147,19 @@ the cockpit, gestures, game modes, tutorials, visuals, audio, settings or perfor
   (RESET, SKIP) need a second tap between `confirmMinSeconds` and `confirmWindowSeconds`
   (`CommandClusterSettings`); every collapse drops a waiting confirmation, so dismissing the
   panel can never reset the flight. Keys are unchanged (`C`, `H`, `R`, Esc).
+- The top-left flight information cluster (`docs/TAP_DISCLOSURE_DESIGN.md`, milestone 4) replaces the
+  old flight data strip and guide plates; never add separate top-left plates back. Collapsed (the
+  capsule: the trigger, at most three readings, one guide chip), Expanded (the panel: every reading,
+  the navigation and approach details) and Focused (a reading or guide enlarged and explained in the
+  panel's lower row). What is eligible stays with `DisclosureController`; how far it is open is the
+  player's (`FlightInfoModel`, `FlightInfoSession`): a profile, phase or warning never opens or folds
+  it, and collapsing never changes a guide, the profile or the flight. The panel and its focus are
+  `DisclosureCoordinator` surfaces; a camera change, a pause and a reset fold it. Values come from
+  the session's telemetry (altitude with the subscale), `NavigationRelation` and `RunwayRelation`,
+  formatted only by `FlightReadouts`. Geometry lives in `FlightInfoLayout` (pure, EditMode-tested):
+  96-unit targets, the open panel above the joystick region (`TouchControlsFactory.JoystickRegionTop`,
+  known to `UiScaleMath`) and left of the command cluster's row. The HUD band's pull is part of the
+  development pull comparison only.
 - Visuals (M15): the project renders in **Linear** colour space with HDR and a global
   post-processing volume; the URP asset and the profile are made by `RenderPipelineSetup`
   (change it, not the assets). The aircraft, the terrain, the scenery and their textures

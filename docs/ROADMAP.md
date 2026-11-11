@@ -332,8 +332,31 @@ See `docs/TAP_DISCLOSURE_DESIGN.md`.
       the HUD profile chosen directly in a selector; RESET, SETTINGS and SKIP TUTORIAL as
       quieter session actions behind the options, RESET and SKIP with a deliberate second
       tap; EditMode and PlayMode tests
-- [ ] CI green for milestones 2 and 3
-- [ ] Owner: rebuild the scene (Open Skies > Rebuild Flight Prototype Scene); try the
-      cluster on a phone: reach, the ⋯ symbol, the pause disc's discoverability, the RESET
-      confirmation
-- [ ] Next: the top-left flight-information cluster; the tutorial redesign
+- [x] Milestone 4: the collapsible top-left flight information cluster: the capsule (the
+      trigger, the phase's essential readings, one guide chip), the panel (every reading, the
+      navigation and approach details) and the focused reading or guide with its explanation;
+      expansion independent of the HUD profile, the phase and the warnings; the cockpit view
+      starts quiet; a requested navigation guide survives collapsing; the HUD band's pull
+      moved to the development comparison; the scale limit knows the cluster; EditMode and
+      PlayMode tests at 4:3, 16:10, 16:9, 19.5:9 and 20:9
+- [ ] CI green for milestone 4 (`tests.yml`: "editmode test results", "playmode test results")
+- [ ] Owner: rebuild the scene (Open Skies > Rebuild Flight Prototype Scene); try both clusters
+      on a phone: reach, the ⋯ and gauge symbols, the pause disc's discoverability, the RESET
+      confirmation, the capsule at arm's length, finding the focus without the hint
+
+### Stage 1 APK checkpoint
+
+Stage 1 (milestones 1 to 4) is complete in code. To produce the checkpoint build:
+
+1. Merge the milestone 4 pull request once `tests.yml` is green on it.
+2. Run `build.yml` by manual dispatch on `main` with **Development build** on: it builds the
+   APK (artifact) and the WebGL player, and the `launch-test` job installs the APK on an
+   emulator and keeps logcat and screenshots. A release-style APK is the same dispatch with
+   the option off (no development overlays, no pull comparison).
+3. Before installing on a phone, check the `launch-test` artifact: the app reaches the entry
+   screen without "level0 is corrupted" or missing-script errors.
+4. On the device: `docs/PROTOTYPE_TEST_PLAN.md` section G (the four milestones), then the
+   device sections of `docs/GESTURE_TEST_PLAN.md`.
+
+- [ ] Stage 1 APK built and installed on a reference phone and a 4:3 tablet
+- [ ] Next (Stage 2): the tutorial redesign; final artwork and animation for both clusters

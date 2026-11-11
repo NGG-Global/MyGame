@@ -43,7 +43,12 @@ namespace OpenSkies.Gameplay
         [Tooltip("Top right: camera, options (HUD profile, RESET, SETTINGS, SKIP TUTORIAL), pause and LOOK FWD.")]
         public CommandCluster commandCluster;
 
+        [Header("Flight information")]
+        [Tooltip("Top left: the capsule, the panel of readings and guides, and the focused reading (docs/TAP_DISCLOSURE_DESIGN.md, milestone 4).")]
+        public FlightInfoCluster flightInfo;
+
         [Header("Contextual HUD")]
+        [Tooltip("Warning banners, the legacy action rail and SYSTEMS, the development inspector.")]
         public ContextualHud contextualHud;
         [Tooltip("Phase, warning and disclosure tuning. The defaults in code are used when empty.")]
         public FlightAwarenessConfiguration awarenessConfiguration;
@@ -96,6 +101,8 @@ namespace OpenSkies.Gameplay
         DisclosureCoordinator _coordinator;
         int _flightSettingsLayer = DisclosureCoordinator.None;
         CommandClusterSession _commands;
+        FlightInfoSession _info;
+        HudExplanations _explanations;
         GestureSession _gestures;
         GestureHints _hints;
         bool _hintsEnabled = true;
@@ -190,6 +197,10 @@ namespace OpenSkies.Gameplay
         public DisclosureCoordinator Coordinator => _coordinator;
         /// <summary>The top-right command cluster (null without one): camera, HUD profile, RESET, pause and the session actions.</summary>
         public CommandClusterSession Commands => _commands;
+        /// <summary>The top-left flight information cluster (null without one): the capsule, the panel and the focused reading.</summary>
+        public FlightInfoSession FlightInfo => _info;
+        /// <summary>What each reading, guide, warning and action means, from this aircraft's data (built once per session).</summary>
+        public HudExplanations Explanations => _explanations;
         /// <summary>The authoritative switch and lever positions of the aircraft.</summary>
         public AircraftSystems Systems => _systems;
         public CockpitSession Cockpit => _cockpit;
@@ -331,6 +342,14 @@ namespace OpenSkies.Gameplay
             if (flightSettings != null) flightSettings.SetReducedMotion(reduced);
             if (guidanceLine != null) guidanceLine.SetReducedMotion(reduced);
 
+            // One set of explanations for the long presses and the flight information's focused readings.
+            _explanations = new HudExplanations(envelope, config.warnings.flapExtendedSpeedKnots, _systems.MaxFlapDegrees);
+            if (flightInfo != null)
+            {
+                flightInfo.SetReducedMotion(reduced);
+                _info = new FlightInfoSession(flightInfo, _coordinator, _explanations);
+            }
+
             ApplyInteractionConfiguration();
 
             // Gesture-first interaction: one surface for every touch nothing else took, the cockpit routed through it.
@@ -339,7 +358,7 @@ namespace OpenSkies.Gameplay
                 var ownership = touchControls != null ? touchControls.Ownership : new PointerOwnership();
                 interactionSurface.Initialize(ownership);
                 if (cockpitInteraction != null) interactionSurface.SetCockpitTarget(cockpitInteraction);
-                var explanations = new HudExplanations(envelope, config.warnings.flapExtendedSpeedKnots, _systems.MaxFlapDegrees);
+                var explanations = _explanations;
                 _gestures = new GestureSession(this, interactionSurface, gestureHud, contextualHud, cameraRig, ownership, explanations, _systems, gestureSettings,
                     _leverInteraction);
                 _gestures.SetReducedMotion(reduced);
@@ -471,6 +490,7 @@ namespace OpenSkies.Gameplay
             }
             _manipulation?.Dispose();
             _commands?.Dispose();
+            _info?.Dispose();
             if (interactionSurface != null) interactionSurface.GestureRaised -= OnDiaryGesture;
             _diary?.Flush();
             if (_gestures != null)
@@ -572,6 +592,7 @@ namespace OpenSkies.Gameplay
             // Gestures first: they may preview a HUD profile for this frame's disclosure.
             _gestures?.Update(CurrentView, Time.timeScale <= 0f, _hudProfile, _disclosure, _systems);
             _commands?.Update(Time.timeScale <= 0f);
+            _info?.Update(Time.timeScale <= 0f, CurrentView);
             _hints?.Tick(Time.unscaledTime);
             UpdateDisclosure(t, Time.deltaTime);
             _cockpit?.Update(t, _runway, CurrentView);
@@ -711,6 +732,7 @@ namespace OpenSkies.Gameplay
             if (focusPanel != null) focusPanel.SetReducedMotion(reduced);
             if (cockpitViewControls != null) cockpitViewControls.SetReducedMotion(reduced);
             if (commandCluster != null) commandCluster.SetReducedMotion(reduced);
+            if (flightInfo != null) flightInfo.SetReducedMotion(reduced);
             if (flightSettings != null) flightSettings.SetReducedMotion(reduced);
             if (guidanceLine != null) guidanceLine.SetReducedMotion(reduced);
             _gestures?.SetReducedMotion(reduced);
@@ -722,6 +744,7 @@ namespace OpenSkies.Gameplay
         public void ApplyHudOpacity(float opacity)
         {
             if (contextualHud != null) contextualHud.SetOpacity(opacity);
+            if (flightInfo != null) flightInfo.SetOpacity(opacity);
             if (gestureHud != null) gestureHud.SetOpacity(opacity);
             if (commandCluster != null) commandCluster.SetOpacity(opacity);
             if (touchControls != null) touchControls.SetOpacityScale(opacity);
@@ -760,11 +783,13 @@ namespace OpenSkies.Gameplay
             };
             _disclosure.Update(input, deltaTime);
 
-            if (contextualHud == null) return;
             // The HUD shows the altitude the altimeter shows (subscale applied): one reading everywhere.
             var shown = t;
             shown.AltitudeFeet = SoftLogic.Finite(t.AltitudeFeet, 0f) + InstrumentSettings.BaroCorrectionFeet(_instruments.BaroHectopascals);
-            contextualHud.Present(shown, _runway, _navigation, _disclosure, _warnings, _hudProfile);
+            _info?.Present(shown, _runway, _navigation, _disclosure, _warnings.ActiveMask, input.DistanceToRunwayNm);
+
+            if (contextualHud == null) return;
+            contextualHud.Present(_disclosure, _warnings, _hudProfile);
             if (contextualHud.inspector != null) contextualHud.inspector.Present(_phase, _warnings, _disclosure, _hudProfile, view);
         }
 

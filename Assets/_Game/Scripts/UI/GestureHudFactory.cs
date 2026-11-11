@@ -9,7 +9,9 @@ namespace OpenSkies.UI
     /// units for the 1920 × 1080 reference inside the safe area:
     /// - The systems handle where SYSTEMS used to be (bottom right, left of the
     ///   throttle, above BRAKE): a 168 × 96 touch area with a quiet grip; the wheel's hub.
-    /// - The HUD band over the flight data strip (top left).
+    /// - The HUD band over the flight information's first row (top left), a target only in the
+    ///   pull comparison (development): the flight information cluster draws over it and takes its
+    ///   own taps (docs/TAP_DISCLOSURE_DESIGN.md, milestone 4).
     /// - The systems wheel centred on the handle (segments with a symbol, a label and a
     ///   state line; a focused action's options on the same band; the pull comparison's
     ///   outer ring), fitted to the screen at runtime by the session; the flap lever, the
@@ -21,9 +23,9 @@ namespace OpenSkies.UI
     {
         public static readonly Vector2 HandleSize = ContextualHudFactory.RailButtonSize;
         public static readonly Vector2 HandlePosition = ContextualHudFactory.RailBase;
-        /// <summary>The HUD band covers the five flight data slots and a little below them.</summary>
-        public static readonly Rect BandArea = new Rect(ContextualHudFactory.Margin, -ContextualHudFactory.TopMargin - 104f,
-            ContextualHud.DataItemCount * ContextualHudFactory.DataItemSpacing - (ContextualHudFactory.DataItemSpacing - ContextualHudFactory.DataItemSize.x), 104f);
+        /// <summary>The HUD band covers the flight information's first row (the trigger and the five reading tiles) and a little below it.</summary>
+        public static readonly Rect BandArea = new Rect(FlightInfoLayout.LeftMargin, -FlightInfoLayout.TopMargin - 104f,
+            FlightInfoLayout.Tile(FlightReadouts.ReadingCount - 1).xMax - FlightInfoLayout.LeftMargin, 104f);
         public static readonly Vector2 InspectorPosition = new Vector2(-ContextualHudFactory.Margin, -352f);
         public static readonly Vector2 InspectorSize = new Vector2(520f, 128f);
 

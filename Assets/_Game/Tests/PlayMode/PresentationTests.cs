@@ -103,6 +103,7 @@ namespace OpenSkies.Tests
             var touch = TouchControlsFactory.Build(safe, Font);
             var hud = ContextualHudFactory.Build(safe, Font);
             var coach = MissionUiFactory.BuildCoachingPanel(safe, Font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
+            var info = FlightInfoClusterFactory.Build(safe, Font);
             var cluster = CommandClusterFactory.Build(safe, Font);
             cluster.skipButton.gameObject.SetActive(true);
             Canvas.ForceUpdateCanvases();
@@ -112,7 +113,9 @@ namespace OpenSkies.Tests
             {
                 hud.systemsButton, coach, cluster.cameraButton, cluster.optionsButton, cluster.pauseButton, cluster.lookForward.lookForward,
                 cluster.panel, cluster.hudRow, cluster.resetButton, cluster.settingsButton, cluster.skipButton,
+                info.capsuleButton, info.panel, info.triggerButton, info.navigationTile, info.approachTile, info.focusButton, info.explanationButton,
             };
+            targets.AddRange(info.tiles);
             string at = $" at aspect {aspect:0.00}, scale {scale:0.000}";
             foreach (var target in targets)
             {
@@ -266,6 +269,10 @@ namespace OpenSkies.Tests
             var hud = ContextualHudFactory.Build(safe, Font);
             hud.SetMotionPreference(MotionPreference.Reduced);
             hud.SetOpacity(0.6f);
+            var info = FlightInfoClusterFactory.Build(safe, Font);
+            info.SetReducedMotion(true);
+            info.SetOpacity(0.6f);
+            var model = new FlightInfoModel();
             touch.SetOpacityScale(0.6f);
 
             var disclosure = new DisclosureController();
@@ -280,16 +287,20 @@ namespace OpenSkies.Tests
             };
             for (int i = 0; i < 80; i++)
             {
-                warnings.Update(new FlightTelemetry { StallWarning = true, AltitudeFeet = 3000f, HeightAboveGroundFeet = 3000f }, 0.02f);
+                var stalled = new FlightTelemetry { StallWarning = true, AltitudeFeet = 3000f, HeightAboveGroundFeet = 3000f };
+                warnings.Update(stalled, 0.02f);
                 input.WarningMask = warnings.ActiveMask;
                 disclosure.Update(input, 0.02f);
-                hud.Present(default, default, disclosure, warnings, HudProfile.Detailed);
+                model.Compose(disclosure, warnings.ActiveMask, false, true, true);
+                info.Present(model, stalled, default, default, disclosure.Settings);
+                hud.Present(disclosure, warnings, HudProfile.Detailed);
                 yield return null;
             }
 
             Assert.AreNotEqual(0, warnings.ActiveMask, "the stall warning is on");
             Assert.AreEqual(1f, hud.warningSlots[0].alpha, 1e-4f, "warnings are never dimmed");
-            Assert.That(hud.dataItems[(int)HudElement.Airspeed].alpha, Is.InRange(0.01f, 0.6f + 1e-4f), "routine data follows the opacity");
+            Assert.That(info.capsuleGroup.alpha, Is.InRange(0.01f, 0.6f + 1e-4f), "routine data (the flight information at rest) follows the opacity");
+            Assert.GreaterOrEqual(model.CapsuleCellOf(HudElement.Airspeed), 0, "the stall's airspeed is in the capsule");
             Assert.That(touch.EffectiveOpacity, Is.GreaterThanOrEqualTo(touch.opacity * touch.minimumOpacityShare - 1e-4f), "controls stay findable");
             Assert.IsNotNull(hud.warningIcons[0].sprite, "a severity symbol, not colour alone");
         }
