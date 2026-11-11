@@ -50,12 +50,15 @@ namespace OpenSkies.UI
         public Color gripOpen = new Color(0.16f, 0.2f, 0.24f, 0.7f);
 
         bool _gestureFirst = true, _reducedMotion, _initialized;
+        bool _bandEnabled;
         bool _held, _open, _back;
         float _opacity = 1f;
 
         public const string SystemsLabel = "SYSTEMS";
 
         public bool GestureFirst => _gestureFirst;
+        /// <summary>The HUD band takes touches (gesture-first with the pull comparison on; docs/TAP_DISCLOSURE_DESIGN.md, milestone 4).</summary>
+        public bool BandActive => _gestureFirst && _bandEnabled;
         public bool ReducedMotion => _reducedMotion;
 
         void Awake() => EnsureInitialized();
@@ -70,10 +73,21 @@ namespace OpenSkies.UI
             ApplyMode();
         }
 
-        /// <summary>Gesture-first on: the handle and the band take touches. Off (legacy): they are hidden and inert.</summary>
+        /// <summary>Gesture-first on: the handle (and the band, when enabled) take touches. Off (legacy): they are hidden and inert.</summary>
         public void SetGestureFirst(bool on)
         {
             _gestureFirst = on;
+            ApplyMode();
+        }
+
+        /// <summary>
+        /// The HUD band's pull (density preview) is a development comparison like the wheel's pull:
+        /// in the tap-first interface the top left belongs to the flight information cluster, whose
+        /// taps open it, and the HUD profile is chosen in the command cluster.
+        /// </summary>
+        public void SetBandEnabled(bool on)
+        {
+            _bandEnabled = on;
             ApplyMode();
         }
 
@@ -87,8 +101,8 @@ namespace OpenSkies.UI
             }
             if (bandGroup != null)
             {
-                bandGroup.blocksRaycasts = _gestureFirst;
-                bandGroup.interactable = _gestureFirst;
+                bandGroup.blocksRaycasts = BandActive;
+                bandGroup.interactable = BandActive;
             }
         }
 

@@ -261,10 +261,9 @@ namespace OpenSkies.Tests
                 keepClear.Add(Rect.MinMaxRect(centre - ContextualHudFactory.WarningSize.x * 0.5f, top - ContextualHudFactory.WarningSize.y,
                     centre + ContextualHudFactory.WarningSize.x * 0.5f, top));
             }
-            // The flight data strip (five items, top left) and the guides under it.
-            keepClear.Add(Rect.MinMaxRect(ContextualHudFactory.Margin, height - ContextualHudFactory.TopMargin - ContextualHudFactory.DataItemSize.y,
-                ContextualHudFactory.Margin + 4f * ContextualHudFactory.DataItemSpacing + ContextualHudFactory.DataItemSize.x, height - ContextualHudFactory.TopMargin));
-            keepClear.Add(Rect.MinMaxRect(ContextualHudFactory.Margin, height - 208f, 774f, height - 112f));
+            // The flight information cluster (top left): its widest capsule and its open panel.
+            keepClear.Add(FlightInfoLayout.InSafeArea(FlightInfoLayout.CapsuleHit(FlightInfoModel.MaxCapsuleReadings, true), safe));
+            keepClear.Add(FlightInfoLayout.InSafeArea(FlightInfoLayout.Panel, safe));
 
             var cluster = new System.Collections.Generic.List<Rect>
             {

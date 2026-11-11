@@ -691,6 +691,7 @@ namespace OpenSkies.Tests
             var touch = TouchControlsFactory.Build(safeArea, font);
             var panel = CockpitFocusPanelFactory.Build(safeArea, font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
             var hud = ContextualHudFactory.Build(safeArea, font);
+            var info = FlightInfoClusterFactory.Build(safeArea, font);
             var cluster = CommandClusterFactory.Build(safeArea, font);
             var view = cluster.lookForward;
             Canvas.ForceUpdateCanvases();
@@ -707,10 +708,10 @@ namespace OpenSkies.Tests
             Assert.AreEqual(camera.xMax, button.xMax, 0.01f, "aligned with the camera");
 
             var others = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton, hud.inspector,
-                hud.approachGuide, hud.navigationGuide, panel.systemCard, panel.instrumentCard,
+                info.capsuleButton, info.panel, panel.systemCard, panel.instrumentCard,
                 cluster.cameraButton, cluster.optionsButton, cluster.pauseButton };
             others.AddRange(hud.railSlots);
-            others.AddRange(hud.dataItems);
+            others.AddRange(info.tiles);
             others.AddRange(hud.warningSlots);
             foreach (var other in others)
                 Assert.IsFalse(button.Overlaps(WorldRect(other)), $"LOOK FWD overlaps {other.name} at width {width}");

@@ -15,7 +15,10 @@ short, restrained transitions. It never takes control away from the pilot.
    BRAKE follows weight on wheels (a physical fact), never the estimated phase.
 2. **Fixed homes.** Every HUD element and action has one position for the
    session. Disclosure only fades things in and out; nothing reflows or slides
-   across the screen.
+   across the screen. The flight information cluster (top left) has one corner: its
+   capsule widens or narrows from its right end as readings come and go, always in the
+   same order, and its panel opens from the same corner
+   (`docs/TAP_DISCLOSURE_DESIGN.md`, milestone 4).
 3. **Warnings override minimalism.** A warning banner appears in every profile,
    and the information related to it (airspeed for a stall) appears with it.
    Banners never take touches and are never modal.
@@ -39,17 +42,20 @@ AircraftTelemetry ──▶ FlightTelemetry ─┬─▶ FlightPhaseEstimator �
                                                         │
 FlightSession (Gameplay) ── DisclosureInput ──▶ DisclosureController ──▶ visibility + reasons
  profile, view, systems                                                  │
-                                                         ContextualHud (UI) ◀┘  fades, text, rail
-                                                         DisclosureInspector (development only)
+                         FlightInfoSession ── FlightInfoModel.Compose ◀──┤  capsule readings, guide chip
+                                         └──▶ FlightInfoCluster (UI)      │  capsule, panel, focus (milestone 4)
+                                                     ContextualHud (UI) ◀─┘  warnings, legacy rail
+                                                     DisclosureInspector (development only)
 ContextualHud ── requests (action, SYSTEMS, profile) ──▶ FlightSession ──▶ ParkingBrake (input provider) / DisclosureController
+FlightInfoCluster ── taps ──▶ FlightInfoSession ──▶ DisclosureCoordinator (open, focus, collapse; never a guide or the profile)
 ```
 
 | Assembly | Code | Notes |
 |---|---|---|
 | `OpenSkies.Awareness` (new, references FlightState only) | `FlightPhaseEstimator`, `FlightPhaseSettings`, `RunwayGeometry`, `FlightWarningMonitor`, `FlightWarningSettings`, `DisclosureController`, `DisclosureSettings`, `FlightAwarenessConfiguration` | Plain C#, deterministic, allocation-free per step. EditMode-tested with scripted telemetry. |
-| `OpenSkies.UI` | `ContextualHud`, `ContextualHudFactory`, `HudButton`, `HudFade`, `HudMotionSettings`, `NumberStrings`, `DisclosureInspector` | Reads awareness state, raises requests, never changes the flight. |
+| `OpenSkies.UI` | `ContextualHud`, `ContextualHudFactory` (warnings, legacy rail), `FlightInfoCluster`, `FlightInfoClusterFactory`, `FlightInfoModel`, `FlightInfoLayout`, `FlightReadouts` (the flight information cluster), `HudButton`, `HudFade`, `HudMotionSettings`, `NumberStrings`, `DisclosureInspector` | Reads awareness state, raises requests, never changes the flight. |
 | `OpenSkies.FlightInput` | `ParkingBrake` | An `IFlightInputProvider`: the latched brake reaches the aircraft through the router like any input. |
-| `OpenSkies.Gameplay` | `FlightSession`, `HudPreferences` | Runs awareness at the physics rate, disclosure per frame, routes requests. |
+| `OpenSkies.Gameplay` | `FlightSession`, `FlightInfoSession`, `HudPreferences` | Runs awareness at the physics rate, disclosure per frame, routes requests; the info session owns how far the cluster is open. |
 | `OpenSkies.Simulation` | `AircraftTelemetry` | Adds `HeightAboveGroundFeet` (radio-altimeter style raycast). The flight model is unchanged. |
 
 Phase estimation and warnings run in `FixedUpdate` on every telemetry sample, so
@@ -124,10 +130,12 @@ against recorded flights in the Editor with the inspector open.
 
 The command cluster's HUD selector (top right: options, HUD, then CINEMATIC, SMART or
 DETAILED directly) chooses a profile; **H** still cycles Smart → Detailed → Cinematic; in
-the gesture-first interface a pull on the HUD band previews and commits a profile
+the development pull comparison a pull on the HUD band previews and commits a profile
 (`docs/GESTURE_INTERACTION.md`): while the band is pulled, the disclosure controller
 runs with the previewed profile and the committed one is untouched until release. The
-choice is remembered (PlayerPrefs). Changing profile never affects flight input.
+choice is remembered (PlayerPrefs). Changing profile never affects flight input, and never
+opens or folds the flight information cluster: the profile decides what is eligible, the
+player decides how far the cluster is open.
 
 | | Cinematic | Smart (default) | Detailed |
 |---|---|---|---|
@@ -137,6 +145,13 @@ choice is remembered (PlayerPrefs). Changing profile never affects flight input.
 | Navigation guide | on request | on request (offered in climb, cruise, descent) | airborne, en route |
 | Action rail | engaged actions only, or SYSTEMS | contextual by phase | every available action |
 | Warnings and related data | always | always | always |
+
+Where it appears (milestone 4): the flight data and the guides this table makes visible
+are the content of the top-left flight information cluster's **capsule**, at most three
+readings (warning-related first, then IAS, ALT, VS, HDG, GS) and one guide chip (approach
+first). Detailed therefore rests with IAS, ALT and VS; HDG and GS are one tap away in the
+expanded panel, which offers every reading and the guides' details in every profile.
+Details and state transitions: `docs/TAP_DISCLOSURE_DESIGN.md`.
 
 The cockpit has readable instruments and a GPS map (`docs/COCKPIT.md`), so
 `cockpitHasInstruments` is on: in cockpit view the flight data and the navigation
@@ -185,12 +200,14 @@ approach. SYSTEMS stays open until closed. A reset clears guide choices.
 
 ## Guides
 
-- **Approach guide** (top left, under the flight data): runway, distance to the
+- **Approach guide** (the flight information cluster: the capsule's chip shows the
+  runway and the lights; the panel's approach tile shows everything): runway, distance to the
   threshold, height above the runway, four PAPI-style lights (more white = higher;
   two white and two red on a 3° path to an aim point 150 m beyond the threshold)
   and a centreline marker that shows where the centreline is (steer towards it).
   The light angles approximate a standard 3° installation and are configurable.
-- **Navigation guide**: an arrow pointing to the destination relative to the nose,
+- **Navigation guide** (the capsule's chip: arrow, destination, distance; the panel's
+  navigation tile adds the course): an arrow pointing to the destination relative to the nose,
   the destination's name (AIRFIELD by default), the distance in NM and the course to
   steer. A mode can set another destination (a mission checkpoint, a landmark).
 
@@ -230,8 +247,8 @@ appears. Banners are never dimmed by the HUD opacity setting.
 
 | Element | Position | Size |
 |---|---|---|
-| Flight data IAS, ALT, VS, HDG, GS | top left, x = 24 + 156·i, y = −16 | 148 × 84 each |
-| Approach guide / navigation guide | top left, y = −112 (x 24 / 474) | 430 × 96 / 300 × 96 |
+| Flight information capsule (trigger, up to three readings, one guide chip) | top left, x = 24, y = −16 (`FlightInfoLayout`) | 96 to 600 × 96 touch; pill 72 tall |
+| Flight information panel (transient: trigger, five reading tiles, navigation and approach details, or a focused reading and its explanation) | top left, x = 24 to 842, y = −16 to −212 | 818 × 196; tiles 140 × 96, lower row 376 + 436 × 96 |
 | Warning banners | anchor 56 % of the width, y = −250, −334, −418, −502 | 380 × 72 |
 | Command cluster, primary row (camera, options, pause; not part of disclosure) | top right, x = −24 to −344, y = −16 (`CommandClusterLayout`, `docs/TAP_DISCLOSURE_DESIGN.md`) | 112 / 96 / 96 × 96 touch; smaller visuals |
 | LOOK FWD (cockpit view, not part of disclosure) | under the camera (y = −120) | 112 × 96 touch, 104 × 52 visual |
@@ -250,8 +267,9 @@ appears. Banners are never dimmed by the HUD opacity setting.
 
 A PlayMode test checks at 4:3, 16:9 and 20:9 that no HUD target or banner
 overlaps the joystick region, the throttle or BRAKE, and that every target is at
-least 96 units tall. The development overlays (telemetry line, touch diagnostics)
-moved below the guides.
+least 96 units tall; the flight information cluster has its own checks at 4:3, 16:10,
+16:9, 19.5:9 and 20:9. The development overlays (telemetry line, touch diagnostics)
+sit below the flight information panel.
 
 **Touch safety.** HUD buttons fire only when a pointer is pressed and released on
 the same button (uGUI click semantics). A finger that started on a flight control
@@ -277,7 +295,8 @@ platforms have no built-in Unity API for this, so they use full motion unless th
 preference is Reduced. The preference is stored under the same key by the options
 store (`PlayerPrefsOptionsStore`).
 
-**HUD opacity** (Settings > Display, 60-100 %) scales routine information and the HUD
+**HUD opacity** (Settings > Display, 60-100 %) scales routine information (the flight
+information capsule; its open panel stays at full strength, like the command panel) and the HUD
 buttons. Warnings stay at full strength; the flight controls follow only part of the
 way (at least 80 % of their normal opacity). **Interface scale** (90-110 %) changes
 the canvas reference height; `UiScaleMath` limits it per screen so nothing overlaps
@@ -318,10 +337,12 @@ PlayMode (`Tests/PlayMode`):
   ratios; flight controls accessible and unmoved across every profile, phase and
   warning; warning shown in Cinematic; fade timing; reduced motion; rail taps;
   a pressed action is not hidden; engaged parking brake in Cinematic. The HUD profile's
-  tap control is tested with the command cluster (`CommandClusterPlayModeTests`).
+  tap control is tested with the command cluster (`CommandClusterPlayModeTests`), the
+  flight data and guides with the flight information cluster (`FlightInfoTests`,
+  `FlightInfoPlayModeTests`).
 - `FlightSessionDisclosureTests` (Rigidbody aircraft): Parked then Takeoff roll from
   physics telemetry; profile switching during the take-off roll keeps the controls;
-  airspeed shown on the take-off roll; parking brake holds at full power and
+  airspeed shown in the collapsed capsule on the take-off roll; parking brake holds at full power and
   releases; cannot be set in the air; reset clears awareness.
 
 What the tests do not show: how the HUD looks and reads on a phone, whether the

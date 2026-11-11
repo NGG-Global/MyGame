@@ -604,6 +604,7 @@ namespace OpenSkies.Tests
             var touch = TouchControlsFactory.Build(safe, Font);
             var coach = MissionUiFactory.BuildCoachingPanel(safe, Font, TouchControlsFactory.JoystickRegionRight, ContextualHudFactory.RailLeftInset);
             var hud = ContextualHudFactory.Build(safe, Font);
+            var info = FlightInfoClusterFactory.Build(safe, Font);
             var cluster = CommandClusterFactory.Build(safe, Font);
             cluster.skipButton.gameObject.SetActive(true);
             cluster.selectorLevel.gameObject.SetActive(true);
@@ -611,9 +612,9 @@ namespace OpenSkies.Tests
             string at = $" at aspect {aspect:0.00}, scale {scale:0.000}";
 
             // SYSTEMS stands where the gesture HUD's handle is (GestureHudFactory.HandlePosition = ContextualHudFactory.RailBase).
-            var keepClear = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton, coach, hud.approachGuide, hud.navigationGuide };
+            var keepClear = new List<Component> { touch.joystick, touch.throttle, touch.brake, hud.systemsButton, coach, info.capsuleButton, info.panel };
             keepClear.AddRange(hud.warningSlots);
-            keepClear.AddRange(hud.dataItems);
+            keepClear.AddRange(info.tiles);
             foreach (var target in ClusterTargets(cluster))
             {
                 var r = WorldRect(target);

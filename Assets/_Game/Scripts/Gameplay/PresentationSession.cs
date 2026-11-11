@@ -86,7 +86,7 @@ namespace OpenSkies.Gameplay
             _haptics = new HapticFeedback(_hapticDevice ?? HapticFeedback.CreateDevice());
             var camera = flight != null && flight.cameraRig != null ? flight.cameraRig.ViewCamera : null;
             _graphics = new GraphicsQuality(sun, camera);
-            _layout = UiScaleMath.HudLayout(TouchControlsFactory.JoystickRegionRight, TouchControlsFactory.ThrottleAreaTop);
+            _layout = UiScaleMath.HudLayout(TouchControlsFactory.JoystickRegionRight, TouchControlsFactory.ThrottleAreaTop, TouchControlsFactory.JoystickRegionTop);
             if (audioManager != null) audioManager.EnsureInitialized();
             _ground = audioManager != null ? audioManager.Configuration.ground : new GroundAudioSettings();
 

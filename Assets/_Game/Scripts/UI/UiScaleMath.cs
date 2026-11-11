@@ -8,7 +8,9 @@ namespace OpenSkies.UI
     /// aspect × 1080/s of width; elements keep their sizes in units, so a larger
     /// scale means less room. The limits come from the layout's tightest places:
     /// the action rail under the top bar, the open command panel over the throttle,
-    /// and the warning column between the joystick region and the rail.
+    /// the open flight information panel over the joystick region, the warning
+    /// column between the joystick region and the rail, and the flight information
+    /// panel beside the command cluster's row.
     /// Plain C#, EditMode-tested; a PlayMode test checks the layout at the limit.
     /// </summary>
     public static class UiScaleMath
@@ -23,6 +25,14 @@ namespace OpenSkies.UI
         {
             /// <summary>Right edge of the joystick region, fraction of the width.</summary>
             public float JoystickRegionRight;
+            /// <summary>Top edge of the joystick region, fraction of the height from the bottom.</summary>
+            public float JoystickRegionTop;
+            /// <summary>Lowest point of the top-left flight information cluster (its open panel) below the top edge.</summary>
+            public float InfoClusterBottom;
+            /// <summary>Rightmost point of the flight information cluster from the left edge.</summary>
+            public float InfoClusterRight;
+            /// <summary>From the right edge to the left edge of the top bar (the command cluster's primary row).</summary>
+            public float TopBarWidth;
             /// <summary>Top of the throttle's touch area above the bottom edge.</summary>
             public float ThrottleTop;
             /// <summary>Lowest point of the top-right command cluster (its open options panel) below the top edge.</summary>
@@ -40,10 +50,20 @@ namespace OpenSkies.UI
             public float WidestPanel;
         }
 
+        /// <summary>
+        /// The joystick region's top edge the touch controls use (<c>TouchControlsFactory.JoystickRegionTop</c>;
+        /// layers do not share code, so an EditMode test keeps the two equal).
+        /// </summary>
+        public const float DefaultJoystickRegionTop = 0.78f;
+
         /// <summary>The layout of this game's HUD, with the joystick region and throttle the scene uses.</summary>
-        public static Layout HudLayout(float joystickRegionRight, float throttleTop) => new Layout
+        public static Layout HudLayout(float joystickRegionRight, float throttleTop, float joystickRegionTop = DefaultJoystickRegionTop) => new Layout
         {
             JoystickRegionRight = joystickRegionRight,
+            JoystickRegionTop = joystickRegionTop,
+            InfoClusterBottom = FlightInfoLayout.Bottom,
+            InfoClusterRight = FlightInfoLayout.Right,
+            TopBarWidth = CommandClusterLayout.RowWidth,
             ThrottleTop = throttleTop,
             SessionColumnBottom = CommandClusterLayout.ColumnBottom,
             RailTop = ContextualHudFactory.RailBase.y + ContextualHud.RailSlotCount * ContextualHudFactory.RailStep + ContextualHudFactory.RailButtonSize.y,
@@ -63,10 +83,14 @@ namespace OpenSkies.UI
             if (float.IsNaN(aspect) || aspect <= 0f) aspect = ReferenceWidth / ReferenceHeight;
             if (float.IsNaN(heightShare) || heightShare <= 0f || heightShare > 1f) heightShare = 1f;
 
-            // Vertical: the stacks that share a column must fit one above the other.
+            // Vertical: the stacks that share a column must fit one above the other, and the open
+            // flight information panel must end above the joystick region (a fraction of the height).
             float railStack = layout.RailTop + layout.TopBarBottom;
             float sessionStack = layout.ThrottleTop + layout.SessionColumnBottom;
             float neededHeight = Mathf.Max(railStack, sessionStack) + Clearance;
+            float joystickBand = 1f - Mathf.Clamp01(layout.JoystickRegionTop);
+            if (layout.InfoClusterBottom > 0f && joystickBand > 0.01f)
+                neededHeight = Mathf.Max(neededHeight, (layout.InfoClusterBottom + Clearance) / joystickBand);
             float vertical = ReferenceHeight * heightShare / Mathf.Max(1f, neededHeight);
 
             // Horizontal: a warning banner fits between the joystick region and the rail,
@@ -75,6 +99,8 @@ namespace OpenSkies.UI
             float rightLimited = (layout.RailLeftInset + half + Clearance) / Mathf.Max(0.01f, 1f - layout.WarningColumn);
             float leftLimited = (half + Clearance) / Mathf.Max(0.01f, layout.WarningColumn - layout.JoystickRegionRight);
             float neededWidth = Mathf.Max(rightLimited, Mathf.Max(leftLimited, layout.WidestPanel));
+            // The flight information cluster (top left) and the command cluster's row (top right) share the top band.
+            neededWidth = Mathf.Max(neededWidth, layout.InfoClusterRight + HudStyle.Gap + layout.TopBarWidth);
             float horizontal = ReferenceHeight * heightShare * aspect / Mathf.Max(1f, neededWidth);
 
             return Mathf.Min(vertical, horizontal);

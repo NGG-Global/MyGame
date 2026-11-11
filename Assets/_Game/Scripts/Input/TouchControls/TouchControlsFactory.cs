@@ -13,6 +13,8 @@ namespace OpenSkies.FlightInput.TouchControls
     {
         /// <summary>Right edge of the joystick touch region, fraction of the safe-area width. Other layouts keep clear of it.</summary>
         public const float JoystickRegionRight = 0.42f;
+        /// <summary>Top edge of the joystick touch region, fraction of the safe-area height from the bottom (the top band above it holds the flight information).</summary>
+        public const float JoystickRegionTop = 0.78f;
         /// <summary>The throttle's touch area: offset from the bottom-right corner and size, canvas units.</summary>
         public static readonly Vector2 ThrottleOffset = new Vector2(-24f, 24f);
         public static readonly Vector2 ThrottleAreaSize = new Vector2(220f, 620f);
@@ -50,7 +52,7 @@ namespace OpenSkies.FlightInput.TouchControls
         {
             var region = NewRect("JoystickRegion", parent);
             region.anchorMin = Vector2.zero;
-            region.anchorMax = new Vector2(JoystickRegionRight, 0.78f);
+            region.anchorMax = new Vector2(JoystickRegionRight, JoystickRegionTop);
             region.pivot = Vector2.zero;
             region.offsetMin = new Vector2(16f, 16f);
             region.offsetMax = Vector2.zero;

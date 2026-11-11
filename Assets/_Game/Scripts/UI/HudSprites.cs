@@ -18,6 +18,8 @@ namespace OpenSkies.UI
         Camera = 7,
         More = 8,
         Pause = 9,
+        /// <summary>The flight information cluster's trigger: a gauge (an arc open at the bottom, a needle and its hub).</summary>
+        FlightData = 10,
     }
 
     /// <summary>
@@ -33,7 +35,7 @@ namespace OpenSkies.UI
         public const float RoundedRectRadius = Size * 0.3f;
         static Sprite _disc, _roundedRect, _arrow, _ring, _bezel, _roundedOutline, _diamond, _cautionIcon, _warningIcon;
         const int IconSize = 64;
-        const int IconCount = 10;
+        const int IconCount = 11;
         static readonly Sprite[] _icons = new Sprite[IconCount];
         static readonly Sprite[] _annuli = new Sprite[4];
         static readonly float[] _annulusRatios = new float[4];
@@ -154,7 +156,7 @@ namespace OpenSkies.UI
         /// <see cref="HudIcon.None"/>. Simple, high-contrast shapes: a P in a ring (parking
         /// brake), a wing with its flap lowered, a toggle switch, a runway in perspective, a
         /// compass needle, three sliders (assistance settings); a camera with its lens, three
-        /// dots (more options) and two bars (pause).
+        /// dots (more options) and two bars (pause); a gauge (the flight information trigger).
         /// </summary>
         public static Sprite Icon(HudIcon icon)
         {
@@ -180,6 +182,7 @@ namespace OpenSkies.UI
                 case HudIcon.Camera: return CameraBody;
                 case HudIcon.More: return (x, y) => DiscAt(x, y, 0.2f, 0.5f, 0.09f) || DiscAt(x, y, 0.5f, 0.5f, 0.09f) || DiscAt(x, y, 0.8f, 0.5f, 0.09f);
                 case HudIcon.Pause: return (x, y) => y >= 0.24f && y <= 0.76f && ((x >= 0.28f && x <= 0.42f) || (x >= 0.58f && x <= 0.72f));
+                case HudIcon.FlightData: return Gauge;
                 default: return null;
             }
         }
@@ -264,6 +267,20 @@ namespace OpenSkies.UI
             float cx = Mathf.Clamp(x, xMin + radius, xMax - radius), cy = Mathf.Clamp(y, yMin + radius, yMax - radius);
             float dx = x - cx, dy = y - cy;
             return x >= xMin && x <= xMax && y >= yMin && y <= yMax && dx * dx + dy * dy <= radius * radius;
+        }
+
+        /// <summary>A gauge: an arc open at the bottom with three ticks, a needle to the upper left and its hub (not a compass: no ring).</summary>
+        static bool Gauge(float x, float y)
+        {
+            const float cx = 0.5f, cy = 0.42f;
+            bool arc = RingAt(x, y, cx, cy, 0.3f, 0.38f) && y >= 0.3f;
+            bool ticks = SegmentDistance(x, y, 0.5f, 0.68f, 0.5f, 0.6f) <= 0.03f
+                         || SegmentDistance(x, y, 0.27f, 0.59f, 0.32f, 0.55f) <= 0.03f
+                         || SegmentDistance(x, y, 0.73f, 0.59f, 0.68f, 0.55f) <= 0.03f;
+            bool needle = SegmentDistance(x, y, cx, cy, 0.33f, 0.6f) <= 0.035f;
+            bool hub = DiscAt(x, y, cx, cy, 0.075f);
+            bool bars = y >= 0.12f && y <= 0.19f && ((x >= 0.22f && x <= 0.44f) || (x >= 0.56f && x <= 0.78f));
+            return arc || ticks || needle || hub || bars;
         }
 
         /// <summary>Three sliders at different settings.</summary>

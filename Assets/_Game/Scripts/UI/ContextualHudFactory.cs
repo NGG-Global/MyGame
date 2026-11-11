@@ -1,4 +1,3 @@
-using OpenSkies.Awareness;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,7 +9,8 @@ namespace OpenSkies.UI
     /// units for a 1920×1080 reference with height matching, inside the safe area.
     ///
     /// Layout (never changes at runtime; disclosure only fades elements):
-    /// - Top left: flight data strip (fixed slot per item), guides below it.
+    /// - Top left: nothing of its own. The flight information cluster (<see cref="FlightInfoClusterFactory"/>)
+    ///   holds the readings and the approach and navigation guides.
     /// - Upper middle, slightly right of centre (between the joystick region and the
     ///   action rail, above the aircraft): warning banners, most urgent first.
     /// - Top right: nothing of its own. The command cluster (<see cref="CommandClusterFactory"/>)
@@ -24,8 +24,6 @@ namespace OpenSkies.UI
     {
         public const float Margin = 24f;
         public const float TopMargin = 16f;
-        public static readonly Vector2 DataItemSize = new Vector2(148f, 84f);
-        public const float DataItemSpacing = 156f;
         public static readonly Vector2 RailButtonSize = new Vector2(168f, 96f);
         /// <summary>SYSTEMS sits here (bottom-right anchor); the rail continues upwards in steps of 112.</summary>
         public static readonly Vector2 RailBase = new Vector2(-268f, 184f);
@@ -36,11 +34,7 @@ namespace OpenSkies.UI
         public const float WarningColumn = 0.56f;
         public static readonly Vector2 WarningSize = new Vector2(380f, 72f);
 
-        static readonly Color LabelColor = HudStyle.TextSecondary;
-        static readonly Color ValueColor = HudStyle.TextPrimary;
         static readonly Color ShadowColor = HudStyle.TextShadow;
-        /// <summary>Inner padding of the flight data and guide plates, canvas units.</summary>
-        const float PlatePadding = 10f;
 
         public static ContextualHud Build(RectTransform safeArea, Font font)
         {
@@ -50,12 +44,6 @@ namespace OpenSkies.UI
             Stretch(root);
             var hud = root.gameObject.AddComponent<ContextualHud>();
 
-            var backings = new System.Collections.Generic.List<Image>();
-            for (int i = 0; i < ContextualHud.DataItemCount; i++)
-                backings.Add(BuildDataItem(root, font, (HudElement)i, i, out hud.dataItems[i], out hud.dataValues[i]));
-            backings.Add(BuildApproachGuide(root, font, hud));
-            backings.Add(BuildNavigationGuide(root, font, hud));
-            hud.backings = backings.ToArray();
             BuildWarnings(root, font, hud);
             // The development inspector is built before the rail: where the top rail slot (ASSIST) reaches
             // under it, the rail button draws on top and takes the touch.
@@ -64,134 +52,6 @@ namespace OpenSkies.UI
 
             root.gameObject.SetActive(true);
             return hud;
-        }
-
-        /// <summary>One flight data item: a faint plate, a small label and the value. Returns the plate.</summary>
-        static Image BuildDataItem(RectTransform parent, Font font, HudElement element, int slot, out CanvasGroup group, out Text value)
-        {
-            var item = NewRect(element + "Readout", parent);
-            item.anchorMin = item.anchorMax = item.pivot = new Vector2(0f, 1f);
-            item.anchoredPosition = new Vector2(Margin + slot * DataItemSpacing, -TopMargin);
-            item.sizeDelta = DataItemSize;
-            group = Hidden(item);
-
-            var plate = NewRect("Plate", item);
-            Stretch(plate);
-            var backing = AddImage(plate, HudStyle.DataBacking);
-
-            var label = NewText("Label", item, font, HudStyle.LabelSize, TextAnchor.UpperLeft, LabelColor);
-            label.rectTransform.anchorMin = new Vector2(0f, 1f);
-            label.rectTransform.anchorMax = new Vector2(1f, 1f);
-            label.rectTransform.pivot = new Vector2(0f, 1f);
-            label.rectTransform.anchoredPosition = new Vector2(PlatePadding, -4f);
-            label.rectTransform.sizeDelta = new Vector2(-PlatePadding, 26f);
-            label.text = DataLabel(element);
-
-            value = NewText("Value", item, font, HudStyle.ValueSize, TextAnchor.LowerLeft, ValueColor);
-            Stretch(value.rectTransform);
-            value.rectTransform.offsetMin = new Vector2(PlatePadding, 2f);
-            value.rectTransform.offsetMax = new Vector2(0f, -24f);
-            value.text = "-";
-            return backing;
-        }
-
-        static string DataLabel(HudElement element)
-        {
-            switch (element)
-            {
-                case HudElement.Airspeed: return "IAS KT";
-                case HudElement.Altitude: return "ALT FT";
-                case HudElement.VerticalSpeed: return "VS FPM";
-                case HudElement.Heading: return "HDG";
-                default: return "GS KT";
-            }
-        }
-
-        static Image BuildApproachGuide(RectTransform parent, Font font, ContextualHud hud)
-        {
-            var panel = NewRect("ApproachGuide", parent);
-            panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0f, 1f);
-            panel.anchoredPosition = new Vector2(Margin, -112f);
-            panel.sizeDelta = new Vector2(430f, 96f);
-            hud.approachGuide = Hidden(panel);
-            var backing = Plate(panel);
-
-            hud.approachRunway = TopRowText("Runway", panel, font, 0f, 120f);
-            hud.approachDistance = TopRowText("Distance", panel, font, 130f, 140f);
-            hud.approachHeight = TopRowText("Height", panel, font, 280f, 150f);
-
-            // PAPI-style lights, bottom left: more white = higher.
-            for (int k = 0; k < ApproachGuidance.PapiLights; k++)
-            {
-                var light = NewRect("Papi" + k, panel);
-                light.anchorMin = light.anchorMax = light.pivot = new Vector2(0f, 0f);
-                light.anchoredPosition = new Vector2(k * 30f, 8f);
-                light.sizeDelta = new Vector2(22f, 22f);
-                var image = AddImage(light, Color.white);
-                AddShadow(image);
-                hud.papiLights[k] = image;
-            }
-
-            // Centreline cue: a track with a centre tick and a marker that shows where the centreline is.
-            var track = NewRect("LateralTrack", panel);
-            track.anchorMin = track.anchorMax = track.pivot = new Vector2(0f, 0f);
-            track.anchoredPosition = new Vector2(150f, 16f);
-            track.sizeDelta = new Vector2(180f, 6f);
-            AddShadow(AddImage(track, new Color(1f, 1f, 1f, 0.5f)));
-
-            var tick = NewRect("CentreTick", track);
-            tick.anchorMin = tick.anchorMax = tick.pivot = new Vector2(0.5f, 0.5f);
-            tick.sizeDelta = new Vector2(3f, 18f);
-            AddImage(tick, new Color(1f, 1f, 1f, 0.6f));
-
-            var marker = NewRect("CentrelineMarker", track);
-            marker.anchorMin = marker.anchorMax = marker.pivot = new Vector2(0.5f, 0.5f);
-            marker.sizeDelta = new Vector2(12f, 26f);
-            AddShadow(AddImage(marker, HudStyle.Navigation));
-            hud.lateralMarker = marker;
-            hud.lateralHalfTravel = 80f;
-            return backing;
-        }
-
-        static Image BuildNavigationGuide(RectTransform parent, Font font, ContextualHud hud)
-        {
-            var panel = NewRect("NavigationGuide", parent);
-            panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0f, 1f);
-            panel.anchoredPosition = new Vector2(474f, -112f);
-            panel.sizeDelta = new Vector2(300f, 96f);
-            hud.navigationGuide = Hidden(panel);
-            var backing = Plate(panel);
-
-            var arrow = NewRect("Arrow", panel);
-            arrow.anchorMin = arrow.anchorMax = new Vector2(0f, 0.5f);
-            arrow.pivot = new Vector2(0.5f, 0.5f);
-            arrow.anchoredPosition = new Vector2(32f, 0f);
-            arrow.sizeDelta = new Vector2(56f, 56f);
-            AddShadow(AddImage(arrow, HudStyle.Navigation)); // magenta: course to the destination
-            hud.navigationArrow = arrow;
-
-            var label = NewText("Label", panel, font, HudStyle.LabelSize, TextAnchor.UpperLeft, LabelColor);
-            label.rectTransform.anchorMin = label.rectTransform.anchorMax = label.rectTransform.pivot = new Vector2(0f, 1f);
-            label.rectTransform.anchoredPosition = new Vector2(76f, -12f);
-            label.rectTransform.sizeDelta = new Vector2(220f, 26f);
-            label.text = "AIRFIELD";
-            hud.navigationLabel = label;
-
-            var distance = NewText("Distance", panel, font, 32, TextAnchor.UpperLeft, ValueColor);
-            distance.rectTransform.anchorMin = distance.rectTransform.anchorMax = distance.rectTransform.pivot = new Vector2(0f, 1f);
-            distance.rectTransform.anchoredPosition = new Vector2(76f, -40f);
-            distance.rectTransform.sizeDelta = new Vector2(124f, 44f);
-            distance.text = "-";
-            hud.navigationDistance = distance;
-
-            // Course to steer, quieter than the distance: optional heading guidance.
-            var bearing = NewText("Bearing", panel, font, 24, TextAnchor.UpperLeft, LabelColor);
-            bearing.rectTransform.anchorMin = bearing.rectTransform.anchorMax = bearing.rectTransform.pivot = new Vector2(0f, 1f);
-            bearing.rectTransform.anchoredPosition = new Vector2(204f, -46f);
-            bearing.rectTransform.sizeDelta = new Vector2(92f, 36f);
-            bearing.text = string.Empty;
-            hud.navigationBearing = bearing;
-            return backing;
         }
 
         static void BuildWarnings(RectTransform parent, Font font, ContextualHud hud)
@@ -273,27 +133,6 @@ namespace OpenSkies.UI
             label.text = caption;
             button.label = label;
             return button;
-        }
-
-        static Text TopRowText(string name, RectTransform panel, Font font, float x, float width)
-        {
-            var text = NewText(name, panel, font, 26, TextAnchor.UpperLeft, ValueColor);
-            var rect = text.rectTransform;
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(x, 0f);
-            rect.sizeDelta = new Vector2(width, 40f);
-            text.text = "-";
-            return text;
-        }
-
-        /// <summary>A faint plate behind a guide, a little larger than the guide so its text has room.</summary>
-        static Image Plate(RectTransform panel)
-        {
-            var plate = NewRect("Plate", panel);
-            Stretch(plate);
-            plate.offsetMin = new Vector2(-PlatePadding, -4f);
-            plate.offsetMax = new Vector2(PlatePadding, 4f);
-            return AddImage(plate, HudStyle.DataBacking);
         }
 
         /// <summary>Adds a CanvasGroup that starts invisible and ignores touches.</summary>

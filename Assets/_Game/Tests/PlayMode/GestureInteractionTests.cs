@@ -35,6 +35,7 @@ namespace OpenSkies.Tests
         TouchFlightControls _touch;
         ContextualHud _hud;
         GestureHud _gestureHud;
+        FlightInfoCluster _info;
         CommandCluster _cluster;
         InteractionSurface _surface;
         CameraRig _camera;
@@ -84,6 +85,7 @@ namespace OpenSkies.Tests
             _hud = ContextualHudFactory.Build(safeArea, font);
             _hud.SetMotionPreference(MotionPreference.Reduced);
             _gestureHud = GestureHudFactory.Build(safeArea, font, _surface);
+            _info = FlightInfoClusterFactory.Build(safeArea, font);
             _cluster = CommandClusterFactory.Build(safeArea, font);
 
             var sessionGo = new GameObject("FlightSession");
@@ -97,6 +99,7 @@ namespace OpenSkies.Tests
             _session.contextualHud = _hud;
             _session.interactionSurface = _surface;
             _session.gestureHud = _gestureHud;
+            _session.flightInfo = _info;
             _session.commandCluster = _cluster;
             _session.rememberHudPreferences = false;
             _session.homeRunway = new RunwayInfo(Vector3.zero, 0f, 2000f, 30f);
@@ -526,13 +529,16 @@ namespace OpenSkies.Tests
             yield return null;
             yield return null;
             Assert.IsTrue(_session.Disclosure.IsVisible(HudElement.Airspeed));
-            var item = WorldRect(_hud.dataItems[(int)HudElement.Airspeed]).center;
+            // The capsule's airspeed cell, under the HUD band (the band's hold is the pull comparison's; a tap on the capsule opens the panel).
+            int cell = _session.FlightInfo.Model.CapsuleCellOf(HudElement.Airspeed);
+            Assert.GreaterOrEqual(cell, 0, "the airspeed is in the capsule");
+            var item = WorldRect(_info.cells[cell]).center;
             var p = Pointer(20, item);
             _gestureHud.bandHotspot.OnPointerDown(p);
             yield return Wait(_surface.settings.longPressSeconds + 0.1f);
             Assert.AreEqual(GestureSession.Doing.Explain, _session.Gestures.Current);
             Assert.AreEqual("AIRSPEED, KT", _gestureHud.plate.CurrentTitle);
-            Assert.AreEqual(1f, _hud.dataItems[(int)HudElement.Airspeed].alpha, 1e-3f, "the value stays visible");
+            Assert.IsTrue(_info.cells[cell].gameObject.activeInHierarchy && _info.CapsuleShown, "the value stays visible");
             _gestureHud.bandHotspot.OnPointerUp(p);
             yield return null;
             Assert.IsFalse(_gestureHud.plate.IsShown);

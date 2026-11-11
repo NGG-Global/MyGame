@@ -1,4 +1,4 @@
-# Open Skies: tap-first disclosure (UI redesign, milestones 1 to 3)
+# Open Skies: tap-first disclosure (UI redesign, milestones 1 to 4)
 
 The transient interfaces of the HUD, the cockpit, the coaching, the settings and
 the pause no longer need a hold or a drag to open, to go deeper or to close. A
@@ -11,13 +11,18 @@ Milestone 1 made every transient interface tap-first under one coordinator. Mile
 turns the systems arc into a polished tap-first **systems wheel** (the section of that
 name below); the wheel-picker concept stays, by the owner's decision. Milestone 3
 replaces the row of equal top-right buttons with a compact, hierarchical **command
-cluster** (the section of that name below).
+cluster** (the section of that name below). Milestone 4 replaces the separate top-left
+flight data and guide plates with one progressively disclosed **flight information
+cluster** (the section of that name below). Together they complete Stage 1 of the UI
+redesign.
 
-Status: implemented with EditMode and PlayMode tests. Milestone 1 passed CI (the only
-red runs were the CI editor being killed at start-up and one intermittent tip test that
-predates it). The status of milestones 2 and 3 is in their pull requests; **none of them
-has been run in the Editor by hand or touched on a device.** Not in these milestones: the
-top-left flight data (unchanged), the tutorial redesign, an APK.
+Status: implemented with EditMode and PlayMode tests. Milestones 1 to 3 are on `main`,
+where both test jobs passed after the merge (`tests.yml` run 48). Milestone 4 has not been
+compiled or run anywhere yet (the session that wrote it had no Unity Editor and no C#
+compiler): CI is its first compiler and test run, and its status is in its pull request. **None of the four has
+been run in the Editor by hand or touched on a device.** Not in these milestones: the
+tutorial redesign, final artwork and animation. Stage 1 ends with an APK checkpoint
+(`docs/ROADMAP.md`).
 
 ## The contract
 
@@ -26,7 +31,7 @@ Every transient interface follows these rules:
 1. **Tap a visible trigger to expand.** SYSTEMS opens the arc; a cockpit instrument
    or switch opens its focus panel; ASSIST (on the arc or the rail) opens the flight
    settings; the coaching message opens its explanation; MENU opens the pause sheet;
-   SETTINGS opens the settings.
+   SETTINGS opens the settings; the flight information capsule opens its panel.
 2. **Tap an option to select, or to open deeper functionality.** An arc segment acts
    (as the rail button would) or fans its options out on the outer ring; a detent, a
    profile, a destination is chosen by a tap.
@@ -55,6 +60,286 @@ Every transient interface follows these rules:
 10. **Flight controls stay active and independently owned.** A finger the joystick,
     the throttle or the brake owns is never an outside tap. Nothing here changes
     `PointerOwnership`.
+
+## The flight information cluster (milestone 4)
+
+### Why
+
+The top left used to hold up to seven separate plates: five flight values in a 780-unit
+strip and two guides (approach, navigation) in a second row under it, 1,500 units of
+horizontal space between them on a wide phone. Each plate faded in and out on its own, so
+the corner changed shape with every phase of flight, and Detailed kept all of it on screen
+all the time. The cluster puts the same information in one place with one entry point, a
+small resting state and the detail on demand.
+
+### Hierarchy
+
+| Tier | Element | Where | How it looks | How it acts |
+|---|---|---|---|---|
+| Resting | Capsule | Top-left corner of the safe area | A 72-unit dark pill (the flight-data plate's contrast) in a 96-unit touch target. Left end: the **trigger**, a gauge symbol. Then up to three reading cells (label and value) and at most one guide chip | One tap opens the panel. Never moves; it widens or narrows from its right end only |
+| Resting | Guide chip | In the capsule, after the readings | Navigation: magenta arrow relative to the nose, the destination's name, the distance. Approach: the runway and the four glide-path lights | Part of the capsule's tap |
+| Expanded | Panel | Opens from the same corner, over the capsule's place | A `PanelSurface` plate, 818 × 196 | Registered root of the coordinator ("Flight information") |
+| Expanded | Trigger | The panel's first cell, exactly where the capsule's trigger was | The same gauge on a lighter square (not cyan: cyan means a selection) | One tap folds everything |
+| Expanded | Reading tiles | First row, after the trigger: IAS, ALT, VS, HDG, GS, always in that order | 136 × 88 tiles, label above a 42-unit value | One tap focuses that reading |
+| Expanded | Navigation tile | Lower row, left (region A) | Arrow, destination, distance (NM), course to steer | One tap focuses it |
+| Expanded | Approach tile | Lower row, right (region B) | Runway, distance to the threshold, height above it, glide-path lights, centreline marker | One tap focuses it |
+| Expanded | Hint | Lower row, when there is no guide to detail | "Tap a reading to explain it" | Nothing (a press on the plate goes nowhere) |
+| Focused | Enlarged reading | Region A (the guides give way) | The reading's title and its value at the display size, on a cyan-tinted plate | One tap goes back to the panel |
+| Focused | Explanation | The region the focused element's own tile does not use (B for a reading or the navigation guide, A for the approach guide) | Two or three lines from `HudExplanations`, the same texts as the long-press explanations | One tap goes back to the panel |
+
+A focused tile is also tinted cyan, but the focus is never shown by colour alone: the
+lower row changes to the enlarged value and its explanation.
+
+### States and transitions
+
+```
+                         tap capsule
+        ┌────────────┐ ─────────────────▶ ┌────────────┐  tap a tile   ┌──────────────────┐
+        │ COLLAPSED  │                    │  EXPANDED  │ ────────────▶ │ FOCUSED(element) │
+        │  capsule   │ ◀───────────────── │   panel    │ ◀──────────── │  panel, lower    │
+        └────────────┘   tap trigger,     └────────────┘  tap the same │  row = detail    │
+              ▲          outside tap,           ▲         tile, or the └──────────────────┘
+              │          another cluster,       │         detail            │   │ tap another
+              │          camera change,         │                           │   │ tile: focus
+              │          pause, reset,          │                           │   ▼ moves
+              └─────────────────────────────────┴─── same collapses ────────┘
+```
+
+| From | Event | To | Coordinator |
+|---|---|---|---|
+| Collapsed | Tap the capsule (not over a frozen flight) | Expanded | `Open("Flight information")`: replaces any other root (the wheel, the command options, a cockpit card, the flight settings, the coaching detail) |
+| Expanded | Tap a reading tile, or a guide tile the panel shows | Focused | `Open("Flight information focus")`, a child of the panel |
+| Focused | Tap the focused tile again, the enlarged reading or the explanation | Expanded | `Close(focus, ParentTap)` |
+| Focused | Tap another tile | Focused (the new element) | the child stays open |
+| Expanded or Focused | Tap the trigger | Collapsed | `Close(panel, Trigger)` |
+| Expanded or Focused | Tap outside (sky, cockpit, a banner) | Collapsed | `OutsideTap`: the surface consumes the tap on the `Dismiss` route; nothing underneath reacts |
+| Expanded or Focused | Another cluster opens (SYSTEMS, ⋯, a cockpit item, ASSIST, the coach) | Collapsed | `Replaced` |
+| Expanded or Focused | Camera change (chase ↔ cockpit) | Collapsed | `Close(panel, Owner)`, so the cockpit view always starts quiet |
+| Expanded or Focused | The flight freezes (pause, settings, entry screen) | Collapsed | `Blocked`; the trigger refuses to open over a frozen flight |
+| Expanded or Focused | New flight (RESET, a mode's start), the app loses focus | Collapsed | `Reset`, `FocusLost` |
+| Focused on a guide | The guide is no longer offered (the destination went away) | Expanded | `NotifyClosed(focus)` |
+| Any | HUD profile change, phase change, warning | **unchanged** | none |
+
+The last row is the rule the owner asked for: the selected HUD profile and the expansion
+state are independent, a phase change never forcibly expands a collapsed cluster (and
+never folds an open one), and a warning never opens it. A pilot who opens the panel and
+keeps flying with the stick and throttle keeps it open: a finger the flight controls own
+is never an outside tap.
+
+### What each profile shows
+
+The flight context still decides eligibility through `DisclosureController`, unchanged:
+profile, phase (with its anti-flicker), stable flight, the cockpit's instruments, the
+player's guide choices, mission guides and warnings. The cluster only lays that decision
+out in one place (`FlightInfoModel.Compose`).
+
+| | Collapsed capsule | Expanded panel |
+|---|---|---|
+| Cinematic | The trigger only (the quietest rest). A guide the player asked for, and a warning's reading, still appear | Every reading and the guides' details, on demand |
+| Smart (default) | The phase's essentials (the Smart table in `docs/CONTEXTUAL_UI.md`, at most three), quiet in stable flight; the requested or relevant guide | The same |
+| Detailed | Three readings always (IAS, ALT, VS), so the capsule stays compact; the guide en route or on approach | The same: HDG and GS live here, no longer across the top |
+| Cockpit view, any profile | The trigger only: the instruments carry the readings and the GPS map the way to the airfield. A warning's reading, the approach lights (the panel has no glide-path indicator), a mission checkpoint and a guide the player asked for still appear | Every reading on demand |
+
+Capsule rules (`FlightInfoSettings`, tuning not code): at most `capsuleReadings` (3)
+readings; warning-related readings are chosen first, the others in the fixed order IAS,
+ALT, VS, HDG, GS; they are shown in that fixed order. One chip: the approach guide when it
+is shown, otherwise the navigation guide when it is shown. The expanded panel offers the
+navigation details whenever there is a destination, and the approach details when the
+approach guide is shown or the aircraft is airborne within the guide's range of the runway
+(`DisclosureController.ApproachGuideInRange`, the same rule Detailed uses for the guide).
+
+### Information: one calculation each
+
+| Shown | Source (computed once, by the session) | Formatting |
+|---|---|---|
+| IAS, VS, HDG, GS | `FlightTelemetry` (`TelemetryMath`) | `FlightReadouts`: whole knots, 50 fpm, whole degrees (north 360) |
+| ALT | Telemetry plus the altimeter's subscale (`InstrumentSettings`), as before: one altitude everywhere | tens of feet |
+| Destination, distance, course, arrow | `NavigationRelation` (`FlightSession.Navigation`, from `NavigationMath`) | tenths of a NM, compass degrees |
+| Runway, distance, height, lights, centreline | `RunwayRelation` (`RunwayGeometry`), `ApproachGuidance` | the same as the old guide |
+| Explanations | `HudExplanations` (from the aircraft's envelope), now built once per session for the long presses and the cluster | |
+
+`FlightReadouts` is the old `ContextualHud` formatting moved, not copied: the capsule, the
+panel and the focused value read one quantised value per refresh (0.1 s), from cached
+strings, so steady flight allocates nothing.
+
+### Navigation
+
+- The navigation guide stays a player choice held by `DisclosureController` (the NAV
+  action on the wheel, or a mission). The cluster never changes it: collapsing,
+  expanding, focusing or a camera change leaves the player's "show" in place, and the
+  capsule keeps the destination chip after every collapse.
+- In the cockpit the GPS map shows the way to the airfield, so the chip is not shown there
+  unless the player asked for the guide or a mission set a checkpoint (the GPS does not
+  show checkpoints).
+- Near the runway the approach chip takes the capsule's one chip slot; the navigation
+  guide is still on and its tile is still on the panel.
+
+### Warnings
+
+Banners are unchanged: never registered with the coordinator, never covered by the panel
+(the panel ends 38 units above the first banner slot), never dimmed. A warning also brings
+its reading into the collapsed capsule in every profile and view (airspeed for STALL and
+OVERSPEED, altitude and vertical speed for SINK RATE), first in line and in the alert
+colour; in the panel the same tile turns to the alert colour.
+
+### Placement
+
+Canvas units at the 1080 reference height, from the safe area's top-left corner
+(`FlightInfoLayout`, pure and EditMode-tested; the factory builds exactly these rectangles).
+
+| Element | Touch target | Visual |
+|---|---|---|
+| Trigger (capsule and panel) | x 24 to 120, y −16 to −112 | 72 × 72, the gauge 36 |
+| Capsule | x 24 to 24 + width, y −16 to −112; width 96 (trigger only) to 600 (three readings and a chip) | pill 72 tall; cells 112, chip 192 |
+| Reading tiles | x 124 + 144·i, 140 wide, y −16 to −112 | 136 × 88 |
+| Region A (navigation, focused reading, approach explanation) | x 24 to 400, y −114 to −210 | 372 × 88 |
+| Region B (approach, explanation) | x 404 to 840, y −114 to −210 | 432 × 88 |
+| Panel plate | x 24 to 842, y −16 to −212 | `PanelSurface`, radius 18 |
+
+- **The top band.** The joystick region starts 22 % of the safe height below the top edge
+  (`TouchControlsFactory.JoystickRegionTop`, now a named constant). The open panel ends 212
+  units down, no deeper than the old guides. `UiScaleMath` now knows it: the interface-scale
+  limit keeps the panel above the joystick region and left of the command cluster's row
+  (`InfoClusterBottom`, `InfoClusterRight`, `TopBarWidth`). On a full-height screen this
+  limit is 111 %, above the 110 % option. It is slightly tighter (0.3 %) than the open
+  command panel over the throttle, which set the vertical limit before, so on a safe area
+  shorter than about 99 % of the screen the cluster now sets it. (The old guides fitted
+  under that limit by 1.4 units; the limit now states the rule instead of relying on it.)
+- **Clear of everything permanent.** The panel stays above the warning column (it starts
+  250 units down), left of the command cluster (its right edge at 842; at 4:3 the cluster's
+  row starts at about 1,083), and the cockpit focus card and the flight settings start
+  lower in the free column. It and the command options panel never overlap, and never
+  show together (one coordinator).
+- **Development overlays.** The telemetry line (220 down) and the touch diagnostics stay
+  under the panel. The disclosure inspector can reach under the panel's right end on a 4:3
+  tablet in development builds; the panel draws over it and takes the touch.
+- **Draw order.** The cluster is built after the gesture HUD (it draws over the HUD band
+  and takes its own taps) and before the command cluster, the coaching highlights, the
+  mission card, the pause sheet and the entry screen.
+
+Checked at 4:3, 16:10, 16:9, 19.5:9 and 20:9, at 90 %, 100 % and the largest allowed
+interface scale, and inside a cut-out's safe area.
+
+### Interaction details
+
+- **Tap-first only.** Every action is one tap on a 96-unit target; nothing needs a hold
+  or a drag, and there is no X. The panel's plate catches presses between tiles, so they
+  never reach the world.
+- **The HUD band.** Its pull (density preview) sat over the old data strip; it would now
+  compete with the capsule's tap and blur the line between the profile and the expansion.
+  It joins the pull gestures of the systems wheel as a **development comparison**
+  (`GestureHud.SetBandEnabled`, switched with `FlightSession.pullGestureComparison`, never in
+  a release build). The profile is chosen in the command cluster's selector or with `H`.
+  A long press on a reading under the band in the comparison still explains it
+  (`FlightInfoCluster.ElementAt`).
+- **Reduced motion.** The capsule and the panel swap at once; otherwise they cross-fade in
+  0.2 s (`HudMotionSettings`). The coordinator's opening and closing states follow.
+- **Opacity.** The capsule follows the player's HUD opacity like the old plates; the open
+  panel stays at full strength (the player asked for it and it carries text), like the
+  command options panel. Warnings are never dimmed.
+
+### Animation preparation
+
+The final motion belongs to a later milestone. The structure is ready for it:
+
+- One corner: the capsule, the panel and the trigger share the top-left anchor; the
+  trigger's symbol is at the same point in both states.
+- One order: capsule cells and panel tiles use the same left-to-right order, so a reading
+  can travel from its cell to its tile (`FlightInfoLayout.CapsuleCell`, `Tile`;
+  `FlightInfoCluster.RectOf`).
+- One row for detail: a focused element's detail always opens in the lower row directly
+  below the first row, next to the tile it came from (regions A and B).
+- The coordinator already reports Opening, Open, Closing and Closed for both surfaces.
+
+### Code
+
+| Where | What |
+|---|---|
+| `FlightInfoModel` (UI, pure) | Levels, focus, tap rules; `Compose` (the capsule's readings and chip, the panel's guides, alerts) from `DisclosureController`; `FlightInfoSettings` |
+| `FlightInfoLayout` (UI, pure) | Every rectangle from the safe area's top-left corner |
+| `FlightReadouts` (UI, pure) | Quantisation and cached text of the readings and guides (moved from `ContextualHud`) |
+| `FlightInfoCluster` (UI, MonoBehaviour) | The view: capsule, panel, lower row, fades; raises taps |
+| `FlightInfoClusterFactory` (UI) | Builds it in code |
+| `FlightInfoSession` (Gameplay) | Registers the panel and its focus with the coordinator, applies taps, folds on camera change and pause, presents per frame |
+| `FlightSession` | `flightInfo`, `FlightInfo`, `Explanations` (built once); presents the cluster after disclosure; opacity and motion |
+| `ContextualHud`, `ContextualHudFactory` | Keep the warnings, the legacy rail and SYSTEMS, the inspector; the plates are gone |
+| `DisclosureController` | `ApproachGuideInRange` (shared by the Detailed guide rule and the panel) |
+| `GestureHud`, `GestureSession` | The band only in the pull comparison; long-press targets resolve through the cluster |
+| `UiScaleMath`, `TouchControlsFactory` | The cluster in the scale limit; `JoystickRegionTop` |
+| `HudSprites` | `HudIcon.FlightData` (the gauge) |
+| `FlightPrototypeSceneBuilder` | Builds the cluster after the gesture HUD and wires it |
+
+### Tests
+
+EditMode `FlightInfoTests`: the levels and the tap rules; guides focusable only while
+offered and a lost destination going back to the panel; every profile expanding and
+collapsing independently, a profile change never moving the level; phase changes and
+warnings through every phase and profile never opening a collapsed cluster or folding an
+open one; the Smart capsule per phase in the fixed order; stable cruise quiet; Detailed
+compact with every reading focusable; Cinematic just the trigger; a stall surfacing the
+airspeed in every profile and view; warning-related readings first when the capsule is
+full; the cockpit showing no duplicated readings but keeping the approach lights, a
+mission checkpoint and a requested guide; the chip rules; a requested navigation guide
+surviving rounds of expanding, focusing and collapsing; the approach details' range rule;
+sanitised settings; the readouts' rounding, caching and bad samples; the trigger's single
+home, the capsule growing from its corner; tiles and regions as full targets without
+overlap; on 4:3, 16:10, 16:9, 19.5:9 and 20:9 at 90 %, 100 % and the largest allowed scale,
+every rectangle on screen and clear of the joystick region, the throttle, the brake, the
+handle, the warning slots and the command cluster; shorter safe areas keeping the panel
+above the joystick region; the scale limit knowing the cluster; the gauge symbol.
+
+PlayMode `FlightInfoPlayModeTests` (real `FlightSession`, Rigidbody aircraft, touch
+controls, both HUDs, the command cluster, the focus panel, the flight settings): tap to
+expand, tap a reading to focus and explain it, another reading moves the focus, the detail
+goes back, an outside tap folds everything and is consumed, the trigger folds from a
+focus, no X; the command options and the systems wheel replace it and it replaces them;
+the band inactive in the tap-first interface and drawn under the cluster; every profile
+collapsing independently with the profile unchanged, a profile change keeping it open,
+Detailed compact; real phase changes (a take-off roll) never opening it or folding it; a
+stall surfacing the airspeed in Cinematic with the banner shown and never covered; the
+cockpit view starting quiet with no duplicated readings and the readings one tap away; a
+requested navigation guide surviving collapses with its chip; the readings equal to the
+session's telemetry, the altitude following the altimeter's subscale, the navigation
+values equal to the session's; the stick's and throttle's fingers keeping their input
+through expanding, focusing and an outside tap; pause, reset and focus loss folding it;
+nothing overlapping or clipping at 4:3, 16:10, 16:9, 19.5:9 and 20:9 at the largest
+allowed scale (text widths checked where the test player has font metrics); a cut-out's
+safe area. `ContextualHudTests`, `GestureInteractionTests`, `PresentationTests`,
+`CockpitTests`, `CommandClusterTests`, `CommandClusterPlayModeTests` and
+`FlightSessionDisclosureTests` were updated for the retired plates.
+
+### Retired elements
+
+| Before | Now |
+|---|---|
+| `ContextualHud.dataItems`, `dataValues`, `approachGuide` and its texts and lights, `navigationGuide` and its texts and arrow, `backings`, `quietAlpha`, `valueRefreshSeconds`, the value colours and the old `Present` overloads | `FlightInfoCluster` (capsule cells, tiles, guide tiles, chip); `FlightInfoSettings`; `ContextualHud.Present(disclosure, warnings, profile)` |
+| `ContextualHud.DataItemCount`, `ContextualHudFactory.DataItemSize`, `DataItemSpacing` and the plate builders | `FlightReadouts.ReadingCount`, `FlightInfoLayout` |
+| The HUD band over the data strip in the release interface | The band in the pull comparison only |
+
+A scene generated before this milestone must be rebuilt (**Open Skies > Rebuild Flight
+Prototype Scene**).
+
+### Decisions and open points
+
+- **Expanded is transient, not a pinned mode.** The panel follows the tap-first contract
+  like every other expanded interface, so an outside tap folds it. A pilot who wants more
+  at rest chooses Detailed (three readings in the capsule) or asks for a guide. Should
+  device tests show players want the panel pinned in Detailed, a pin is a small change to
+  the session, but it would have to give up "tap outside to collapse" for that state.
+- **Three readings at rest.** The capsule's largest width (600) is three quarters of the
+  old flight data strip alone (780) and takes one row instead of two; four readings would
+  cost 112 units more. `capsuleReadings` can be lowered, not raised.
+- **The band's pull moved to the development comparison** (see above). The owner may want
+  it back in release builds on a different surface.
+- **On-demand readings in the cockpit** show every reading, including those the
+  instruments carry: the player asked, and the instruments can be out of view when looking
+  around. The resting state never duplicates them.
+- **No new data.** Height above ground, true airspeed and the flaps are not shown; they
+  were not asked for and stay out of scope.
+- Device questions: whether the gauge symbol reads as "flight data"; whether the 72-unit
+  capsule is comfortable at arm's length; whether players find the focus without the hint;
+  whether the explanation's three lines read in the narrower region on a 4:3 tablet (the
+  text shrinks to 16 units rather than clip).
 
 ## The command cluster (milestone 3)
 
@@ -437,7 +722,8 @@ the band instead of the outer ring, and the pull tests switch the comparison on.
 | Empty space (the sky, the cockpit panel behind a card) | The whole branch collapses, deepest surface first, down to the first surface that stays through outside taps (a paused interface) |
 | A parent while a child is open (the arc while an action's options are out; the pause sheet while its settings are up) | The children collapse; the parent stays |
 | The deepest open surface (a segment, a detent button, a settings row) | Not an outside tap: the surface handles it |
-| A warning banner, a flight value, the HUD band | Outside: the branch collapses; the banner and the value are untouched |
+| A warning banner, the HUD band (pull comparison) | Outside: the branch collapses; the banner is untouched |
+| The flight information capsule or a tile | Not an outside tap: a button of the flight information cluster, which opens or focuses it (and replaces another cluster) |
 | Another trigger (the handle, MENU, a rail button, a cockpit item in the legacy comparison) | Not an outside tap: the new cluster replaces the old one |
 | A finger the flight controls own | Nothing: the pointer is never routed |
 
@@ -478,6 +764,7 @@ Owners register their surfaces once, open and close them as they always did, and
   GestureSession ─ Systems arc (root), Systems sub-arc (child of the arc)
   FlightSession ─ Flight settings card
   CommandClusterSession ─ Command options (root), HUD selector (child of the options)
+  FlightInfoSession ─ Flight information (root), Flight information focus (child of the panel)
   CockpitSession ─ Cockpit panel (instrument card or selector)
   GameModeSession ─ Pause sheet (stays), Pause sheet settings (child), Pause card (stays), Coaching detail
   PresentationSession ─ Settings screen (child of the pause card when it opened from it)
@@ -600,5 +887,6 @@ whether an outside tap is ever an accident, how the folded "–" reads. Device p
 - Focus loss folds the flight-time transients; a paused interface keeps its state.
   Coming back from another app while the sheet was at the settings finds it there.
 - The HUD band has no tap-first ladder; the command cluster's HUD selector is its tap twin.
+  Since milestone 4 the band is part of the pull comparison only.
 - The explanation plate (hold to explain) is not a registered surface by design.
 - Nothing here is compiled or run until CI does it (`tests.yml`).

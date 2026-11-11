@@ -68,6 +68,14 @@ namespace OpenSkies.Awareness
         public bool IsActionEngaged(ContextAction action) => _actionEngaged[(int)action];
         public DisclosureReason GetActionReason(ContextAction action) => _actions[(int)action].Reason;
 
+        /// <summary>
+        /// Approach information is worth offering: airborne and within the approach guide's range
+        /// of the runway (the Detailed profile's rule for the guide; the flight information
+        /// cluster offers the approach details on expansion by the same rule).
+        /// </summary>
+        public bool ApproachGuideInRange(bool onGround, float distanceToRunwayNm) =>
+            !onGround && distanceToRunwayNm <= _settings.approachGuideRangeNm;
+
         /// <summary>SYSTEMS: the player opened the full action rail.</summary>
         public bool RailExpanded => _railExpanded;
         public bool IsStableFlight => _stable;
@@ -229,7 +237,7 @@ namespace OpenSkies.Awareness
                     if (input.Profile == HudProfile.Detailed)
                     {
                         reason = DisclosureReason.Profile;
-                        return !input.OnGround && input.DistanceToRunwayNm <= _settings.approachGuideRangeNm ? Prominence.Full : Prominence.Hidden;
+                        return ApproachGuideInRange(input.OnGround, input.DistanceToRunwayNm) ? Prominence.Full : Prominence.Hidden;
                     }
                     if (input.Profile == HudProfile.Smart)
                     {
