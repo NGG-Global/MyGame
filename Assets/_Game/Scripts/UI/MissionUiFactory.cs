@@ -12,8 +12,9 @@ namespace OpenSkies.UI
     ///   cockpit instrument panel.
     /// - Mission card (pause menu, results): the free column's panel band, built
     ///   after the HUD so a modal card's dimming takes every touch.
-    /// - MENU: top right under CAM; SKIP TUTORIAL under MENU, only in the First
-    ///   Flight. Both above the throttle, clear of the rail.
+    /// - Pause and SKIP TUTORIAL are part of the top-right command cluster
+    ///   (<see cref="CommandClusterFactory"/>): pause in its primary row, SKIP among
+    ///   the session actions of its options panel.
     /// - Checkpoint marker and control highlights take no touches.
     /// - Entry screen: full screen, on top of everything.
     /// </summary>
@@ -21,9 +22,6 @@ namespace OpenSkies.UI
     {
         public const float CoachBottom = 12f;
         public const float CoachHeight = 96f;
-        public static readonly Vector2 SessionButtonSize = new Vector2(128f, 96f);
-        public static readonly Vector2 MenuPosition = new Vector2(-24f, -128f);
-        public static readonly Vector2 SkipPosition = new Vector2(-24f, -240f);
 
         static readonly Color CardColour = HudStyle.PanelSurface;
         static readonly Color ButtonColour = HudStyle.PanelControl;
@@ -193,38 +191,6 @@ namespace OpenSkies.UI
 
             root.gameObject.SetActive(true);
             return card;
-        }
-
-        // ---- Session buttons ---------------------------------------------------------------------
-
-        /// <summary>MENU, top right under CAM (always), and SKIP TUTORIAL under it (First Flight only).</summary>
-        public static HudButton BuildMenuButton(RectTransform safeArea, Font font) =>
-            SessionButton("MenuButton", safeArea, font, MenuPosition, "MENU", HudStyle.ButtonSize);
-
-        public static HudButton BuildSkipButton(RectTransform safeArea, Font font)
-        {
-            var button = SessionButton("SkipButton", safeArea, font, SkipPosition, "SKIP\nTUTORIAL", HudStyle.CaptionSize);
-            Hidden((RectTransform)button.transform);
-            return button;
-        }
-
-        static HudButton SessionButton(string name, RectTransform parent, Font font, Vector2 position, string caption, int fontSize)
-        {
-            var rect = NewRect(name, parent);
-            rect.gameObject.SetActive(false); // wire everything before HudButton.Awake (rounded sprite, colours)
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = position;
-            rect.sizeDelta = SessionButtonSize;
-            var image = AddImage(rect, HudStyle.ControlSurface);
-            image.raycastTarget = true;
-            var button = rect.gameObject.AddComponent<HudButton>();
-            button.background = image;
-            var label = NewText("Label", rect, font, fontSize, TextAnchor.MiddleCenter, HudStyle.TextPrimary, shadow: false);
-            Stretch(label.rectTransform);
-            label.text = caption;
-            button.label = label;
-            rect.gameObject.SetActive(true);
-            return button;
         }
 
         // ---- Entry screen ------------------------------------------------------------------------

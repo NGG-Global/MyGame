@@ -48,7 +48,7 @@ Surfaces:
 
 | Token | Value | Used for |
 |---|---|---|
-| `ControlSurface` | (0.02, 0.03, 0.04), 0.42 | buttons drawn over the world (CAM, RESET, MENU, HUD, rail) |
+| `ControlSurface` | (0.02, 0.03, 0.04), 0.42 | buttons drawn over the world (the command cluster's camera and options, LOOK FWD, rail) |
 | `ControlPressed` | white, 0.32 | any button while pressed |
 | `PanelSurface` | (0.03, 0.035, 0.045), 0.82 | cards and panels (pause menu, settings, assistance, results) |
 | `PanelControl` | white, 0.10 | buttons on a panel |
@@ -98,8 +98,8 @@ reference height.
 | `ValueSize` | 42 | flight values (IAS, ALT, VS, HDG, GS) |
 | `BodySize` | 24 | body text, row labels (26) |
 | `ButtonSize` | 24 | button captions, upper case |
-| `LabelSize` | 20 | value labels, two-line button captions (HUD SMART, CAM CHASE) |
-| `CaptionSize` | 18 | the smallest text: footnotes, notes under a setting |
+| `LabelSize` | 20 | value labels, two-line button captions, the HUD row's profile |
+| `CaptionSize` | 18 | the smallest text: footnotes, notes under a setting, the camera's view name, the cluster's tertiary actions |
 
 Rules: captions in upper case, sentences in sentence case, no italics, bold only for
 titles and banner words. White text over the world always has the 1.5-unit drop
@@ -163,7 +163,7 @@ when a cockpit switch moves. Nothing vibrates continuously.
 | Guides | Under the flight data; plate behind; magenta course and centreline cue; PAPI white/red. |
 | Warning banners | Upper middle, most urgent first; solid fill, symbol left, word centred, bold; never dimmed, never take touches. |
 | Action rail | Bottom right above SYSTEMS; engaged = cyan fill, dark text; disabled = 40 % opacity. |
-| Top bar | HUD profile, RESET, CAM (CAM names the current view: CHASE or COCKPIT); MENU and SKIP below CAM. |
+| Command cluster (top right) | No card behind the row. Weight follows importance: the camera is the largest visual (92 × 72 plate, camera symbol, the view's name), the options trigger a 64-unit disc (three dots; lighter, not cyan, while its panel is open), pause the smallest and quietest (52-unit disc, fainter surface, `TextSecondary` bars). Every control is a 96-unit invisible touch target around its visual. LOOK FWD is a 104 × 52 pill under the camera, only while useful. The options panel is a `PanelSurface` plate only while open: a full-width HUD row (profile in cyan words, chevron) over a hairline, then three smaller, quieter tertiary pills (RESET, SETTINGS, SKIP TUTORIAL; `CaptionSize`, `TextSecondary`). An armed RESET or SKIP is engaged (cyan fill, dark text) and says "TAP AGAIN" (never colour alone). |
 | Touch controls | White strokes with a dark edge for bright skies; idle 16-30 % opacity, held 55-80 %; throttle marks at 25, 50, 75 %. Their touch areas draw nothing. |
 | Cards (pause, results, assistance, cockpit) | Free column only; `PanelSurface`; title, short lines, large buttons; RESUME and SETTINGS share the first row of the pause card. |
 | Settings screen | Centred panel over a dimmed, paused world; tabs DISPLAY, CONTROLS, SOUND, GRAPHICS; label left, segments or stepper right; a footnote explains each page's limits. |
@@ -181,8 +181,8 @@ is about 68 mm tall, so a 96-unit target is about 6 mm, smaller than the 7-9 mm 
 recommended for touch. On a 11-inch tablet the same target is over 12 mm. The
 interface scale setting (90-110 %) helps at the margins, but the 1080-unit layout
 does not have the vertical room for a much larger scale (see `UiScaleMath`: the
-action rail under the top bar and the MENU/SKIP column over the throttle are the
-limits). A phone-specific layout with fewer rail slots and a shorter throttle area is
+action rail under the top bar and the command cluster's open panel over the throttle
+are the limits). A phone-specific layout with fewer rail slots and a shorter throttle area is
 the recommended next step once device tests confirm the problem (`docs/ROADMAP.md`).
 
 Interface scale limits (largest scale where nothing overlaps; `UiScaleMath`):

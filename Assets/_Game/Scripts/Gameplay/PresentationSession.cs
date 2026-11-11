@@ -2,6 +2,7 @@ using OpenSkies.Audio;
 using OpenSkies.Awareness;
 using OpenSkies.FlightInput.TouchControls;
 using OpenSkies.FlightState;
+using OpenSkies.Gestures;
 using OpenSkies.Options;
 using OpenSkies.Platform;
 using OpenSkies.UI;
@@ -59,6 +60,8 @@ namespace OpenSkies.Gameplay
         Rect _lastSafeArea;
         Vector2Int _lastScreen;
         bool _initialized, _started, _appPaused, _dirty, _subscribed;
+        DisclosureCoordinator _coordinator;
+        int _settingsLayer = DisclosureCoordinator.None;
 
         public GameOptions Options => _options;
         public float EffectiveUiScale => _effectiveUiScale;
@@ -101,9 +104,22 @@ namespace OpenSkies.Gameplay
         {
             EnsureInitialized();
             Subscribe();
+            RegisterSettings();
             ApplyAll();
             _started = true;
         }
+
+        /// <summary>The full settings screen is a transient: a tap on the dimmed world around it, or DONE, folds it back to where it came from.</summary>
+        void RegisterSettings()
+        {
+            if (_coordinator != null || flight == null || settings == null) return;
+            _coordinator = flight.Coordinator;
+            if (_coordinator != null) _settingsLayer = _coordinator.Register("Settings screen", IsOnSettings, CollapseSettings);
+        }
+
+        bool IsOnSettings(Vector2 screenPoint) => settings != null && settings.IsOpen && ScreenRects.Contains(settings.panel, screenPoint);
+
+        void CollapseSettings(DisclosureCollapseReason reason) => CloseSettings();
 
         void OnEnable()
         {
@@ -121,6 +137,7 @@ namespace OpenSkies.Gameplay
         void OnDestroy()
         {
             _graphics?.Dispose(); // the project's pipeline asset and the sun's shadows come back
+            if (_coordinator != null) _coordinator.Unregister(_settingsLayer);
         }
 
         void OnApplicationPause(bool paused)
@@ -243,8 +260,7 @@ namespace OpenSkies.Gameplay
 
         void ApplyOpacity()
         {
-            if (flight != null) flight.ApplyHudOpacity(_options.HudOpacity);
-            if (modes != null) modes.SetHudOpacity(_options.HudOpacity);
+            if (flight != null) flight.ApplyHudOpacity(_options.HudOpacity); // the command cluster included
         }
 
         /// <summary>The interface scale the screen allows; recomputed when the screen or safe area changes.</summary>
@@ -277,12 +293,19 @@ namespace OpenSkies.Gameplay
             if (settings == null) return;
             settings.Open(View());
             if (modes != null) modes.OverlayOpen = true;
+            if (_coordinator != null)
+            {
+                // Over the pause card the settings are its child: a tap outside them returns to the card, never resumes.
+                _coordinator.SetParent(_settingsLayer, modes != null && modes.PauseCardOpen ? modes.PauseCardLayer : DisclosureCoordinator.None);
+                _coordinator.Open(_settingsLayer);
+            }
         }
 
         public void CloseSettings()
         {
             if (settings != null) settings.Close();
             if (modes != null) modes.OverlayOpen = false;
+            _coordinator?.NotifyClosed(_settingsLayer);
             SaveIfDirty();
         }
 

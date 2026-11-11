@@ -6,8 +6,8 @@ using OpenSkies.FlightState;
 using OpenSkies.Gameplay;
 using OpenSkies.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
-using UnityEngine.UI;
 
 namespace OpenSkies.Tests
 {
@@ -22,7 +22,7 @@ namespace OpenSkies.Tests
         }
 
         GameObject _root;
-        HudPresenter _hud;
+        CommandCluster _cluster;
         static readonly Vector3 StartPosition = new Vector3(0f, 0f, -500f);
 
         [TearDown]
@@ -47,16 +47,10 @@ namespace OpenSkies.Tests
             rig.target = aircraft.transform;
             rig.cockpitAnchor = cockpit;
 
-            // HUD with the two session buttons, wired before it is enabled.
-            var hudGo = new GameObject("HUD");
-            hudGo.SetActive(false);
+            // The top-right command cluster (camera, options with RESET), built before the session wakes.
+            var hudGo = new GameObject("HUD", typeof(RectTransform));
             hudGo.transform.SetParent(_root.transform, false);
-            _hud = hudGo.AddComponent<HudPresenter>();
-            _hud.cameraButton = new GameObject("CameraButton", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
-            _hud.resetButton = new GameObject("ResetButton", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
-            _hud.cameraButton.transform.SetParent(hudGo.transform, false);
-            _hud.resetButton.transform.SetParent(hudGo.transform, false);
-            hudGo.SetActive(true);
+            _cluster = CommandClusterFactory.Build((RectTransform)hudGo.transform, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
             var sessionGo = new GameObject("FlightSession");
             sessionGo.SetActive(false);
@@ -65,7 +59,7 @@ namespace OpenSkies.Tests
             session.aircraft = aircraft;
             session.telemetry = telemetry;
             session.cameraRig = rig;
-            session.hud = _hud;
+            session.commandCluster = _cluster;
             session.SetControlSource(controls);
             sessionGo.SetActive(true);
             return session;
@@ -114,33 +108,38 @@ namespace OpenSkies.Tests
         }
 
         [UnityTest]
-        public IEnumerator HudCameraButton_SwitchesViewWithoutChangingThrottleOrFlight()
+        public IEnumerator ClusterCameraButton_SwitchesViewWithoutChangingThrottleOrFlight()
         {
             var session = CreateSession(new ScriptedControls(), out var rig);
             yield return new WaitForSeconds(2f);
             float speedBefore = session.Telemetry.GroundspeedKnots;
 
-            _hud.cameraButton.onClick.Invoke(); // what a tap on CAM does
+            _cluster.cameraButton.OnPointerClick(new PointerEventData(EventSystem.current)); // what a tap on the camera does
             Assert.AreEqual(CameraMode.Cockpit, rig.mode);
             Assert.AreEqual(1f, session.aircraft.Controls.Throttle, "camera switch must not touch throttle");
 
             yield return new WaitForSeconds(1f);
             Assert.That(session.Telemetry.GroundspeedKnots, Is.GreaterThan(speedBefore));
 
-            _hud.cameraButton.onClick.Invoke();
+            _cluster.cameraButton.OnPointerClick(new PointerEventData(EventSystem.current));
             Assert.AreEqual(CameraMode.Chase, rig.mode);
             Assert.AreEqual(1f, session.aircraft.Controls.Throttle);
         }
 
         [UnityTest]
-        public IEnumerator HudResetButton_ResetsTheFlight()
+        public IEnumerator ClusterReset_BehindTheOptions_WithItsConfirmation_ResetsTheFlight()
         {
             var controls = new ScriptedControls();
             var session = CreateSession(controls, out _);
             yield return new WaitForSeconds(2f);
             Assert.That(session.aircraft.Body.linearVelocity.magnitude, Is.GreaterThan(1f), "precondition: moving");
 
-            _hud.resetButton.onClick.Invoke(); // what a tap on RESET does
+            var tap = new PointerEventData(EventSystem.current);
+            _cluster.optionsButton.OnPointerClick(tap); // RESET is behind the options trigger
+            _cluster.resetButton.OnPointerClick(tap);
+            Assert.AreEqual(0, controls.Resets, "the first tap only asks for a confirmation");
+            yield return new WaitForSecondsRealtime(0.5f);
+            _cluster.resetButton.OnPointerClick(tap); // the deliberate second tap
 
             Assert.AreEqual(1, controls.Resets);
             Assert.AreEqual(Vector3.zero, session.aircraft.Body.linearVelocity);

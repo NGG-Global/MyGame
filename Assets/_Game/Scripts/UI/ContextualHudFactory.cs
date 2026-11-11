@@ -13,7 +13,9 @@ namespace OpenSkies.UI
     /// - Top left: flight data strip (fixed slot per item), guides below it.
     /// - Upper middle, slightly right of centre (between the joystick region and the
     ///   action rail, above the aircraft): warning banners, most urgent first.
-    /// - Top right: HUD profile button, left of RESET and CAM; inspector below (development only).
+    /// - Top right: nothing of its own. The command cluster (<see cref="CommandClusterFactory"/>)
+    ///   holds the camera, the HUD profile and the session actions; the development inspector
+    ///   sits left of the cluster's column, under the top bar.
     /// - Bottom right, left of the throttle and above BRAKE: SYSTEMS, with the
     ///   contextual action rail stacked above it. Nothing overlaps the joystick
     ///   region, the throttle or the brake button.
@@ -59,9 +61,6 @@ namespace OpenSkies.UI
             // under it, the rail button draws on top and takes the touch.
             hud.inspector = BuildInspector(root, font);
             BuildRail(root, font, hud);
-            hud.profileButton = BuildButton("HudProfileButton", root, font, HudStyle.LabelSize, new Vector2(1f, 1f), new Vector2(-312f, -TopMargin),
-                new Vector2(128f, 96f), ContextualHud.ProfileLabel(HudProfile.Smart));
-            hud.profileGroup = hud.profileButton.gameObject.AddComponent<CanvasGroup>();
 
             root.gameObject.SetActive(true);
             return hud;
@@ -240,13 +239,17 @@ namespace OpenSkies.UI
             }
         }
 
+        /// <summary>Development inspector: under the top bar, left of the command cluster's column (LOOK FWD sits under the camera).</summary>
+        public static readonly Vector2 InspectorPosition = new Vector2(-152f, -128f);
+        public static readonly Vector2 InspectorSize = new Vector2(488f, 216f);
+
         static DisclosureInspector BuildInspector(RectTransform parent, Font font)
         {
             var text = NewText("DisclosureInspector", parent, font, 18, TextAnchor.UpperLeft, new Color(1f, 1f, 1f, 0.85f));
             var rect = text.rectTransform;
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = new Vector2(-Margin, -128f);
-            rect.sizeDelta = new Vector2(520f, 216f);
+            rect.anchoredPosition = InspectorPosition;
+            rect.sizeDelta = InspectorSize;
             text.raycastTarget = true; // tap to collapse; rail buttons drawn over it keep their touches
             var inspector = text.gameObject.AddComponent<DisclosureInspector>();
             inspector.text = text;
